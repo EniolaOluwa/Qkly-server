@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BusinessType } from '../business-type.entity';
 import { BusinessTypesController } from './business-types.controller';
 import { BusinessTypesService } from './business-types.service';
-import { BusinessType } from '../business-type.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([BusinessType])],
