@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsOptional, IsNumber, IsNotEmpty, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsNotEmpty,
+  MinLength,
+} from 'class-validator';
 
 export class WelcomeResponseDto {
   @ApiProperty({
@@ -148,4 +155,121 @@ export class BusinessTypeResponseDto {
     example: '2023-01-01T00:00:00.000Z',
   })
   updatedAt: Date;
-} 
+}
+
+export class CreateBusinessDto {
+  @ApiProperty({
+    description: 'Business name',
+    example: 'Acme Restaurant',
+  })
+  @IsString()
+  @IsNotEmpty()
+  businessName: string;
+
+  @ApiProperty({
+    description: 'Business type ID',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  businessTypeId: number;
+
+  @ApiProperty({
+    description: 'Business description',
+    example: 'A family-owned restaurant serving authentic cuisine',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  businessDescription?: string;
+
+  @ApiProperty({
+    description: 'Business location',
+    example: '123 Main St, New York, NY 10001',
+  })
+  @IsString()
+  @IsNotEmpty()
+  location: string;
+}
+
+export class UpdateBusinessDto {
+  @ApiProperty({
+    description: 'Business name',
+    example: 'Acme Restaurant',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  businessName?: string;
+
+  @ApiProperty({
+    description: 'Business type ID',
+    example: 1,
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  businessTypeId?: number;
+
+  @ApiProperty({
+    description: 'Business description',
+    example: 'A family-owned restaurant serving authentic cuisine',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  businessDescription?: string;
+
+  @ApiProperty({
+    description: 'Business location',
+    example: '123 Main St, New York, NY 10001',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  location?: string;
+}
+
+export class BusinessResponseDto {
+  @ApiProperty({
+    description: 'Business ID',
+    example: 1,
+  })
+  id: number;
+
+  @ApiProperty({
+    description: 'Business name',
+    example: 'Acme Restaurant',
+  })
+  businessName: string;
+
+  @ApiProperty({
+    description: 'Business type information',
+    type: BusinessTypeResponseDto,
+  })
+  businessType: BusinessTypeResponseDto;
+
+  @ApiProperty({
+    description: 'Business description',
+    example: 'A family-owned restaurant serving authentic cuisine',
+  })
+  businessDescription: string;
+
+  @ApiProperty({
+    description: 'Business location',
+    example: '123 Main St, New York, NY 10001',
+  })
+  location: string;
+
+  @ApiProperty({
+    description: 'Creation timestamp',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Update timestamp',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  updatedAt: Date;
+}

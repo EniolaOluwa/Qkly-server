@@ -9,14 +9,15 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get welcome message',
-    description: 'Returns a welcome message indicating the NestJS application is running' 
+    description:
+      'Returns a welcome message indicating the NestJS application is running',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Welcome message returned successfully',
-    type: WelcomeResponseDto
+    type: WelcomeResponseDto,
   })
   getHello(): string {
     return this.appService.getHello();
@@ -24,14 +25,15 @@ export class AppController {
 
   @Get('health')
   @ApiTags('health')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Health check',
-    description: 'Returns the health status of the application and database connection' 
+    description:
+      'Returns the health status of the application and database connection',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Health status returned successfully',
-    type: HealthResponseDto
+    type: HealthResponseDto,
   })
   getHealth(): string {
     return this.appService.getHealthStatus();

@@ -7,7 +7,7 @@ import { User } from './user.entity';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
 import { UsersModule } from './users/users.module';
-import { BusinessTypesModule } from './business-types/business-types.module';
+import { BusinessesModule } from './businesses/businesses.module';
 
 @Module({
   imports: [
@@ -25,9 +25,8 @@ import { BusinessTypesModule } from './business-types/business-types.module';
       synchronize: process.env.NODE_ENV === 'development', // Only in development
       logging: process.env.NODE_ENV === 'development',
     }),
-    TypeOrmModule.forFeature([Business]),
     UsersModule,
-    BusinessTypesModule,
+    BusinessesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

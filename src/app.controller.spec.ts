@@ -16,7 +16,9 @@ describe('AppController', () => {
 
   describe('root', () => {
     it('should return "Hello World! NestJS app with PostgreSQL is running."', () => {
-      expect(appController.getHello()).toBe('Hello World! NestJS app with PostgreSQL is running.');
+      expect(appController.getHello()).toBe(
+        'Hello World! NestJS app with PostgreSQL is running.',
+      );
     });
   });
 });

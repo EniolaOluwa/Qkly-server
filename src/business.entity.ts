@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { BusinessType } from './business-type.entity';
 
 @Entity('businesses')
 export class Business {
@@ -8,8 +17,12 @@ export class Business {
   @Column({ nullable: false })
   businessName: string;
 
+  @ManyToOne(() => BusinessType, { nullable: false })
+  @JoinColumn({ name: 'businessTypeId' })
+  businessType: BusinessType;
+
   @Column({ nullable: false })
-  businessType: string;
+  businessTypeId: number;
 
   @Column({ nullable: true })
   businessDescription: string;
@@ -22,4 +35,4 @@ export class Business {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

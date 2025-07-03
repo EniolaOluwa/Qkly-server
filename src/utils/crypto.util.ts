@@ -20,4 +20,4 @@ export class CryptoUtil {
     const hashedPassword = this.hashPassword(password);
     return hashedPassword === hash;
   }
-} 
+}
