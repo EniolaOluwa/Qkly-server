@@ -102,4 +102,50 @@ export class RegisterUserResponseDto {
     example: 'john.doe@example.com',
   })
   email: string;
+}
+
+export class CreateBusinessTypeDto {
+  @ApiProperty({
+    description: 'Business type name',
+    example: 'Restaurant',
+  })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+}
+
+export class UpdateBusinessTypeDto {
+  @ApiProperty({
+    description: 'Business type name',
+    example: 'Restaurant',
+  })
+  @IsString()
+  @IsOptional()
+  name?: string;
+}
+
+export class BusinessTypeResponseDto {
+  @ApiProperty({
+    description: 'Business type ID',
+    example: 1,
+  })
+  id: number;
+
+  @ApiProperty({
+    description: 'Business type name',
+    example: 'Restaurant',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Creation timestamp',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Update timestamp',
+    example: '2023-01-01T00:00:00.000Z',
+  })
+  updatedAt: Date;
 } 

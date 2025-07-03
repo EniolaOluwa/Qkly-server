@@ -17,12 +17,6 @@ export class Business {
   @Column({ nullable: false })
   location: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
-  longitude: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
-  latitude: number;
-
   @CreateDateColumn()
   createdAt: Date;
 
