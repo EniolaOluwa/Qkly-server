@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { User } from './user.entity';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
+import { Otp } from './otp.entity';
 import { UsersModule } from './users/users.module';
 import { BusinessesModule } from './businesses/businesses.module';
 
@@ -21,7 +22,7 @@ import { BusinessesModule } from './businesses/businesses.module';
       username: process.env.DB_USERNAME || 'eniolafakeye',
       password: process.env.DB_PASSWORD || 'password@12345',
       database: process.env.DB_NAME || 'nqkly_db',
-      entities: [User, Business, BusinessType],
+      entities: [User, Business, BusinessType, Otp],
       synchronize: process.env.NODE_ENV === 'development', // Only in development
       logging: process.env.NODE_ENV === 'development',
     }),

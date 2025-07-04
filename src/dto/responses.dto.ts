@@ -273,3 +273,76 @@ export class BusinessResponseDto {
   })
   updatedAt: Date;
 }
+
+export class GeneratePhoneOtpDto {
+  @ApiProperty({
+    description: 'User ID',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  userId: number;
+
+  @ApiProperty({
+    description: 'Phone number for OTP verification',
+    example: '+1234567890',
+  })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+}
+
+export class GeneratePhoneOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP generation success message',
+    example: 'OTP sent successfully to your phone number',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'OTP expiry time in minutes',
+    example: 5,
+  })
+  expiryInMinutes: number;
+}
+
+export class VerifyPhoneOtpDto {
+  @ApiProperty({
+    description: 'User ID',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  userId: number;
+
+  @ApiProperty({
+    description: 'Phone number for OTP verification',
+    example: '+1234567890',
+  })
+  @IsString()
+  @IsNotEmpty()
+  phone: string;
+
+  @ApiProperty({
+    description: 'OTP code to verify',
+    example: '123456',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  otp: string;
+}
+
+export class VerifyPhoneOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP verification result message',
+    example: 'Phone number verified successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Verification status',
+    example: true,
+  })
+  verified: boolean;
+}

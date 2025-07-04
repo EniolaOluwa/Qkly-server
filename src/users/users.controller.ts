@@ -8,7 +8,14 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { RegisterUserDto, RegisterUserResponseDto } from '../dto/responses.dto';
+import { 
+  RegisterUserDto, 
+  RegisterUserResponseDto, 
+  GeneratePhoneOtpDto, 
+  GeneratePhoneOtpResponseDto, 
+  VerifyPhoneOtpDto, 
+  VerifyPhoneOtpResponseDto 
+} from '../dto/responses.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -66,5 +73,57 @@ export class UsersController {
     // Return user without password
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  @Post('generate-phone-otp')
+  @ApiOperation({
+    summary: 'Generate OTP for phone number verification',
+    description: 'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP generated successfully',
+    type: GeneratePhoneOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User with this ID and phone number not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async generatePhoneOtp(
+    @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
+  ): Promise<GeneratePhoneOtpResponseDto> {
+    return this.usersService.generatePhoneOtp(generatePhoneOtpDto.userId, generatePhoneOtpDto.phone);
+  }
+
+  @Post('verify-phone-otp')
+  @ApiOperation({
+    summary: 'Verify OTP for phone number verification',
+    description: 'Verifies the OTP code and marks the phone number as verified if successful.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    type: VerifyPhoneOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid OTP or OTP expired',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User with this ID and phone number not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async verifyPhoneOtp(
+    @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
+  ): Promise<VerifyPhoneOtpResponseDto> {
+    return this.usersService.verifyPhoneOtp(verifyPhoneOtpDto.userId, verifyPhoneOtpDto.phone, verifyPhoneOtpDto.otp);
   }
 }
