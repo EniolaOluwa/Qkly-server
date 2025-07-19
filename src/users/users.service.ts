@@ -4,12 +4,14 @@ import {
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { User } from '../user.entity';
 import { Otp, OtpType } from '../otp.entity';
-import { RegisterUserDto } from '../dto/responses.dto';
+import { RegisterUserDto, LoginDto, LoginResponseDto } from '../dto/responses.dto';
 import { CryptoUtil } from '../utils/crypto.util';
 
 @Injectable()
@@ -19,6 +21,7 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
+    private jwtService: JwtService,
   ) {}
 
   async registerUser(
@@ -71,6 +74,73 @@ export class UsersService {
 
   async findUserById(id: number): Promise<User | null> {
     return this.userRepository.findOne({ where: { id } });
+  }
+
+  async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
+    try {
+      // Find user by email
+      const user = await this.userRepository.findOne({
+        where: { email: loginDto.email },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      // Verify password
+      if (!CryptoUtil.verifyPassword(loginDto.password, user.password)) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      // Update user's device ID and location if provided
+      const updateData: Partial<User> = {};
+      if (loginDto.deviceid) {
+        updateData.deviceId = loginDto.deviceid;
+      }
+      if (loginDto.longitude !== undefined) {
+        updateData.longitude = loginDto.longitude;
+      }
+      if (loginDto.latitude !== undefined) {
+        updateData.latitude = loginDto.latitude;
+      }
+
+      // Update user if there's data to update
+      if (Object.keys(updateData).length > 0) {
+        await this.userRepository.update(user.id, updateData);
+      }
+
+      // Generate JWT payload
+      const payload = {
+        sub: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        deviceId: loginDto.deviceid,
+      };
+
+      // Generate JWT token
+      const accessToken = this.jwtService.sign(payload);
+
+      // Return user information with token
+      return {
+        message: 'User logged in successfully',
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: 3600, // 1 hour in seconds
+        userId: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to login user');
+    }
   }
 
   async generatePhoneOtp(userId: number, phone: string): Promise<{ message: string; expiryInMinutes: number }> {

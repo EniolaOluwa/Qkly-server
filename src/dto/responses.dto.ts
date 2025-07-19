@@ -346,3 +346,113 @@ export class VerifyPhoneOtpResponseDto {
   })
   verified: boolean;
 }
+
+export class LoginDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'john.doe@example.com',
+  })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({
+    description: 'User password',
+    example: 'securePassword123',
+  })
+  @IsString()
+  @IsNotEmpty()
+  password: string;
+
+  @ApiProperty({
+    description: 'Device ID',
+    example: 'device_123456',
+  })
+  @IsString()
+  @IsNotEmpty()
+  deviceid: string;
+
+  @ApiProperty({
+    description: 'Longitude coordinate',
+    example: -122.4194,
+  })
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
+
+  @ApiProperty({
+    description: 'Latitude coordinate',
+    example: 37.7749,
+  })
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+}
+
+export class LoginResponseDto {
+  @ApiProperty({
+    description: 'Login success message',
+    example: 'User logged in successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'JWT access token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  accessToken: string;
+
+  @ApiProperty({
+    description: 'Token type',
+    example: 'Bearer',
+  })
+  tokenType: string;
+
+  @ApiProperty({
+    description: 'Token expiration time in seconds',
+    example: 3600,
+  })
+  expiresIn: number;
+
+  @ApiProperty({
+    description: 'User ID',
+    example: 1,
+  })
+  userId: number;
+
+  @ApiProperty({
+    description: 'User email',
+    example: 'john.doe@example.com',
+  })
+  email: string;
+
+  @ApiProperty({
+    description: 'User first name',
+    example: 'John',
+  })
+  firstName: string;
+
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+  })
+  lastName: string;
+
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+1234567890',
+  })
+  phone: string;
+
+  @ApiProperty({
+    description: 'Email verification status',
+    example: true,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Phone verification status',
+    example: false,
+  })
+  isPhoneVerified: boolean;
+}

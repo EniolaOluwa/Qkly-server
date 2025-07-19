@@ -5,8 +5,10 @@ import {
   ValidationPipe,
   Get,
   Param,
+  UseGuards,
+  Request,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { 
   RegisterUserDto, 
@@ -14,8 +16,11 @@ import {
   GeneratePhoneOtpDto, 
   GeneratePhoneOtpResponseDto, 
   VerifyPhoneOtpDto, 
-  VerifyPhoneOtpResponseDto 
+  VerifyPhoneOtpResponseDto,
+  LoginDto,
+  LoginResponseDto 
 } from '../dto/responses.dto';
+import { JwtAuthGuard } from './jwt-auth.guard';
 
 @ApiTags('users')
 @Controller('users')
@@ -49,6 +54,53 @@ export class UsersController {
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
   ): Promise<RegisterUserResponseDto> {
     return this.usersService.registerUser(registerUserDto);
+  }
+
+  @Post('login')
+  @ApiOperation({
+    summary: 'Login user',
+    description:
+      'Authenticates a user with email and password, and updates their device ID and location if provided.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User logged in successfully',
+    type: LoginResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid email or password',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async loginUser(
+    @Body(ValidationPipe) loginDto: LoginDto,
+  ): Promise<LoginResponseDto> {
+    return this.usersService.loginUser(loginDto);
+  }
+
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get user profile',
+    description: 'Retrieves the current user profile information using JWT token',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  async getProfile(@Request() req) {
+    return {
+      message: 'Profile retrieved successfully',
+      user: req.user,
+    };
   }
 
   @Get(':id')
