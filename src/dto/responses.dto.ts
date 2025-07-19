@@ -456,3 +456,59 @@ export class LoginResponseDto {
   })
   isPhoneVerified: boolean;
 }
+
+export class VerifyKycDto {
+  @ApiProperty({
+    description: 'Reference ID of the verification from Dojah',
+    example: 'DJ-31038041E0',
+  })
+  @IsString()
+  @IsNotEmpty()
+  reference_id: string;
+}
+
+export class KycVerificationResponseDto {
+  @ApiProperty({
+    description: 'Overall verification status',
+    example: true,
+  })
+  status: boolean;
+
+  @ApiProperty({
+    description: 'Response message',
+    example: 'BVN verification completed successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Reference ID of the verification',
+    example: 'DJ-31038041E0',
+  })
+  reference_id: string;
+
+  @ApiProperty({
+    description: 'BVN verification status',
+    example: true,
+  })
+  bvn_verified: boolean;
+}
+
+export class KycErrorResponseDto {
+  @ApiProperty({
+    description: 'Error status',
+    example: false,
+  })
+  status: boolean;
+
+  @ApiProperty({
+    description: 'Error message',
+    example: 'Reference ID not found or verification failed',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Error code',
+    example: 'VERIFICATION_NOT_FOUND',
+  })
+  error_code?: string;
+}

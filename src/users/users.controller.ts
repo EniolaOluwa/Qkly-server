@@ -18,7 +18,10 @@ import {
   VerifyPhoneOtpDto, 
   VerifyPhoneOtpResponseDto,
   LoginDto,
-  LoginResponseDto 
+  LoginResponseDto,
+  VerifyKycDto,
+  KycVerificationResponseDto,
+  KycErrorResponseDto
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -177,5 +180,44 @@ export class UsersController {
     @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
   ): Promise<VerifyPhoneOtpResponseDto> {
     return this.usersService.verifyPhoneOtp(verifyPhoneOtpDto.userId, verifyPhoneOtpDto.phone, verifyPhoneOtpDto.otp);
+  }
+
+  @Post('verify-kyc')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify user KYC status',
+    description: 'Retrieves BVN verification status from Dojah using reference ID. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'BVN verification details retrieved successfully',
+    type: KycVerificationResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid reference ID format',
+    type: KycErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+    type: KycErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - Verification reference ID not found',
+    type: KycErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to retrieve verification details',
+    type: KycErrorResponseDto,
+  })
+  async verifyKyc(
+    @Body(ValidationPipe) verifyKycDto: VerifyKycDto,
+    @Request() req,
+  ): Promise<KycVerificationResponseDto> {
+    return this.usersService.getKycVerificationDetails(verifyKycDto.reference_id);
   }
 }
