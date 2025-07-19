@@ -35,6 +35,21 @@ export class User {
   @Column({ nullable: true, comment: 'Encrypted PIN for user authentication' })
   pin: string;
 
+  @Column({ nullable: true, comment: 'Monnify wallet reference' })
+  walletReference: string;
+
+  @Column({ nullable: true, comment: 'Monnify wallet account number' })
+  walletAccountNumber: string;
+
+  @Column({ nullable: true, comment: 'Monnify wallet account name' })
+  walletAccountName: string;
+
+  @Column({ nullable: true, comment: 'Monnify wallet bank name' })
+  walletBankName: string;
+
+  @Column({ nullable: true, comment: 'Monnify wallet bank code' })
+  walletBankCode: string;
+
   @Column({ nullable: true })
   businessId: number;
 

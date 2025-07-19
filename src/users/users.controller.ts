@@ -21,7 +21,11 @@ import {
   LoginResponseDto,
   VerifyKycDto,
   KycVerificationResponseDto,
-  KycErrorResponseDto
+  KycErrorResponseDto,
+  CreatePinDto,
+  CreatePinResponseDto,
+  GenerateWalletDto,
+  GenerateWalletResponseDto
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -219,5 +223,75 @@ export class UsersController {
     @Request() req,
   ): Promise<KycVerificationResponseDto> {
     return this.usersService.getKycVerificationDetails(verifyKycDto.reference_id);
+  }
+
+  @Post('create-pin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create authentication PIN',
+    description: 'Creates a 6-digit encrypted PIN for user authentication. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'PIN created successfully',
+    type: CreatePinResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - PIN must be exactly 6 digits',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to create PIN',
+  })
+  async createPin(
+    @Body(ValidationPipe) createPinDto: CreatePinDto,
+    @Request() req,
+  ): Promise<CreatePinResponseDto> {
+    return this.usersService.createPin(req.user.id, createPinDto.pin);
+  }
+
+  @Post('generate-wallet')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Generate user wallet',
+    description: 'Creates a Monnify wallet for the authenticated user. Requires JWT authentication and user BVN.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Wallet created successfully',
+    type: GenerateWalletResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid wallet data or user already has a wallet',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to create wallet',
+  })
+  async generateWallet(
+    @Body(ValidationPipe) generateWalletDto: GenerateWalletDto,
+    @Request() req,
+  ): Promise<GenerateWalletResponseDto> {
+    return this.usersService.generateWallet(req.user.userId, generateWalletDto);
   }
 }

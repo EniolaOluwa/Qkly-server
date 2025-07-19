@@ -13,7 +13,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { User } from '../user.entity';
 import { Otp, OtpType } from '../otp.entity';
-import { RegisterUserDto, LoginDto, LoginResponseDto, KycVerificationResponseDto } from '../dto/responses.dto';
+import { RegisterUserDto, LoginDto, LoginResponseDto, KycVerificationResponseDto, CreatePinResponseDto, GenerateWalletDto, GenerateWalletResponseDto } from '../dto/responses.dto';
 import { CryptoUtil } from '../utils/crypto.util';
 
 @Injectable()
@@ -22,6 +22,14 @@ export class UsersService {
   private readonly DOJAH_BASE_URL = 'https://api.dojah.io';
   private readonly DOJAH_APP_ID = 'mock-app-id-12345';
   private readonly DOJAH_SECRET_KEY = 'mock-secret-key-abcdefghijklmnop';
+
+  // Monnify API credentials - In production, these should be environment variables
+  private readonly MONNIFY_BASE_URL = process.env.NODE_ENV === 'production' 
+    ? 'https://api.monnify.com' 
+    : 'https://sandbox.monnify.com';
+  private readonly MONNIFY_API_KEY = process.env.MONNIFY_API_KEY || 'MK_TEST_SAF7HR5F3F';
+  private readonly MONNIFY_SECRET_KEY = process.env.MONNIFY_SECRET_KEY || '4SY6TNL8CK3VPRSBTHTRG2N8XXEGC6NL';
+  private readonly MONNIFY_CONTRACT_CODE = process.env.MONNIFY_CONTRACT_CODE || '7059707855';
 
   constructor(
     @InjectRepository(User)
@@ -287,6 +295,153 @@ export class UsersService {
       }
       
       throw new InternalServerErrorException('Failed to retrieve KYC verification details');
+    }
+  }
+
+  async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
+    try {
+      // Validate PIN format (6 digits only)
+      if (!/^\d{6}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 6 digits');
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Encrypt the PIN
+      const encryptedPin = CryptoUtil.encryptPin(pin);
+
+      // Update user with encrypted PIN
+      await this.userRepository.update(userId, {
+        pin: encryptedPin,
+      });
+
+      return {
+        message: 'PIN created successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create PIN');
+    }
+  }
+
+  /**
+   * Get Monnify access token for authentication
+   * @returns Promise<string> Access token
+   */
+  private async getMonnifyAccessToken(): Promise<string> {
+    try {
+      const credentials = Buffer.from(`${this.MONNIFY_API_KEY}:${this.MONNIFY_SECRET_KEY}`).toString('base64');
+      
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.MONNIFY_BASE_URL}/api/v1/auth/login`, {}, {
+          headers: {
+            'Authorization': `Basic ${credentials}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+
+      if (response.data.requestSuccessful && response.data.responseBody?.accessToken) {
+        return response.data.responseBody.accessToken;
+      }
+
+      throw new Error('Failed to get access token from Monnify');
+    } catch (error) {
+      console.error('Monnify authentication failed:', error.response?.data || error.message);
+      throw new InternalServerErrorException('Failed to authenticate with Monnify');
+    }
+  }
+
+  async generateWallet(userId: number, generateWalletDto: GenerateWalletDto): Promise<GenerateWalletResponseDto> {
+    try {
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Check if user already has a wallet
+      if (user.walletReference) {
+        throw new BadRequestException('User already has a wallet');
+      }
+
+      // Get Monnify access token
+      const accessToken = await this.getMonnifyAccessToken();
+
+      // Prepare request body for Monnify Create Wallet API
+      const walletData = {
+        walletReference: generateWalletDto.walletReference,
+        walletName: generateWalletDto.walletName,
+        customerEmail: generateWalletDto.customerEmail,
+        customerName: `${user.firstName} ${user.lastName}`,
+        bvn: generateWalletDto.bvn,
+        currencyCode: generateWalletDto.currencyCode || 'NGN',
+        contractCode: this.MONNIFY_CONTRACT_CODE,
+      };
+
+      // Call Monnify Create Wallet API
+      const response = await firstValueFrom(
+        this.httpService.post(`${this.MONNIFY_BASE_URL}/api/v1/disbursements/wallet`, walletData, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+
+      const walletResponse = response.data;
+      
+      if (!walletResponse.requestSuccessful) {
+        throw new BadRequestException(walletResponse.responseMessage || 'Wallet creation failed');
+      }
+
+      const walletDetails = walletResponse.responseBody;
+
+      // Update user with wallet information
+      await this.userRepository.update(userId, {
+        walletReference: walletDetails.walletReference || generateWalletDto.walletReference,
+        walletAccountNumber: walletDetails.accountNumber,
+        walletAccountName: walletDetails.accountName || generateWalletDto.walletName,
+        walletBankName: walletDetails.bankName,
+        walletBankCode: walletDetails.bankCode,
+      });
+
+      return {
+        message: 'Wallet created successfully',
+        success: true,
+        walletReference: walletDetails.walletReference || generateWalletDto.walletReference,
+        accountNumber: walletDetails.accountNumber,
+        accountName: walletDetails.accountName || generateWalletDto.walletName,
+        bankName: walletDetails.bankName,
+        bankCode: walletDetails.bankCode,
+        currencyCode: walletDetails.currencyCode || generateWalletDto.currencyCode || 'NGN',
+        createdOn: walletDetails.createdOn || new Date().toISOString(),
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      console.error('Wallet generation failed:', error.response?.data || error.message);
+      
+      if (error.response?.status === 400) {
+        throw new BadRequestException(error.response.data?.responseMessage || 'Invalid wallet creation data');
+      }
+      
+      if (error.response?.status === 401) {
+        throw new UnauthorizedException('Invalid Monnify API credentials');
+      }
+      
+      throw new InternalServerErrorException('Failed to create wallet');
     }
   }
 }
