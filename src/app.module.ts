@@ -9,6 +9,7 @@ import { BusinessType } from './business-type.entity';
 import { Otp } from './otp.entity';
 import { UsersModule } from './users/users.module';
 import { BusinessesModule } from './businesses/businesses.module';
+import { WalletsModule } from './wallets/wallets.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { BusinessesModule } from './businesses/businesses.module';
     }),
     UsersModule,
     BusinessesModule,
+    WalletsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
