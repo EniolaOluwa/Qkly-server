@@ -23,7 +23,11 @@ import {
   KycVerificationResponseDto,
   KycErrorResponseDto,
   CreatePinDto,
-  CreatePinResponseDto
+  CreatePinResponseDto,
+  ForgotPasswordDto,
+  ForgotPasswordResponseDto,
+  VerifyPasswordResetOtpDto,
+  VerifyPasswordResetOtpResponseDto
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -256,6 +260,65 @@ export class UsersController {
     @Request() req,
   ): Promise<CreatePinResponseDto> {
     return this.usersService.createPin(req.user.id, createPinDto.pin);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({
+    summary: 'Forgot password - Send OTP',
+    description: 'Sends an OTP to the user\'s registered phone number for password reset. Returns a masked phone number.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    type: ForgotPasswordResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - User has no phone number on file',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User with this email not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to send OTP',
+  })
+  async forgotPassword(
+    @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<ForgotPasswordResponseDto> {
+    return this.usersService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('verify-password-reset-otp')
+  @ApiOperation({
+    summary: 'Verify password reset OTP',
+    description: 'Verifies the OTP code for password reset and returns a reset token.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    type: VerifyPasswordResetOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid OTP or OTP expired',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async verifyPasswordResetOtp(
+    @Body(ValidationPipe) verifyPasswordResetOtpDto: VerifyPasswordResetOtpDto,
+  ): Promise<VerifyPasswordResetOtpResponseDto> {
+    return this.usersService.verifyPasswordResetOtp(
+      verifyPasswordResetOtpDto.email, 
+      verifyPasswordResetOtpDto.otp
+    );
   }
 
 

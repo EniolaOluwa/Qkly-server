@@ -14,6 +14,12 @@ export enum OtpType {
   PHONE = 'phone',
 }
 
+export enum OtpPurpose {
+  PHONE_VERIFICATION = 'phone_verification',
+  PASSWORD_RESET = 'password_reset',
+  EMAIL_VERIFICATION = 'email_verification',
+}
+
 @Entity('otps')
 export class Otp {
   @PrimaryGeneratedColumn()
@@ -35,6 +41,14 @@ export class Otp {
     nullable: false,
   })
   otpType: OtpType;
+
+  @Column({
+    type: 'enum',
+    enum: OtpPurpose,
+    default: OtpPurpose.PHONE_VERIFICATION,
+    nullable: false,
+  })
+  purpose: OtpPurpose;
 
   @Column({ nullable: false })
   expiresAt: Date;

@@ -1,43 +1,47 @@
 import {
   Injectable,
+  BadRequestException,
   InternalServerErrorException,
   NotFoundException,
-  BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { User } from '../user.entity';
 import { GenerateWalletDto, GenerateWalletResponseDto } from '../dto/wallet.dto';
 
 @Injectable()
 export class WalletsService {
-  // Monnify API credentials - In production, these should be environment variables
-  private readonly MONNIFY_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://api.monnify.com' 
-    : 'https://sandbox.monnify.com';
-  private readonly MONNIFY_API_KEY = process.env.MONNIFY_API_KEY || 'MK_TEST_SAF7HR5F3F';
-  private readonly MONNIFY_SECRET_KEY = process.env.MONNIFY_SECRET_KEY || '4SY6TNL8CK3VPRSBTHTRG2N8XXEGC6NL';
-  private readonly MONNIFY_CONTRACT_CODE = process.env.MONNIFY_CONTRACT_CODE || '7059707855';
+    // Monnify API configuration loaded from environment variables
 
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private httpService: HttpService,
+    private configService: ConfigService,
   ) {}
 
   /**
    * Get Monnify access token for authentication
    * @returns Promise<string> Access token
    */
-  private async getMonnifyAccessToken(): Promise<string> {
+    private async getMonnifyAccessToken(): Promise<string> {
     try {
-      const credentials = Buffer.from(`${this.MONNIFY_API_KEY}:${this.MONNIFY_SECRET_KEY}`).toString('base64');
-      
+      const monnifyBaseUrl = this.configService.get<string>('MONNIFY_BASE_URL', 'https://sandbox.monnify.com');
+      const monnifyApiKey = this.configService.get<string>('MONNIFY_API_KEY');
+      const monnifySecretKey = this.configService.get<string>('MONNIFY_SECRET_KEY');
+
+      if (!monnifyApiKey || !monnifySecretKey) {
+        throw new InternalServerErrorException('Monnify API credentials not configured');
+      }
+
+      const credentials = Buffer.from(`${monnifyApiKey}:${monnifySecretKey}`).toString('base64');
+
       const response = await firstValueFrom(
-        this.httpService.post(`${this.MONNIFY_BASE_URL}/api/v1/auth/login`, {}, {
+        this.httpService.post(`${monnifyBaseUrl}/api/v1/auth/login`, {}, {
           headers: {
             'Authorization': `Basic ${credentials}`,
             'Content-Type': 'application/json',
@@ -73,6 +77,13 @@ export class WalletsService {
       // Get Monnify access token
       const accessToken = await this.getMonnifyAccessToken();
 
+      const monnifyBaseUrl = this.configService.get<string>('MONNIFY_BASE_URL', 'https://sandbox.monnify.com');
+      const monnifyContractCode = this.configService.get<string>('MONNIFY_CONTRACT_CODE');
+
+      if (!monnifyContractCode) {
+        throw new InternalServerErrorException('Monnify contract code not configured');
+      }
+
       // Prepare request body for Monnify Create Wallet API
       const walletData = {
         walletReference: generateWalletDto.walletReference,
@@ -81,12 +92,12 @@ export class WalletsService {
         customerName: `${user.firstName} ${user.lastName}`,
         bvn: generateWalletDto.bvn,
         currencyCode: generateWalletDto.currencyCode || 'NGN',
-        contractCode: this.MONNIFY_CONTRACT_CODE,
+        contractCode: monnifyContractCode,
       };
 
       // Call Monnify Create Wallet API
       const response = await firstValueFrom(
-        this.httpService.post(`${this.MONNIFY_BASE_URL}/api/v1/disbursements/wallet`, walletData, {
+        this.httpService.post(`${monnifyBaseUrl}/api/v1/disbursements/wallet`, walletData, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',

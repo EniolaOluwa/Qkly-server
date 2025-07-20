@@ -10,19 +10,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { User } from '../user.entity';
-import { Otp, OtpType } from '../otp.entity';
+import { Otp, OtpType, OtpPurpose } from '../otp.entity';
 import { RegisterUserDto, LoginDto, LoginResponseDto, KycVerificationResponseDto, CreatePinResponseDto } from '../dto/responses.dto';
 import { CryptoUtil } from '../utils/crypto.util';
 
 @Injectable()
 export class UsersService {
-  // Mock Dojah API credentials - In production, these should be environment variables
-  private readonly DOJAH_BASE_URL = 'https://api.dojah.io';
-  private readonly DOJAH_APP_ID = 'mock-app-id-12345';
-  private readonly DOJAH_SECRET_KEY = 'mock-secret-key-abcdefghijklmnop';
-
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -30,6 +26,7 @@ export class UsersService {
     private otpRepository: Repository<Otp>,
     private jwtService: JwtService,
     private httpService: HttpService,
+    private configService: ConfigService,
   ) {}
 
   async registerUser(
@@ -172,6 +169,7 @@ export class UsersService {
         userId,
         otp: otpCode,
         otpType: OtpType.PHONE,
+        purpose: OtpPurpose.PHONE_VERIFICATION,
         expiresAt,
         isUsed: false,
       });
@@ -208,6 +206,7 @@ export class UsersService {
           userId, 
           otp: otpCode, 
           otpType: OtpType.PHONE,
+          purpose: OtpPurpose.PHONE_VERIFICATION,
           isUsed: false 
         },
         order: { createdAt: 'DESC' },
@@ -244,12 +243,20 @@ export class UsersService {
 
   async getKycVerificationDetails(referenceId: string): Promise<KycVerificationResponseDto> {
     try {
+      const dojahBaseUrl = this.configService.get<string>('DOJAH_BASE_URL', 'https://api.dojah.io');
+      const dojahAppId = this.configService.get<string>('DOJAH_APP_ID');
+      const dojahSecretKey = this.configService.get<string>('DOJAH_SECRET_KEY');
+
+      if (!dojahAppId || !dojahSecretKey) {
+        throw new InternalServerErrorException('Dojah API credentials not configured');
+      }
+
       // Call Dojah API to get verification details by reference ID
       const response = await firstValueFrom(
-        this.httpService.get(`${this.DOJAH_BASE_URL}/api/v1/kyc/verification`, {
+        this.httpService.get(`${dojahBaseUrl}/api/v1/kyc/verification`, {
           headers: {
-            'AppId': this.DOJAH_APP_ID,
-            'Authorization': this.DOJAH_SECRET_KEY,
+            'AppId': dojahAppId,
+            'Authorization': dojahSecretKey,
             'Content-Type': 'application/json',
           },
           params: {
@@ -321,6 +328,173 @@ export class UsersService {
         throw error;
       }
       throw new InternalServerErrorException('Failed to create PIN');
+    }
+  }
+
+  async forgotPassword(email: string): Promise<{ message: string; maskedPhone: string; expiryInMinutes: number }> {
+    try {
+      // Find user by email
+      const user = await this.userRepository.findOne({ where: { email } });
+      
+      if (!user) {
+        throw new NotFoundException('User with this email not found');
+      }
+
+      if (!user.phone) {
+        throw new BadRequestException('User has no phone number on file');
+      }
+
+      // Generate 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Set OTP expiry to 5 minutes from now
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+      // Create new OTP record for password reset
+      const otp = this.otpRepository.create({
+        userId: user.id,
+        otp: otpCode,
+        otpType: OtpType.PHONE,
+        expiresAt,
+        isUsed: false,
+        purpose: OtpPurpose.PASSWORD_RESET,
+      });
+
+      await this.otpRepository.save(otp);
+
+      // Send OTP via Kudi SMS
+      await this.sendOtpViaSms(user.phone, otpCode);
+
+      // Return masked phone number
+      const maskedPhone = this.maskPhoneNumber(user.phone);
+
+      return {
+        message: 'OTP sent successfully to your phone number',
+        maskedPhone,
+        expiryInMinutes: 5,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to send forgot password OTP');
+    }
+  }
+
+  private async sendOtpViaSms(phoneNumber: string, otp: string): Promise<void> {
+    try {
+      const kudiApiUrl = this.configService.get<string>('KUDI_SMS_API_URL', 'https://api.kudisms.com/api/v1');
+      const kudiApiKey = this.configService.get<string>('KUDI_SMS_API_KEY');
+      const senderId = this.configService.get<string>('KUDI_SMS_SENDER_ID', 'NQkly');
+
+      if (!kudiApiKey) {
+        throw new InternalServerErrorException('Kudi SMS API key not configured');
+      }
+
+      const message = `Your NQkly password reset OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+
+      // Format payload according to Kudi SMS API documentation
+      const payload = {
+        phone_number: phoneNumber,
+        message: message,
+        sender_id: senderId,
+      };
+
+      console.log(`Sending OTP via Kudi SMS to ${phoneNumber}: ${otp}`); // For development/testing
+
+      const response = await firstValueFrom(
+        this.httpService.post(`${kudiApiUrl}/send-sms-otp`, payload, {
+          headers: {
+            'Authorization': `Bearer ${kudiApiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+
+      if (response.data.status !== 'success' && response.data.success !== true) {
+        throw new InternalServerErrorException('Failed to send SMS via Kudi API');
+      }
+    } catch (error) {
+      console.error('Failed to send SMS via Kudi:', error.response?.data || error.message);
+      // In development, don't fail the request if SMS sending fails
+      if (this.configService.get<string>('NODE_ENV') === 'production') {
+        throw new InternalServerErrorException('Failed to send SMS');
+      }
+    }
+  }
+
+  private maskPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    if (cleanPhone.length < 6) {
+      return phone; // Return original if too short to mask
+    }
+
+    // Mask middle digits, showing first 4 and last 2 digits
+    // Example: 08123456789 becomes 0812*****89
+    const firstPart = cleanPhone.substring(0, 4);
+    const lastPart = cleanPhone.substring(cleanPhone.length - 2);
+    const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
+    
+    return `${firstPart}${maskedMiddle}${lastPart}`;
+  }
+
+  async verifyPasswordResetOtp(email: string, otpCode: string): Promise<{ message: string; verified: boolean; resetToken?: string }> {
+    try {
+      // Find user by email
+      const user = await this.userRepository.findOne({ where: { email } });
+      
+      if (!user) {
+        throw new NotFoundException('User with this email not found');
+      }
+
+      // Find the most recent unused password reset OTP for this user
+      const otp = await this.otpRepository.findOne({
+        where: { 
+          userId: user.id, 
+          otp: otpCode, 
+          otpType: OtpType.PHONE,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false 
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!otp) {
+        throw new BadRequestException('Invalid OTP or OTP not found. Please request a new password reset.');
+      }
+
+      // Check if OTP has expired
+      if (otp.expiresAt < new Date()) {
+        throw new BadRequestException('OTP has expired. Please request a new password reset.');
+      }
+
+      // Mark OTP as used
+      await this.otpRepository.update(otp.id, { isUsed: true });
+
+      // Generate a short-lived reset token (valid for 15 minutes)
+      const resetTokenPayload = {
+        sub: user.id,
+        email: user.email,
+        purpose: 'password_reset',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
+      };
+
+      const resetToken = this.jwtService.sign(resetTokenPayload);
+
+      return {
+        message: 'OTP verified successfully. You can now reset your password.',
+        verified: true,
+        resetToken,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to verify password reset OTP');
     }
   }
 

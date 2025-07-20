@@ -544,4 +544,75 @@ export class CreatePinResponseDto {
   success: boolean;
 }
 
+export class ForgotPasswordDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'john.doe@example.com',
+  })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+}
+
+export class ForgotPasswordResponseDto {
+  @ApiProperty({
+    description: 'Forgot password success message',
+    example: 'OTP sent successfully to your phone number',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Masked phone number',
+    example: '0813*****06',
+  })
+  maskedPhone: string;
+
+  @ApiProperty({
+    description: 'OTP expiry time in minutes',
+    example: 5,
+  })
+  expiryInMinutes: number;
+}
+
+export class VerifyPasswordResetOtpDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'john.doe@example.com',
+  })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({
+    description: 'OTP code received via SMS',
+    example: '123456',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^\d{6}$/, { message: 'OTP must be exactly 6 digits' })
+  otp: string;
+}
+
+export class VerifyPasswordResetOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP verification result message',
+    example: 'OTP verified successfully. You can now reset your password.',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Verification status',
+    example: true,
+  })
+  verified: boolean;
+
+  @ApiProperty({
+    description: 'Reset token for password change',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  resetToken?: string;
+}
+
 
