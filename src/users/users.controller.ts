@@ -27,7 +27,9 @@ import {
   ForgotPasswordDto,
   ForgotPasswordResponseDto,
   VerifyPasswordResetOtpDto,
-  VerifyPasswordResetOtpResponseDto
+  VerifyPasswordResetOtpResponseDto,
+  ResetPasswordDto,
+  ResetPasswordResponseDto
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -318,6 +320,41 @@ export class UsersController {
     return this.usersService.verifyPasswordResetOtp(
       verifyPasswordResetOtpDto.email, 
       verifyPasswordResetOtpDto.otp
+    );
+  }
+
+  @Post('reset-password')
+  @ApiOperation({
+    summary: 'Reset password with reset token',
+    description: 'Resets user password using the reset token obtained from OTP verification. The reset token is valid for 15 minutes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password reset successfully',
+    type: ResetPasswordResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid password format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or expired reset token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async resetPassword(
+    @Body(ValidationPipe) resetPasswordDto: ResetPasswordDto,
+  ): Promise<ResetPasswordResponseDto> {
+    return this.usersService.resetPassword(
+      resetPasswordDto.newPassword,
+      resetPasswordDto.resetToken
     );
   }
 

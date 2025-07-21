@@ -498,5 +498,62 @@ export class UsersService {
     }
   }
 
+  async resetPassword(newPassword: string, resetToken: string): Promise<{ message: string; success: boolean }> {
+    try {
+      // Decode and verify the reset token
+      let decodedToken;
+      try {
+        decodedToken = this.jwtService.verify(resetToken);
+      } catch (error) {
+        throw new UnauthorizedException('Invalid or expired reset token');
+      }
+
+      // Verify token purpose and structure
+      if (!decodedToken.sub || !decodedToken.email || decodedToken.purpose !== 'password_reset') {
+        throw new UnauthorizedException('Invalid reset token - token not valid for password reset');
+      }
+
+      // Find user by ID from token
+      const user = await this.userRepository.findOne({ where: { id: decodedToken.sub } });
+      
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Verify the email in token matches user email (additional security check)
+      if (user.email !== decodedToken.email) {
+        throw new UnauthorizedException('Invalid reset token - user mismatch');
+      }
+
+      // Hash the new password
+      const hashedPassword = CryptoUtil.hashPassword(newPassword);
+
+      // Update user's password
+      await this.userRepository.update(user.id, {
+        password: hashedPassword,
+      });
+
+      // Invalidate any remaining unused password reset OTPs for this user for security
+      await this.otpRepository.update(
+        { 
+          userId: user.id, 
+          purpose: OtpPurpose.PASSWORD_RESET, 
+          isUsed: false 
+        },
+        { isUsed: true }
+      );
+
+      return {
+        message: 'Password reset successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to reset password');
+    }
+  }
+
 
 }

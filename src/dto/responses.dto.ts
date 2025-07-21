@@ -615,4 +615,38 @@ export class VerifyPasswordResetOtpResponseDto {
   resetToken?: string;
 }
 
+export class ResetPasswordDto {
+  @ApiProperty({
+    description: 'New password for the user account',
+    example: 'newSecurePassword123!',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  newPassword: string;
+
+  @ApiProperty({
+    description: 'Reset token received from password reset OTP verification',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  @IsString()
+  @IsNotEmpty()
+  resetToken: string;
+}
+
+export class ResetPasswordResponseDto {
+  @ApiProperty({
+    description: 'Password reset success message',
+    example: 'Password reset successfully',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Reset status',
+    example: true,
+  })
+  success: boolean;
+}
+
 
