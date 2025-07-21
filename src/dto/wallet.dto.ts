@@ -109,4 +109,4 @@ export class GenerateWalletResponseDto {
     example: '2023-01-15T10:30:00.000Z',
   })
   createdOn: string;
-} 
+}

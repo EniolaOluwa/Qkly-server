@@ -7,9 +7,17 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { WalletsService } from './wallets.service';
-import { GenerateWalletDto, GenerateWalletResponseDto } from '../dto/wallet.dto';
+import {
+  GenerateWalletDto,
+  GenerateWalletResponseDto,
+} from '../dto/wallet.dto';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
 
 @ApiTags('wallets')
@@ -22,7 +30,8 @@ export class WalletsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Generate user wallet',
-    description: 'Creates a Monnify wallet for the authenticated user. Requires JWT authentication and user BVN.',
+    description:
+      'Creates a Monnify wallet for the authenticated user. Requires JWT authentication and user BVN.',
   })
   @ApiResponse({
     status: 201,
@@ -31,7 +40,8 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - Invalid wallet data or user already has a wallet',
+    description:
+      'Bad request - Invalid wallet data or user already has a wallet',
   })
   @ApiResponse({
     status: 401,
@@ -49,7 +59,10 @@ export class WalletsController {
     @Body(ValidationPipe) generateWalletDto: GenerateWalletDto,
     @Request() req,
   ): Promise<GenerateWalletResponseDto> {
-    return this.walletsService.generateWallet(req.user.userId, generateWalletDto);
+    return this.walletsService.generateWallet(
+      req.user.userId,
+      generateWalletDto,
+    );
   }
 
   @Get()
@@ -73,7 +86,8 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 500,
-    description: 'Internal server error - Failed to retrieve wallet information',
+    description:
+      'Internal server error - Failed to retrieve wallet information',
   })
   async getUserWallet(@Request() req) {
     const walletInfo = await this.walletsService.getUserWallet(req.user.userId);
@@ -82,4 +96,4 @@ export class WalletsController {
       wallet: walletInfo,
     };
   }
-} 
+}

@@ -5,8 +5,8 @@ import { PassportModule } from '@nestjs/passport';
 import { HttpModule } from '@nestjs/axios';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { User } from '../user.entity';
-import { Otp } from '../otp.entity';
+import { User } from './user.entity';
+import { Otp } from './otp.entity';
 import { JwtStrategy } from './jwt.strategy';
 
 @Module({
@@ -15,7 +15,9 @@ import { JwtStrategy } from './jwt.strategy';
     PassportModule,
     HttpModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production',
+      secret:
+        process.env.JWT_SECRET ||
+        'your-super-secret-jwt-key-change-this-in-production',
       signOptions: { expiresIn: '1h' },
     }),
   ],

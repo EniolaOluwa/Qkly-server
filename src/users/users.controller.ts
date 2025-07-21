@@ -8,14 +8,19 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { 
-  RegisterUserDto, 
-  RegisterUserResponseDto, 
-  GeneratePhoneOtpDto, 
-  GeneratePhoneOtpResponseDto, 
-  VerifyPhoneOtpDto, 
+import {
+  RegisterUserDto,
+  RegisterUserResponseDto,
+  GeneratePhoneOtpDto,
+  GeneratePhoneOtpResponseDto,
+  VerifyPhoneOtpDto,
   VerifyPhoneOtpResponseDto,
   LoginDto,
   LoginResponseDto,
@@ -29,7 +34,7 @@ import {
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   ResetPasswordDto,
-  ResetPasswordResponseDto
+  ResetPasswordResponseDto,
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
@@ -97,7 +102,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get user profile',
-    description: 'Retrieves the current user profile information using JWT token',
+    description:
+      'Retrieves the current user profile information using JWT token',
   })
   @ApiResponse({
     status: 200,
@@ -141,7 +147,8 @@ export class UsersController {
   @Post('generate-phone-otp')
   @ApiOperation({
     summary: 'Generate OTP for phone number verification',
-    description: 'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes.',
+    description:
+      'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes.',
   })
   @ApiResponse({
     status: 200,
@@ -159,13 +166,17 @@ export class UsersController {
   async generatePhoneOtp(
     @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
   ): Promise<GeneratePhoneOtpResponseDto> {
-    return this.usersService.generatePhoneOtp(generatePhoneOtpDto.userId, generatePhoneOtpDto.phone);
+    return this.usersService.generatePhoneOtp(
+      generatePhoneOtpDto.userId,
+      generatePhoneOtpDto.phone,
+    );
   }
 
   @Post('verify-phone-otp')
   @ApiOperation({
     summary: 'Verify OTP for phone number verification',
-    description: 'Verifies the OTP code and marks the phone number as verified if successful.',
+    description:
+      'Verifies the OTP code and marks the phone number as verified if successful.',
   })
   @ApiResponse({
     status: 200,
@@ -187,7 +198,11 @@ export class UsersController {
   async verifyPhoneOtp(
     @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
   ): Promise<VerifyPhoneOtpResponseDto> {
-    return this.usersService.verifyPhoneOtp(verifyPhoneOtpDto.userId, verifyPhoneOtpDto.phone, verifyPhoneOtpDto.otp);
+    return this.usersService.verifyPhoneOtp(
+      verifyPhoneOtpDto.userId,
+      verifyPhoneOtpDto.phone,
+      verifyPhoneOtpDto.otp,
+    );
   }
 
   @Post('verify-kyc')
@@ -195,7 +210,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Verify user KYC status',
-    description: 'Retrieves BVN verification status from Dojah using reference ID. Requires JWT authentication.',
+    description:
+      'Retrieves BVN verification status from Dojah using reference ID. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
@@ -219,14 +235,17 @@ export class UsersController {
   })
   @ApiResponse({
     status: 500,
-    description: 'Internal server error - Failed to retrieve verification details',
+    description:
+      'Internal server error - Failed to retrieve verification details',
     type: KycErrorResponseDto,
   })
   async verifyKyc(
     @Body(ValidationPipe) verifyKycDto: VerifyKycDto,
     @Request() req,
   ): Promise<KycVerificationResponseDto> {
-    return this.usersService.getKycVerificationDetails(verifyKycDto.reference_id);
+    return this.usersService.getKycVerificationDetails(
+      verifyKycDto.reference_id,
+    );
   }
 
   @Post('create-pin')
@@ -234,7 +253,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Create authentication PIN',
-    description: 'Creates a 6-digit encrypted PIN for user authentication. Requires JWT authentication.',
+    description:
+      'Creates a 6-digit encrypted PIN for user authentication. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 201,
@@ -267,7 +287,8 @@ export class UsersController {
   @Post('forgot-password')
   @ApiOperation({
     summary: 'Forgot password - Send OTP',
-    description: 'Sends an OTP to the user\'s registered phone number for password reset. Returns a masked phone number.',
+    description:
+      "Sends an OTP to the user's registered phone number for password reset. Returns a masked phone number.",
   })
   @ApiResponse({
     status: 200,
@@ -295,7 +316,8 @@ export class UsersController {
   @Post('verify-password-reset-otp')
   @ApiOperation({
     summary: 'Verify password reset OTP',
-    description: 'Verifies the OTP code for password reset and returns a reset token.',
+    description:
+      'Verifies the OTP code for password reset and returns a reset token.',
   })
   @ApiResponse({
     status: 200,
@@ -318,15 +340,16 @@ export class UsersController {
     @Body(ValidationPipe) verifyPasswordResetOtpDto: VerifyPasswordResetOtpDto,
   ): Promise<VerifyPasswordResetOtpResponseDto> {
     return this.usersService.verifyPasswordResetOtp(
-      verifyPasswordResetOtpDto.email, 
-      verifyPasswordResetOtpDto.otp
+      verifyPasswordResetOtpDto.email,
+      verifyPasswordResetOtpDto.otp,
     );
   }
 
   @Post('reset-password')
   @ApiOperation({
     summary: 'Reset password with reset token',
-    description: 'Resets user password using the reset token obtained from OTP verification. The reset token is valid for 15 minutes.',
+    description:
+      'Resets user password using the reset token obtained from OTP verification. The reset token is valid for 15 minutes.',
   })
   @ApiResponse({
     status: 200,
@@ -354,9 +377,7 @@ export class UsersController {
   ): Promise<ResetPasswordResponseDto> {
     return this.usersService.resetPassword(
       resetPasswordDto.newPassword,
-      resetPasswordDto.resetToken
+      resetPasswordDto.resetToken,
     );
   }
-
-
 }

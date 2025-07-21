@@ -61,4 +61,4 @@ export class Otp {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

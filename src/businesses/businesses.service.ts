@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Business } from '../business.entity';
-import { BusinessType } from '../business-type.entity';
+import { Business } from './business.entity';
+import { BusinessType } from './business-type.entity';
 import {
   CreateBusinessTypeDto,
   UpdateBusinessTypeDto,
