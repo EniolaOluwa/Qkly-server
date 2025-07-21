@@ -24,7 +24,9 @@ import { WalletsModule } from './wallets/wallets.module';
       password: process.env.DB_PASSWORD || 'password@12345',
       database: process.env.DB_NAME || 'nqkly_db',
       entities: [User, Business, BusinessType, Otp],
-      synchronize: process.env.NODE_ENV === 'development', // Only in development
+      migrations: ['dist/migrations/*.js'],
+      synchronize: false, // Set to false when using migrations
+      migrationsRun: false, // Set to true to run migrations on app start
       logging: process.env.NODE_ENV === 'development',
     }),
     UsersModule,
