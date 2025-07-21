@@ -29,7 +29,7 @@ import { StoreModule } from './store/store.module';
       entities: [User, Business, BusinessType, Otp, Order, Product],
       migrations: ['dist/migrations/*.js'],
       synchronize: false, // Set to false when using migrations
-      migrationsRun: false, // Set to true to run migrations on app start
+      migrationsRun: true, // Set to true to run migrations on app start
       logging: process.env.NODE_ENV === 'development',
     }),
     UsersModule,

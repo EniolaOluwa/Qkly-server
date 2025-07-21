@@ -28,7 +28,7 @@ export class AddPurposeToOtp1700000000000 implements MigrationInterface {
       `);
     } else {
       console.log('Purpose column already exists, skipping column creation');
-      
+
       // Ensure the column has the correct type and default (in case it was created differently)
       await queryRunner.query(`
         ALTER TABLE "otps" 
@@ -40,8 +40,8 @@ export class AddPurposeToOtp1700000000000 implements MigrationInterface {
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Remove the purpose column
     await queryRunner.query(`ALTER TABLE "otps" DROP COLUMN "purpose"`);
-    
+
     // Drop the enum type (only if no other columns are using it)
     await queryRunner.query(`DROP TYPE IF EXISTS "otp_purpose_enum"`);
   }
-} 
+}

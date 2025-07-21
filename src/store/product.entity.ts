@@ -49,4 +49,4 @@ export class Product {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

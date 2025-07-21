@@ -7,9 +7,16 @@ import {
   Body,
   Param,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { BusinessesService } from './businesses.service';
+import { JwtAuthGuard } from '../users/jwt-auth.guard';
 import {
   CreateBusinessTypeDto,
   UpdateBusinessTypeDto,
@@ -21,6 +28,8 @@ import {
 
 @ApiTags('businesses')
 @Controller('businesses')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) {}
 

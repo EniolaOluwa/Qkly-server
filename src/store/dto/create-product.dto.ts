@@ -77,4 +77,4 @@ export class CreateProductDto {
   @IsNotEmpty()
   @Min(0, { message: 'Price must be a positive number' })
   price: number;
-} 
+}

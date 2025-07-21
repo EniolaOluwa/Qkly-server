@@ -13,7 +13,7 @@ import { Product } from './product.entity';
 
 export enum OrderStatus {
   ORDERED = 'ordered',
-  DISPATCHED = 'dispatched', 
+  DISPATCHED = 'dispatched',
   DELIVERED = 'delivered',
   RETURNED = 'returned',
 }
@@ -91,7 +91,11 @@ export class Order {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   dateOfTransaction: Date;
 
-  @Column({ type: 'json', nullable: true, comment: 'Product details and variants' })
+  @Column({
+    type: 'json',
+    nullable: true,
+    comment: 'Product details and variants',
+  })
   productDetails: any;
 
   @Column({ nullable: true })
@@ -106,4 +110,4 @@ export class Order {
 
   @UpdateDateColumn()
   updatedAt: Date;
-} 
+}

@@ -30,11 +30,11 @@ export class StoreService {
       where: { id },
       relations: ['user', 'business', 'product'],
     });
-    
+
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
-    
+
     return order;
   }
 
@@ -52,13 +52,19 @@ export class StoreService {
     });
   }
 
-  async updateOrderStatus(id: number, orderStatus: OrderStatus): Promise<Order> {
+  async updateOrderStatus(
+    id: number,
+    orderStatus: OrderStatus,
+  ): Promise<Order> {
     const order = await this.findOrderById(id);
     order.orderStatus = orderStatus;
     return await this.orderRepository.save(order);
   }
 
-  async updateTransactionStatus(id: number, transactionStatus: TransactionStatus): Promise<Order> {
+  async updateTransactionStatus(
+    id: number,
+    transactionStatus: TransactionStatus,
+  ): Promise<Order> {
     const order = await this.findOrderById(id);
     order.transactionStatus = transactionStatus;
     return await this.orderRepository.save(order);
@@ -92,11 +98,11 @@ export class StoreService {
       where: { id },
       relations: ['user', 'business'],
     });
-    
+
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
-    
+
     return product;
   }
 
@@ -114,7 +120,10 @@ export class StoreService {
     });
   }
 
-  async updateProduct(id: number, updateData: Partial<Product>): Promise<Product> {
+  async updateProduct(
+    id: number,
+    updateData: Partial<Product>,
+  ): Promise<Product> {
     const product = await this.findProductById(id);
     Object.assign(product, updateData);
     return await this.productRepository.save(product);
@@ -124,4 +133,4 @@ export class StoreService {
     const product = await this.findProductById(id);
     await this.productRepository.remove(product);
   }
-} 
+}
