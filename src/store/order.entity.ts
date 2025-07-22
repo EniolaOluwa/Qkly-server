@@ -9,7 +9,12 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Business } from '../businesses/business.entity';
-import { Product } from './product.entity';
+
+export interface ProductDetails {
+  productId: number;
+  quantity: number;
+  colour: string;
+}
 
 export enum OrderStatus {
   ORDERED = 'ordered',
@@ -93,17 +98,10 @@ export class Order {
 
   @Column({
     type: 'json',
-    nullable: true,
-    comment: 'Product details and variants',
+    nullable: false,
+    comment: 'Array of product details including product ID, quantity, and colour',
   })
-  productDetails: any;
-
-  @Column({ nullable: true })
-  productId: number;
-
-  @ManyToOne(() => Product, { nullable: true })
-  @JoinColumn({ name: 'productId' })
-  product: Product;
+  productDetails: ProductDetails[];
 
   @CreateDateColumn()
   createdAt: Date;

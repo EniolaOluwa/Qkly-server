@@ -21,14 +21,14 @@ export class StoreService {
 
   async findAllOrders(): Promise<Order[]> {
     return await this.orderRepository.find({
-      relations: ['user', 'business', 'product'],
+      relations: ['user', 'business'],
     });
   }
 
   async findOrderById(id: number): Promise<Order> {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: ['user', 'business', 'product'],
+      relations: ['user', 'business'],
     });
 
     if (!order) {
@@ -41,14 +41,14 @@ export class StoreService {
   async findOrdersByUserId(userId: number): Promise<Order[]> {
     return await this.orderRepository.find({
       where: { userId },
-      relations: ['user', 'business', 'product'],
+      relations: ['user', 'business'],
     });
   }
 
   async findOrdersByBusinessId(businessId: number): Promise<Order[]> {
     return await this.orderRepository.find({
       where: { businessId },
-      relations: ['user', 'business', 'product'],
+      relations: ['user', 'business'],
     });
   }
 

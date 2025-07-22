@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Business } from '../businesses/business.entity';
+import { UserRole } from './user-role.enum';
 
 @Entity('users')
 export class User {
@@ -34,6 +35,14 @@ export class User {
 
   @Column({ nullable: true, comment: 'Encrypted PIN for user authentication' })
   pin: string;
+
+  @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.MERCHANT,
+    comment: 'User role: merchant or admin'
+  })
+  role: UserRole;
 
   @Column({ nullable: true, comment: 'Monnify wallet reference' })
   walletReference: string;

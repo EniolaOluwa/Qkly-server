@@ -8,6 +8,7 @@ import { UsersService } from './users.service';
 import { User } from './user.entity';
 import { Otp } from './otp.entity';
 import { JwtStrategy } from './jwt.strategy';
+import { RoleGuard } from './role.guard';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService, JwtStrategy],
-  exports: [UsersService],
+  providers: [UsersService, JwtStrategy, RoleGuard],
+  exports: [UsersService, RoleGuard],
 })
 export class UsersModule {}

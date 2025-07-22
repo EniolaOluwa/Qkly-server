@@ -7,8 +7,37 @@ import {
   IsEnum,
   IsOptional,
   IsPhoneNumber,
+  ValidateNested,
+  IsArray,
 } from 'class-validator';
-import { TransactionMedium } from '../order.entity';
+import { Type } from 'class-transformer';
+import { TransactionMedium, ProductDetails } from '../order.entity';
+
+export class ProductDetailsDto implements ProductDetails {
+  @ApiProperty({
+    description: 'Product ID',
+    example: 1,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  productId: number;
+
+  @ApiProperty({
+    description: 'Quantity of the product',
+    example: 2,
+  })
+  @IsNumber()
+  @IsNotEmpty()
+  quantity: number;
+
+  @ApiProperty({
+    description: 'Colour of the product',
+    example: 'Red',
+  })
+  @IsString()
+  @IsNotEmpty()
+  colour: string;
+}
 
 export class CreateOrderDto {
   @ApiProperty({
@@ -85,24 +114,24 @@ export class CreateOrderDto {
   transactionMedium: TransactionMedium;
 
   @ApiProperty({
-    description: 'Product details and variants',
-    example: {
-      productId: 1,
-      quantity: 2,
-      variant: 'Large',
-      color: 'Red',
-    },
-    required: false,
+    description: 'Array of product details including product ID, quantity, and colour',
+    type: [ProductDetailsDto],
+    example: [
+      {
+        productId: 1,
+        quantity: 2,
+        colour: 'Red'
+      },
+      {
+        productId: 2,
+        quantity: 1,
+        colour: 'Blue'
+      }
+    ]
   })
-  @IsOptional()
-  productDetails?: any;
-
-  @ApiProperty({
-    description: 'Product ID (optional)',
-    example: 1,
-    required: false,
-  })
-  @IsOptional()
-  @IsNumber()
-  productId?: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductDetailsDto)
+  @IsNotEmpty()
+  productDetails: ProductDetailsDto[];
 }

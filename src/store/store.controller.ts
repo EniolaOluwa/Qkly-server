@@ -61,27 +61,38 @@ export class OrdersController {
     return await this.storeService.findOrdersByUserId(req.user.userId);
   }
 
-  @Get('user/:userId?')
+  @Get('user')
+  @ApiOperation({
+    summary: 'Get orders for authenticated user',
+    description:
+      'Retrieves orders for the authenticated user using JWT token.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Orders retrieved successfully',
+  })
+  async findOrdersForCurrentUser(@Request() req: any): Promise<Order[]> {
+    return await this.storeService.findOrdersByUserId(req.user.userId);
+  }
+
+  @Get('user/:userId')
   @ApiOperation({
     summary: 'Get orders by user ID',
-    description:
-      'Retrieves orders for a specific user. If userId is not provided in route, uses authenticated user ID from JWT token.',
+    description: 'Retrieves orders for a specific user.',
   })
   @ApiParam({
     name: 'userId',
-    required: false,
-    description:
-      'User ID to get orders for. If not provided, uses authenticated user ID.',
+    required: true,
+    description: 'User ID to get orders for.',
   })
   @ApiResponse({
     status: 200,
     description: 'Orders retrieved successfully',
   })
   async findOrdersByUserId(
-    @Param('userId') userId?: string,
-    @Request() req?: any,
+    @Param('userId') userId: string,
   ): Promise<Order[]> {
-    const targetUserId = userId ? parseInt(userId, 10) : req?.user?.userId;
+    const targetUserId = parseInt(userId, 10);
     return await this.storeService.findOrdersByUserId(targetUserId);
   }
 
@@ -171,27 +182,38 @@ export class ProductsController {
     return await this.storeService.findProductsByUserId(req.user.userId);
   }
 
-  @Get('user/:userId?')
+  @Get('user')
+  @ApiOperation({
+    summary: 'Get products for authenticated user',
+    description:
+      'Retrieves products for the authenticated user using JWT token.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Products retrieved successfully',
+  })
+  async findProductsForCurrentUser(@Request() req: any): Promise<Product[]> {
+    return await this.storeService.findProductsByUserId(req.user.userId);
+  }
+
+  @Get('user/:userId')
   @ApiOperation({
     summary: 'Get products by user ID',
-    description:
-      'Retrieves products for a specific user. If userId is not provided in route, uses authenticated user ID from JWT token.',
+    description: 'Retrieves products for a specific user.',
   })
   @ApiParam({
     name: 'userId',
-    required: false,
-    description:
-      'User ID to get products for. If not provided, uses authenticated user ID.',
+    required: true,
+    description: 'User ID to get products for.',
   })
   @ApiResponse({
     status: 200,
     description: 'Products retrieved successfully',
   })
   async findProductsByUserId(
-    @Param('userId') userId?: string,
-    @Request() req?: any,
+    @Param('userId') userId: string,
   ): Promise<Product[]> {
-    const targetUserId = userId ? parseInt(userId, 10) : req?.user?.userId;
+    const targetUserId = parseInt(userId, 10);
     return await this.storeService.findProductsByUserId(targetUserId);
   }
 

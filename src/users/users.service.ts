@@ -127,6 +127,7 @@ export class UsersService {
         firstName: user.firstName,
         lastName: user.lastName,
         deviceId: loginDto.deviceid,
+        role: user.role,
       };
 
       // Generate JWT token

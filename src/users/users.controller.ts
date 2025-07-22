@@ -37,6 +37,9 @@ import {
   ResetPasswordResponseDto,
 } from '../dto/responses.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { RoleGuard } from './role.guard';
+import { Roles } from './roles.decorator';
+import { UserRole } from './user-role.enum';
 
 @ApiTags('users')
 @Controller('users')
@@ -379,5 +382,33 @@ export class UsersController {
       resetPasswordDto.newPassword,
       resetPasswordDto.resetToken,
     );
+  }
+
+  // Example admin-only endpoint demonstrating role-based access control
+  @Get('admin/dashboard')
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get admin dashboard data (Admin Only)',
+    description: 'Retrieves dashboard data that only admin users can access',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin dashboard data retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Token required',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Admin role required',
+  })
+  async getAdminDashboard(@Request() req: any): Promise<{ message: string; userRole: string }> {
+    return {
+      message: 'Welcome to the admin dashboard!',
+      userRole: req.user.role,
+    };
   }
 }
