@@ -8,6 +8,7 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsUUID,
 } from 'class-validator';
 
 export class WelcomeResponseDto {
@@ -278,14 +279,6 @@ export class BusinessResponseDto {
 
 export class GeneratePhoneOtpDto {
   @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
-  @ApiProperty({
     description: 'Phone number for OTP verification',
     example: '+1234567890',
   })
@@ -306,17 +299,15 @@ export class GeneratePhoneOtpResponseDto {
     example: 5,
   })
   expiryInMinutes: number;
+
+  @ApiProperty({
+    description: 'OTP expiry timestamp (ISO 8601 format)',
+    example: '2024-01-20T10:35:00.000Z',
+  })
+  expiryTimestamp: Date;
 }
 
 export class VerifyPhoneOtpDto {
-  @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
   @ApiProperty({
     description: 'Phone number for OTP verification',
     example: '+1234567890',
@@ -457,12 +448,18 @@ export class LoginResponseDto {
     example: false,
   })
   isPhoneVerified: boolean;
+
+  @ApiProperty({
+    description: 'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
+    example: 0,
+  })
+  onboardingStep: number;
 }
 
 export class VerifyKycDto {
   @ApiProperty({
-    description: 'Reference ID of the verification from Dojah',
-    example: 'DJ-31038041E0',
+    description: 'Reference ID of the verification from Prembly',
+    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
   })
   @IsString()
   @IsNotEmpty()
@@ -478,21 +475,36 @@ export class KycVerificationResponseDto {
 
   @ApiProperty({
     description: 'Response message',
-    example: 'BVN verification completed successfully',
+    example: 'Verification details retrieved successfully',
   })
   message: string;
 
   @ApiProperty({
     description: 'Reference ID of the verification',
-    example: 'DJ-31038041E0',
+    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
   })
   reference_id: string;
 
   @ApiProperty({
-    description: 'BVN verification status',
-    example: true,
+    description: 'Verification status from Prembly',
+    example: 'VERIFIED',
+    enum: ['VERIFIED', 'FAILED', 'PENDING'],
   })
-  bvn_verified: boolean;
+  verification_status: string;
+
+  @ApiProperty({
+    description: 'Response code from Prembly',
+    example: '00',
+  })
+  response_code: string;
+
+
+
+  @ApiProperty({
+    description: 'Date when verification was created',
+    example: '2023-05-26T09:52:49.677Z',
+  })
+  created_at: string;
 }
 
 export class KycErrorResponseDto {
@@ -517,16 +529,16 @@ export class KycErrorResponseDto {
 
 export class CreatePinDto {
   @ApiProperty({
-    description: '6-digit PIN for user authentication',
-    example: '123456',
-    minLength: 6,
-    maxLength: 6,
+    description: '4-digit PIN for user authentication',
+    example: '1234',
+    minLength: 4,
+    maxLength: 4,
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
-  @MaxLength(6)
-  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  @MinLength(4)
+  @MaxLength(4)
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin: string;
 }
 
@@ -542,6 +554,87 @@ export class CreatePinResponseDto {
     example: true,
   })
   success: boolean;
+}
+
+export class GenerateCreatePinOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP generation success message',
+    example: 'OTP sent successfully to your phone number',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Masked phone number',
+    example: '0813*****06',
+  })
+  maskedPhone: string;
+
+  @ApiProperty({
+    description: 'OTP expiration time in minutes',
+    example: 5,
+  })
+  expiryInMinutes: number;
+}
+
+export class VerifyCreatePinOtpDto {
+  @ApiProperty({
+    description: '6-digit OTP code',
+    example: '123456',
+    minLength: 6,
+    maxLength: 6,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^\d{6}$/, { message: 'OTP must be exactly 6 digits' })
+  otp: string;
+}
+
+export class VerifyCreatePinOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP verification success message',
+    example: 'OTP verified successfully. You can now create your PIN.',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Verification status',
+    example: true,
+  })
+  verified: boolean;
+
+  @ApiProperty({
+    description: 'PIN creation reference code',
+    example: 'a1b2c3',
+  })
+  reference: string;
+}
+
+export class CreatePinWithReferenceDto {
+  @ApiProperty({
+    description: '4-digit PIN for user authentication',
+    example: '1234',
+    minLength: 4,
+    maxLength: 4,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(4)
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
+  pin: string;
+
+  @ApiProperty({
+    description: 'PIN creation reference code from OTP verification',
+    example: 'a1b2c3',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^[a-f0-9]{6}$/, { message: 'Reference must be a 6-character hexadecimal string' })
+  reference: string;
 }
 
 export class ForgotPasswordDto {
@@ -609,8 +702,8 @@ export class VerifyPasswordResetOtpResponseDto {
   verified: boolean;
 
   @ApiProperty({
-    description: 'Reset token for password change',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'UUID reset token for password change',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   resetToken?: string;
 }
@@ -627,11 +720,12 @@ export class ResetPasswordDto {
   newPassword: string;
 
   @ApiProperty({
-    description: 'Reset token received from password reset OTP verification',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'UUID reset token received from password reset OTP verification',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   @IsString()
   @IsNotEmpty()
+  @IsUUID(4, { message: 'Reset token must be a valid UUID' })
   resetToken: string;
 }
 

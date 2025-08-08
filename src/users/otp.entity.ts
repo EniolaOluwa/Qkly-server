@@ -18,6 +18,7 @@ export enum OtpPurpose {
   PHONE_VERIFICATION = 'phone_verification',
   PASSWORD_RESET = 'password_reset',
   EMAIL_VERIFICATION = 'email_verification',
+  PIN_CREATION = 'pin_creation',
 }
 
 @Entity('otps')
@@ -32,7 +33,7 @@ export class Otp {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ length: 6, nullable: false })
+  @Column({ length: 50, nullable: false })
   otp: string;
 
   @Column({

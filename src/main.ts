@@ -1,9 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { LoggingInterceptor } from './utils/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Global interceptors
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Set global prefix for all routes
   app.setGlobalPrefix('v1');

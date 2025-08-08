@@ -30,7 +30,7 @@ import { StoreModule } from './store/store.module';
       migrations: ['dist/migrations/*.js'],
       synchronize: false, // Set to false when using migrations
       migrationsRun: true, // Set to true to run migrations on app start
-      logging: process.env.NODE_ENV === 'development',
+      logging: false, // Disabled database query logging
     }),
     UsersModule,
     BusinessesModule,

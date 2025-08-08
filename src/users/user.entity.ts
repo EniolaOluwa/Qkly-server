@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Business } from '../businesses/business.entity';
 import { UserRole } from './user-role.enum';
+import { OnboardingStep } from './onboarding-step.enum';
 
 @Entity('users')
 export class User {
@@ -71,6 +72,17 @@ export class User {
 
   @Column({ default: false })
   isPhoneVerified: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: OnboardingStep,
+    default: OnboardingStep.PERSONAL_INFORMATION,
+    comment: 'Current onboarding step for the user (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)'
+  })
+  onboardingStep: OnboardingStep;
+
+  @Column({ default: false, comment: 'Whether user has completed all onboarding steps' })
+  isOnboardingCompleted: boolean;
 
   @Column({ nullable: true })
   deviceId: string;

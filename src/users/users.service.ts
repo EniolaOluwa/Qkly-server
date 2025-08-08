@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { User } from './user.entity';
 import { Otp, OtpType, OtpPurpose } from './otp.entity';
+import { OnboardingStep } from './onboarding-step.enum';
 import {
   RegisterUserDto,
   LoginDto,
@@ -146,6 +147,7 @@ export class UsersService {
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
         isPhoneVerified: user.isPhoneVerified,
+        onboardingStep: user.onboardingStep,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
@@ -158,7 +160,7 @@ export class UsersService {
   async generatePhoneOtp(
     userId: number,
     phone: string,
-  ): Promise<{ message: string; expiryInMinutes: number }> {
+  ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
     try {
       // Find user by ID and phone number
       const user = await this.userRepository.findOne({
@@ -190,12 +192,13 @@ export class UsersService {
 
       await this.otpRepository.save(otp);
 
-      // In a real application, you would send the OTP via SMS here
-      console.log(`OTP for ${phone}: ${otpCode}`); // For development/testing
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(phone, otpCode);
 
       return {
         message: 'OTP sent successfully to your phone number',
         expiryInMinutes: 5,
+        expiryTimestamp: expiresAt,
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -250,9 +253,10 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Update user as phone verified
+      // Update user as phone verified and set onboarding step to 1 (PHONE_VERIFICATION)
       await this.userRepository.update(userId, {
         isPhoneVerified: true,
+        onboardingStep: OnboardingStep.PHONE_VERIFICATION,
       });
 
       return {
@@ -274,52 +278,51 @@ export class UsersService {
     referenceId: string,
   ): Promise<KycVerificationResponseDto> {
     try {
-      const dojahBaseUrl = this.configService.get<string>(
-        'DOJAH_BASE_URL',
-        'https://api.dojah.io',
+      const premblyBaseUrl = this.configService.get<string>(
+        'PREMBLY_BASE_URL',
+        'https://api.prembly.com',
       );
-      const dojahAppId = this.configService.get<string>('DOJAH_APP_ID');
-      const dojahSecretKey = this.configService.get<string>('DOJAH_SECRET_KEY');
+      const premblyApiKey = this.configService.get<string>('PREMBLY_API_KEY');
 
-      if (!dojahAppId || !dojahSecretKey) {
+      if (!premblyApiKey) {
         throw new InternalServerErrorException(
-          'Dojah API credentials not configured',
+          'Prembly API credentials not configured',
         );
       }
 
-      // Call Dojah API to get verification details by reference ID
+      // Call Prembly API to get verification status by reference ID
       const response = await firstValueFrom(
-        this.httpService.get(`${dojahBaseUrl}/api/v1/kyc/verification`, {
+        this.httpService.get(`${premblyBaseUrl}/identitypass/verification/${referenceId}/status`, {
           headers: {
-            AppId: dojahAppId,
-            Authorization: dojahSecretKey,
+            'x-api-key': premblyApiKey,
             'Content-Type': 'application/json',
-          },
-          params: {
-            reference_id: referenceId,
           },
         }),
       );
 
       const fullResponse = response.data;
+      const verificationData = fullResponse?.data;
 
-      // Check if BVN verification exists and is successful
-      const bvnData = fullResponse?.data?.government_data?.data?.bvn?.entity;
-      const bvnVerified =
-        fullResponse?.data?.government_data?.status === true && !!bvnData;
+      if (!verificationData) {
+        throw new NotFoundException('Verification data not found');
+      }
 
-      // Return only verification status
+      // Map Prembly response to our DTO
+      const isVerified = verificationData.verification_status === 'VERIFIED';
+      
       return {
         status: fullResponse.status === true,
-        message: bvnVerified
-          ? 'BVN verification completed successfully'
-          : 'BVN verification failed',
-        reference_id: referenceId,
-        bvn_verified: bvnVerified,
+        message: isVerified 
+          ? 'Verification completed successfully' 
+          : `Verification ${verificationData.verification_status?.toLowerCase() || 'failed'}`,
+        reference_id: verificationData.reference || referenceId,
+        verification_status: verificationData.verification_status || 'UNKNOWN',
+        response_code: verificationData.response_code || '',
+        created_at: verificationData.created_at || '',
       };
     } catch (error) {
       console.error(
-        'Dojah KYC verification details failed:',
+        'Prembly KYC verification details failed:',
         error.response?.data || error.message,
       );
 
@@ -332,7 +335,11 @@ export class UsersService {
       }
 
       if (error.response?.status === 401) {
-        throw new UnauthorizedException('Invalid Dojah API credentials');
+        throw new UnauthorizedException('Invalid Prembly API credentials');
+      }
+
+      if (error.response?.status === 403) {
+        throw new UnauthorizedException('Insufficient permissions for Prembly API');
       }
 
       throw new InternalServerErrorException(
@@ -343,9 +350,9 @@ export class UsersService {
 
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
-      // Validate PIN format (6 digits only)
-      if (!/^\d{6}$/.test(pin)) {
-        throw new BadRequestException('PIN must be exactly 6 digits');
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 4 digits');
       }
 
       // Find user by ID
@@ -361,6 +368,194 @@ export class UsersService {
       // Update user with encrypted PIN
       await this.userRepository.update(userId, {
         pin: encryptedPin,
+      });
+
+      return {
+        message: 'PIN created successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create PIN');
+    }
+  }
+
+  async generateCreatePinOtp(userId: number): Promise<{
+    message: string;
+    maskedPhone: string;
+    expiryInMinutes: number;
+  }> {
+    try {
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (!user.phone) {
+        throw new BadRequestException('User has no phone number on file');
+      }
+
+      // Check if user already has a PIN
+      if (user.pin) {
+        throw new BadRequestException('User already has a PIN set');
+      }
+
+      // Generate 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Set OTP expiry to 5 minutes from now
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+      // Create new OTP record for PIN creation
+      const otp = this.otpRepository.create({
+        userId: user.id,
+        otp: otpCode,
+        otpType: OtpType.PHONE,
+        purpose: OtpPurpose.PIN_CREATION,
+        expiresAt,
+      });
+
+      await this.otpRepository.save(otp);
+
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(user.phone, otpCode);
+
+      return {
+        message: 'OTP sent successfully to your phone number',
+        maskedPhone: this.maskPhoneNumber(user.phone),
+        expiryInMinutes: 5,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to generate PIN creation OTP');
+    }
+  }
+
+  async verifyCreatePinOtp(userId: number, otpCode: string): Promise<{
+    message: string;
+    verified: boolean;
+    reference: string;
+  }> {
+    try {
+      // Find the most recent unused OTP for PIN creation
+      const otp = await this.otpRepository.findOne({
+        where: {
+          userId,
+          otp: otpCode,
+          purpose: OtpPurpose.PIN_CREATION,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!otp) {
+        throw new BadRequestException('Invalid OTP code');
+      }
+
+      // Check if OTP has expired
+      if (new Date() > otp.expiresAt) {
+        throw new BadRequestException('OTP has expired. Please request a new one');
+      }
+
+      // Mark OTP as used
+      otp.isUsed = true;
+      await this.otpRepository.save(otp);
+
+      // Generate a shorter reference (6 characters) that fits in the OTP field
+      const reference = require('crypto').randomBytes(3).toString('hex'); // 6 character hex string
+
+      // Store the reference temporarily using the OTP field (which is 6 chars max)
+      const referenceOtp = this.otpRepository.create({
+        userId,
+        otp: reference,
+        otpType: OtpType.PHONE,
+        purpose: OtpPurpose.PIN_CREATION,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes validity
+        isUsed: false,
+      });
+
+      await this.otpRepository.save(referenceOtp);
+
+      return {
+        message: 'OTP verified successfully. You can now create your PIN.',
+        verified: true,
+        reference,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to verify PIN creation OTP');
+    }
+  }
+
+  async createPinWithReference(userId: number, pin: string, reference: string): Promise<{
+    message: string;
+    success: boolean;
+  }> {
+    try {
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 4 digits');
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Check if user already has a PIN
+      if (user.pin) {
+        throw new BadRequestException('User already has a PIN set');
+      }
+
+      // Verify the reference UUID
+      const referenceOtp = await this.otpRepository.findOne({
+        where: {
+          userId,
+          otp: reference, // We stored the reference in the otp field
+          purpose: OtpPurpose.PIN_CREATION,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!referenceOtp) {
+        throw new BadRequestException('Invalid or expired reference');
+      }
+
+      // Check if reference has expired
+      if (new Date() > referenceOtp.expiresAt) {
+        throw new BadRequestException('Reference has expired. Please generate a new OTP');
+      }
+
+      // Mark reference as used
+      referenceOtp.isUsed = true;
+      await this.otpRepository.save(referenceOtp);
+
+      // Encrypt the PIN
+      const encryptedPin = CryptoUtil.encryptPin(pin);
+
+      // Update user with encrypted PIN and advance onboarding step
+      await this.userRepository.update(userId, {
+        pin: encryptedPin,
+        onboardingStep: OnboardingStep.AUTHENTICATION_PIN,
+        isOnboardingCompleted: true, // PIN creation is the final step
       });
 
       return {
@@ -414,8 +609,8 @@ export class UsersService {
 
       await this.otpRepository.save(otp);
 
-      // Send OTP via Kudi SMS
-      await this.sendOtpViaSms(user.phone, otpCode);
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(user.phone, otpCode);
 
       // Return masked phone number
       const maskedPhone = this.maskPhoneNumber(user.phone);
@@ -438,55 +633,58 @@ export class UsersService {
     }
   }
 
-  private async sendOtpViaSms(phoneNumber: string, otp: string): Promise<void> {
+  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
     try {
-      const kudiApiUrl = this.configService.get<string>(
-        'KUDI_SMS_API_URL',
-        'https://api.kudisms.com/api/v1',
+      const termiiBaseUrl = this.configService.get<string>(
+        'TERMII_BASE_URL',
+        'https://api.ng.termii.com',
       );
-      const kudiApiKey = this.configService.get<string>('KUDI_SMS_API_KEY');
+      const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
       const senderId = this.configService.get<string>(
-        'KUDI_SMS_SENDER_ID',
+        'TERMII_SENDER_ID',
         'NQkly',
       );
+      const channel = this.configService.get<string>(
+        'TERMII_CHANNEL',
+        'generic',
+      );
 
-      if (!kudiApiKey) {
+      if (!termiiApiKey) {
         throw new InternalServerErrorException(
-          'Kudi SMS API key not configured',
+          'Termii SMS API key not configured',
         );
       }
 
-      const message = `Your NQkly password reset OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+      const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
 
-      // Format payload according to Kudi SMS API documentation
+      // Format payload according to Termii SMS API documentation
       const payload = {
-        phone_number: phoneNumber,
-        message: message,
-        sender_id: senderId,
+        to: phoneNumber,
+        from: senderId,
+        sms: message,
+        type: 'plain',
+        channel: channel,
+        api_key: termiiApiKey,
       };
 
-      console.log(`Sending OTP via Kudi SMS to ${phoneNumber}: ${otp}`); // For development/testing
+      console.log(`Sending OTP via Termii SMS to ${phoneNumber}: ${otp}`); // For development/testing
 
       const response = await firstValueFrom(
-        this.httpService.post(`${kudiApiUrl}/send-sms-otp`, payload, {
+        this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
           headers: {
-            Authorization: `Bearer ${kudiApiKey}`,
             'Content-Type': 'application/json',
           },
         }),
       );
 
-      if (
-        response.data.status !== 'success' &&
-        response.data.success !== true
-      ) {
+      if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
         throw new InternalServerErrorException(
-          'Failed to send SMS via Kudi API',
+          'Failed to send SMS via Termii API',
         );
       }
     } catch (error) {
       console.error(
-        'Failed to send SMS via Kudi:',
+        'Failed to send SMS via Termii:',
         error.response?.data || error.message,
       );
       // In development, don't fail the request if SMS sending fails
@@ -553,16 +751,20 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Generate a short-lived reset token (valid for 15 minutes)
-      const resetTokenPayload = {
-        sub: user.id,
-        email: user.email,
-        purpose: 'password_reset',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
-      };
+      // Generate a UUID reset token (valid for 15 minutes)
+      const resetToken = require('crypto').randomUUID();
+      
+      // Store the reset token in the OTP table for 15 minutes validity
+      const resetTokenOtp = this.otpRepository.create({
+        userId: user.id,
+        otp: resetToken, // Store the full UUID
+        otpType: OtpType.EMAIL, // Use EMAIL type for reset tokens
+        purpose: OtpPurpose.PASSWORD_RESET,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes validity
+        isUsed: false,
+      });
 
-      const resetToken = this.jwtService.sign(resetTokenPayload);
+      await this.otpRepository.save(resetTokenOtp);
 
       return {
         message: 'OTP verified successfully. You can now reset your password.',
@@ -587,38 +789,37 @@ export class UsersService {
     resetToken: string,
   ): Promise<{ message: string; success: boolean }> {
     try {
-      // Decode and verify the reset token
-      let decodedToken;
-      try {
-        decodedToken = this.jwtService.verify(resetToken);
-      } catch (error) {
+      // Find the reset token in the database
+      const tokenRecord = await this.otpRepository.findOne({
+        where: {
+          otp: resetToken, // Full UUID stored in OTP field
+          otpType: OtpType.EMAIL,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!tokenRecord) {
         throw new UnauthorizedException('Invalid or expired reset token');
       }
 
-      // Verify token purpose and structure
-      if (
-        !decodedToken.sub ||
-        !decodedToken.email ||
-        decodedToken.purpose !== 'password_reset'
-      ) {
-        throw new UnauthorizedException(
-          'Invalid reset token - token not valid for password reset',
-        );
+      // Check if token has expired
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Reset token has expired');
       }
 
-      // Find user by ID from token
+      // Find user by ID from token record
       const user = await this.userRepository.findOne({
-        where: { id: decodedToken.sub },
+        where: { id: tokenRecord.userId },
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
-      // Verify the email in token matches user email (additional security check)
-      if (user.email !== decodedToken.email) {
-        throw new UnauthorizedException('Invalid reset token - user mismatch');
-      }
+      // Mark the reset token as used
+      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
 
       // Hash the new password
       const hashedPassword = CryptoUtil.hashPassword(newPassword);

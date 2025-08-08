@@ -29,6 +29,10 @@ import {
   KycErrorResponseDto,
   CreatePinDto,
   CreatePinResponseDto,
+  CreatePinWithReferenceDto,
+  GenerateCreatePinOtpResponseDto,
+  VerifyCreatePinOtpDto,
+  VerifyCreatePinOtpResponseDto,
   ForgotPasswordDto,
   ForgotPasswordResponseDto,
   VerifyPasswordResetOtpDto,
@@ -148,15 +152,21 @@ export class UsersController {
   }
 
   @Post('generate-phone-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Generate OTP for phone number verification',
     description:
-      'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes.',
+      'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
     description: 'OTP generated successfully',
     type: GeneratePhoneOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
   })
   @ApiResponse({
     status: 404,
@@ -168,18 +178,21 @@ export class UsersController {
   })
   async generatePhoneOtp(
     @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
+    @Request() req,
   ): Promise<GeneratePhoneOtpResponseDto> {
     return this.usersService.generatePhoneOtp(
-      generatePhoneOtpDto.userId,
+      req.user.userId,
       generatePhoneOtpDto.phone,
     );
   }
 
   @Post('verify-phone-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Verify OTP for phone number verification',
     description:
-      'Verifies the OTP code and marks the phone number as verified if successful.',
+      'Verifies the OTP code and marks the phone number as verified if successful. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
@@ -191,6 +204,10 @@ export class UsersController {
     description: 'Invalid OTP or OTP expired',
   })
   @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
     status: 404,
     description: 'User with this ID and phone number not found',
   })
@@ -200,9 +217,10 @@ export class UsersController {
   })
   async verifyPhoneOtp(
     @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
+    @Request() req,
   ): Promise<VerifyPhoneOtpResponseDto> {
     return this.usersService.verifyPhoneOtp(
-      verifyPhoneOtpDto.userId,
+      req.user.userId,
       verifyPhoneOtpDto.phone,
       verifyPhoneOtpDto.otp,
     );
@@ -214,11 +232,11 @@ export class UsersController {
   @ApiOperation({
     summary: 'Verify user KYC status',
     description:
-      'Retrieves BVN verification status from Dojah using reference ID. Requires JWT authentication.',
+      'Retrieves verification status from Prembly using reference ID. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
-    description: 'BVN verification details retrieved successfully',
+    description: 'Verification details retrieved successfully',
     type: KycVerificationResponseDto,
   })
   @ApiResponse({
@@ -255,9 +273,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Create authentication PIN',
+    summary: 'Create authentication PIN with reference',
     description:
-      'Creates a 6-digit encrypted PIN for user authentication. Requires JWT authentication.',
+      'Creates a 4-digit encrypted PIN for user authentication using a verified reference code. Requires JWT authentication and a valid reference from OTP verification.',
   })
   @ApiResponse({
     status: 201,
@@ -266,7 +284,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - PIN must be exactly 6 digits',
+    description: 'Bad request - PIN must be exactly 4 digits, invalid reference, or user already has a PIN',
   })
   @ApiResponse({
     status: 401,
@@ -281,10 +299,77 @@ export class UsersController {
     description: 'Internal server error - Failed to create PIN',
   })
   async createPin(
-    @Body(ValidationPipe) createPinDto: CreatePinDto,
+    @Body(ValidationPipe) createPinDto: CreatePinWithReferenceDto,
     @Request() req,
   ): Promise<CreatePinResponseDto> {
-    return this.usersService.createPin(req.user.id, createPinDto.pin);
+    return this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
+  }
+
+  @Post('generate-create-pin-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Generate OTP for PIN creation',
+    description:
+      'Generates and sends an OTP to the user\'s phone number for PIN creation. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    type: GenerateCreatePinOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - User has no phone number or already has a PIN',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to generate OTP',
+  })
+  async generateCreatePinOtp(
+    @Request() req,
+  ): Promise<GenerateCreatePinOtpResponseDto> {
+    return this.usersService.generateCreatePinOtp(req.user.userId);
+  }
+
+  @Post('verify-create-pin-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify OTP for PIN creation',
+    description:
+      'Verifies the OTP for PIN creation and returns a reference UUID. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    type: VerifyCreatePinOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid or expired OTP',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to verify OTP',
+  })
+  async verifyCreatePinOtp(
+    @Body(ValidationPipe) verifyCreatePinOtpDto: VerifyCreatePinOtpDto,
+    @Request() req,
+  ): Promise<VerifyCreatePinOtpResponseDto> {
+    return this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
   }
 
   @Post('forgot-password')
