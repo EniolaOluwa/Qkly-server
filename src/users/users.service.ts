@@ -385,6 +385,194 @@ export class UsersService {
     }
   }
 
+  async generateCreatePinOtp(userId: number): Promise<{
+    message: string;
+    maskedPhone: string;
+    expiryInMinutes: number;
+  }> {
+    try {
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (!user.phone) {
+        throw new BadRequestException('User has no phone number on file');
+      }
+
+      // Check if user already has a PIN
+      if (user.pin) {
+        throw new BadRequestException('User already has a PIN set');
+      }
+
+      // Generate 6-digit OTP
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // Set OTP expiry to 5 minutes from now
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+      // Create new OTP record for PIN creation
+      const otp = this.otpRepository.create({
+        userId: user.id,
+        otp: otpCode,
+        otpType: OtpType.PHONE,
+        purpose: OtpPurpose.PIN_CREATION,
+        expiresAt,
+      });
+
+      await this.otpRepository.save(otp);
+
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(user.phone, otpCode);
+
+      return {
+        message: 'OTP sent successfully to your phone number',
+        maskedPhone: this.maskPhoneNumber(user.phone),
+        expiryInMinutes: 5,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to generate PIN creation OTP');
+    }
+  }
+
+  async verifyCreatePinOtp(userId: number, otpCode: string): Promise<{
+    message: string;
+    verified: boolean;
+    reference: string;
+  }> {
+    try {
+      // Find the most recent unused OTP for PIN creation
+      const otp = await this.otpRepository.findOne({
+        where: {
+          userId,
+          otp: otpCode,
+          purpose: OtpPurpose.PIN_CREATION,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!otp) {
+        throw new BadRequestException('Invalid OTP code');
+      }
+
+      // Check if OTP has expired
+      if (new Date() > otp.expiresAt) {
+        throw new BadRequestException('OTP has expired. Please request a new one');
+      }
+
+      // Mark OTP as used
+      otp.isUsed = true;
+      await this.otpRepository.save(otp);
+
+      // Generate a shorter reference (6 characters) that fits in the OTP field
+      const reference = require('crypto').randomBytes(3).toString('hex'); // 6 character hex string
+
+      // Store the reference temporarily using the OTP field (which is 6 chars max)
+      const referenceOtp = this.otpRepository.create({
+        userId,
+        otp: reference,
+        otpType: OtpType.PHONE,
+        purpose: OtpPurpose.PIN_CREATION,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes validity
+        isUsed: false,
+      });
+
+      await this.otpRepository.save(referenceOtp);
+
+      return {
+        message: 'OTP verified successfully. You can now create your PIN.',
+        verified: true,
+        reference,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to verify PIN creation OTP');
+    }
+  }
+
+  async createPinWithReference(userId: number, pin: string, reference: string): Promise<{
+    message: string;
+    success: boolean;
+  }> {
+    try {
+      // Validate PIN format (6 digits only)
+      if (!/^\d{6}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 6 digits');
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Check if user already has a PIN
+      if (user.pin) {
+        throw new BadRequestException('User already has a PIN set');
+      }
+
+      // Verify the reference UUID
+      const referenceOtp = await this.otpRepository.findOne({
+        where: {
+          userId,
+          otp: reference, // We stored the reference in the otp field
+          purpose: OtpPurpose.PIN_CREATION,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!referenceOtp) {
+        throw new BadRequestException('Invalid or expired reference');
+      }
+
+      // Check if reference has expired
+      if (new Date() > referenceOtp.expiresAt) {
+        throw new BadRequestException('Reference has expired. Please generate a new OTP');
+      }
+
+      // Mark reference as used
+      referenceOtp.isUsed = true;
+      await this.otpRepository.save(referenceOtp);
+
+      // Encrypt the PIN
+      const encryptedPin = CryptoUtil.encryptPin(pin);
+
+      // Update user with encrypted PIN and advance onboarding step
+      await this.userRepository.update(userId, {
+        pin: encryptedPin,
+        onboardingStep: OnboardingStep.AUTHENTICATION_PIN,
+        isOnboardingCompleted: true, // PIN creation is the final step
+      });
+
+      return {
+        message: 'PIN created successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create PIN');
+    }
+  }
+
   async forgotPassword(email: string): Promise<{
     message: string;
     maskedPhone: string;

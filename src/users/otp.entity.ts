@@ -18,6 +18,7 @@ export enum OtpPurpose {
   PHONE_VERIFICATION = 'phone_verification',
   PASSWORD_RESET = 'password_reset',
   EMAIL_VERIFICATION = 'email_verification',
+  PIN_CREATION = 'pin_creation',
 }
 
 @Entity('otps')

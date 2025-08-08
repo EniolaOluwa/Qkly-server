@@ -29,6 +29,10 @@ import {
   KycErrorResponseDto,
   CreatePinDto,
   CreatePinResponseDto,
+  CreatePinWithReferenceDto,
+  GenerateCreatePinOtpResponseDto,
+  VerifyCreatePinOtpDto,
+  VerifyCreatePinOtpResponseDto,
   ForgotPasswordDto,
   ForgotPasswordResponseDto,
   VerifyPasswordResetOtpDto,
@@ -269,9 +273,9 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Create authentication PIN',
+    summary: 'Create authentication PIN with reference',
     description:
-      'Creates a 6-digit encrypted PIN for user authentication. Requires JWT authentication.',
+      'Creates a 6-digit encrypted PIN for user authentication using a verified reference UUID. Requires JWT authentication and a valid reference from OTP verification.',
   })
   @ApiResponse({
     status: 201,
@@ -280,7 +284,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - PIN must be exactly 6 digits',
+    description: 'Bad request - PIN must be exactly 6 digits, invalid reference, or user already has a PIN',
   })
   @ApiResponse({
     status: 401,
@@ -295,10 +299,77 @@ export class UsersController {
     description: 'Internal server error - Failed to create PIN',
   })
   async createPin(
-    @Body(ValidationPipe) createPinDto: CreatePinDto,
+    @Body(ValidationPipe) createPinDto: CreatePinWithReferenceDto,
     @Request() req,
   ): Promise<CreatePinResponseDto> {
-    return this.usersService.createPin(req.user.id, createPinDto.pin);
+    return this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
+  }
+
+  @Post('generate-create-pin-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Generate OTP for PIN creation',
+    description:
+      'Generates and sends an OTP to the user\'s phone number for PIN creation. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP sent successfully',
+    type: GenerateCreatePinOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - User has no phone number or already has a PIN',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to generate OTP',
+  })
+  async generateCreatePinOtp(
+    @Request() req,
+  ): Promise<GenerateCreatePinOtpResponseDto> {
+    return this.usersService.generateCreatePinOtp(req.user.userId);
+  }
+
+  @Post('verify-create-pin-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify OTP for PIN creation',
+    description:
+      'Verifies the OTP for PIN creation and returns a reference UUID. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'OTP verified successfully',
+    type: VerifyCreatePinOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid or expired OTP',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to verify OTP',
+  })
+  async verifyCreatePinOtp(
+    @Body(ValidationPipe) verifyCreatePinOtpDto: VerifyCreatePinOtpDto,
+    @Request() req,
+  ): Promise<VerifyCreatePinOtpResponseDto> {
+    return this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
   }
 
   @Post('forgot-password')

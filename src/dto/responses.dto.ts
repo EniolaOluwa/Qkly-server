@@ -8,6 +8,7 @@ import {
   MinLength,
   MaxLength,
   Matches,
+  IsUUID,
 } from 'class-validator';
 
 export class WelcomeResponseDto {
@@ -553,6 +554,87 @@ export class CreatePinResponseDto {
     example: true,
   })
   success: boolean;
+}
+
+export class GenerateCreatePinOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP generation success message',
+    example: 'OTP sent successfully to your phone number',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Masked phone number',
+    example: '0813*****06',
+  })
+  maskedPhone: string;
+
+  @ApiProperty({
+    description: 'OTP expiration time in minutes',
+    example: 5,
+  })
+  expiryInMinutes: number;
+}
+
+export class VerifyCreatePinOtpDto {
+  @ApiProperty({
+    description: '6-digit OTP code',
+    example: '123456',
+    minLength: 6,
+    maxLength: 6,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^\d{6}$/, { message: 'OTP must be exactly 6 digits' })
+  otp: string;
+}
+
+export class VerifyCreatePinOtpResponseDto {
+  @ApiProperty({
+    description: 'OTP verification success message',
+    example: 'OTP verified successfully. You can now create your PIN.',
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'Verification status',
+    example: true,
+  })
+  verified: boolean;
+
+  @ApiProperty({
+    description: 'PIN creation reference code',
+    example: 'a1b2c3',
+  })
+  reference: string;
+}
+
+export class CreatePinWithReferenceDto {
+  @ApiProperty({
+    description: '6-digit PIN for user authentication',
+    example: '123456',
+    minLength: 6,
+    maxLength: 6,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  pin: string;
+
+  @ApiProperty({
+    description: 'PIN creation reference code from OTP verification',
+    example: 'a1b2c3',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(6)
+  @MaxLength(6)
+  @Matches(/^[a-f0-9]{6}$/, { message: 'Reference must be a 6-character hexadecimal string' })
+  reference: string;
 }
 
 export class ForgotPasswordDto {
