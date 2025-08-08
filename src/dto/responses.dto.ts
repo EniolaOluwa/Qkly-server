@@ -529,16 +529,16 @@ export class KycErrorResponseDto {
 
 export class CreatePinDto {
   @ApiProperty({
-    description: '6-digit PIN for user authentication',
-    example: '123456',
-    minLength: 6,
-    maxLength: 6,
+    description: '4-digit PIN for user authentication',
+    example: '1234',
+    minLength: 4,
+    maxLength: 4,
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
-  @MaxLength(6)
-  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  @MinLength(4)
+  @MaxLength(4)
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin: string;
 }
 
@@ -613,16 +613,16 @@ export class VerifyCreatePinOtpResponseDto {
 
 export class CreatePinWithReferenceDto {
   @ApiProperty({
-    description: '6-digit PIN for user authentication',
-    example: '123456',
-    minLength: 6,
-    maxLength: 6,
+    description: '4-digit PIN for user authentication',
+    example: '1234',
+    minLength: 4,
+    maxLength: 4,
   })
   @IsString()
   @IsNotEmpty()
-  @MinLength(6)
-  @MaxLength(6)
-  @Matches(/^\d{6}$/, { message: 'PIN must be exactly 6 digits' })
+  @MinLength(4)
+  @MaxLength(4)
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
   pin: string;
 
   @ApiProperty({
@@ -702,8 +702,8 @@ export class VerifyPasswordResetOtpResponseDto {
   verified: boolean;
 
   @ApiProperty({
-    description: 'Reset token for password change',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'UUID reset token for password change',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   resetToken?: string;
 }
@@ -720,11 +720,12 @@ export class ResetPasswordDto {
   newPassword: string;
 
   @ApiProperty({
-    description: 'Reset token received from password reset OTP verification',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'UUID reset token received from password reset OTP verification',
+    example: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   })
   @IsString()
   @IsNotEmpty()
+  @IsUUID(4, { message: 'Reset token must be a valid UUID' })
   resetToken: string;
 }
 

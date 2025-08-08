@@ -33,7 +33,7 @@ export class Otp {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ length: 6, nullable: false })
+  @Column({ length: 50, nullable: false })
   otp: string;
 
   @Column({

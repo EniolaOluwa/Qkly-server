@@ -275,7 +275,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Create authentication PIN with reference',
     description:
-      'Creates a 6-digit encrypted PIN for user authentication using a verified reference UUID. Requires JWT authentication and a valid reference from OTP verification.',
+      'Creates a 4-digit encrypted PIN for user authentication using a verified reference code. Requires JWT authentication and a valid reference from OTP verification.',
   })
   @ApiResponse({
     status: 201,
@@ -284,7 +284,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - PIN must be exactly 6 digits, invalid reference, or user already has a PIN',
+    description: 'Bad request - PIN must be exactly 4 digits, invalid reference, or user already has a PIN',
   })
   @ApiResponse({
     status: 401,

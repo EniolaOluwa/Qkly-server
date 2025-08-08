@@ -350,9 +350,9 @@ export class UsersService {
 
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
-      // Validate PIN format (6 digits only)
-      if (!/^\d{6}$/.test(pin)) {
-        throw new BadRequestException('PIN must be exactly 6 digits');
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 4 digits');
       }
 
       // Find user by ID
@@ -507,9 +507,9 @@ export class UsersService {
     success: boolean;
   }> {
     try {
-      // Validate PIN format (6 digits only)
-      if (!/^\d{6}$/.test(pin)) {
-        throw new BadRequestException('PIN must be exactly 6 digits');
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(pin)) {
+        throw new BadRequestException('PIN must be exactly 4 digits');
       }
 
       // Find user by ID
@@ -751,16 +751,20 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Generate a short-lived reset token (valid for 15 minutes)
-      const resetTokenPayload = {
-        sub: user.id,
-        email: user.email,
-        purpose: 'password_reset',
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 900, // 15 minutes
-      };
+      // Generate a UUID reset token (valid for 15 minutes)
+      const resetToken = require('crypto').randomUUID();
+      
+      // Store the reset token in the OTP table for 15 minutes validity
+      const resetTokenOtp = this.otpRepository.create({
+        userId: user.id,
+        otp: resetToken, // Store the full UUID
+        otpType: OtpType.EMAIL, // Use EMAIL type for reset tokens
+        purpose: OtpPurpose.PASSWORD_RESET,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes validity
+        isUsed: false,
+      });
 
-      const resetToken = this.jwtService.sign(resetTokenPayload);
+      await this.otpRepository.save(resetTokenOtp);
 
       return {
         message: 'OTP verified successfully. You can now reset your password.',
@@ -785,38 +789,37 @@ export class UsersService {
     resetToken: string,
   ): Promise<{ message: string; success: boolean }> {
     try {
-      // Decode and verify the reset token
-      let decodedToken;
-      try {
-        decodedToken = this.jwtService.verify(resetToken);
-      } catch (error) {
+      // Find the reset token in the database
+      const tokenRecord = await this.otpRepository.findOne({
+        where: {
+          otp: resetToken, // Full UUID stored in OTP field
+          otpType: OtpType.EMAIL,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!tokenRecord) {
         throw new UnauthorizedException('Invalid or expired reset token');
       }
 
-      // Verify token purpose and structure
-      if (
-        !decodedToken.sub ||
-        !decodedToken.email ||
-        decodedToken.purpose !== 'password_reset'
-      ) {
-        throw new UnauthorizedException(
-          'Invalid reset token - token not valid for password reset',
-        );
+      // Check if token has expired
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Reset token has expired');
       }
 
-      // Find user by ID from token
+      // Find user by ID from token record
       const user = await this.userRepository.findOne({
-        where: { id: decodedToken.sub },
+        where: { id: tokenRecord.userId },
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
-      // Verify the email in token matches user email (additional security check)
-      if (user.email !== decodedToken.email) {
-        throw new UnauthorizedException('Invalid reset token - user mismatch');
-      }
+      // Mark the reset token as used
+      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
 
       // Hash the new password
       const hashedPassword = CryptoUtil.hashPassword(newPassword);
