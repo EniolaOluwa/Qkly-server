@@ -278,52 +278,51 @@ export class UsersService {
     referenceId: string,
   ): Promise<KycVerificationResponseDto> {
     try {
-      const dojahBaseUrl = this.configService.get<string>(
-        'DOJAH_BASE_URL',
-        'https://api.dojah.io',
+      const premblyBaseUrl = this.configService.get<string>(
+        'PREMBLY_BASE_URL',
+        'https://api.prembly.com',
       );
-      const dojahAppId = this.configService.get<string>('DOJAH_APP_ID');
-      const dojahSecretKey = this.configService.get<string>('DOJAH_SECRET_KEY');
+      const premblyApiKey = this.configService.get<string>('PREMBLY_API_KEY');
 
-      if (!dojahAppId || !dojahSecretKey) {
+      if (!premblyApiKey) {
         throw new InternalServerErrorException(
-          'Dojah API credentials not configured',
+          'Prembly API credentials not configured',
         );
       }
 
-      // Call Dojah API to get verification details by reference ID
+      // Call Prembly API to get verification status by reference ID
       const response = await firstValueFrom(
-        this.httpService.get(`${dojahBaseUrl}/api/v1/kyc/verification`, {
+        this.httpService.get(`${premblyBaseUrl}/identitypass/verification/${referenceId}/status`, {
           headers: {
-            AppId: dojahAppId,
-            Authorization: dojahSecretKey,
+            'x-api-key': premblyApiKey,
             'Content-Type': 'application/json',
-          },
-          params: {
-            reference_id: referenceId,
           },
         }),
       );
 
       const fullResponse = response.data;
+      const verificationData = fullResponse?.data;
 
-      // Check if BVN verification exists and is successful
-      const bvnData = fullResponse?.data?.government_data?.data?.bvn?.entity;
-      const bvnVerified =
-        fullResponse?.data?.government_data?.status === true && !!bvnData;
+      if (!verificationData) {
+        throw new NotFoundException('Verification data not found');
+      }
 
-      // Return only verification status
+      // Map Prembly response to our DTO
+      const isVerified = verificationData.verification_status === 'VERIFIED';
+      
       return {
         status: fullResponse.status === true,
-        message: bvnVerified
-          ? 'BVN verification completed successfully'
-          : 'BVN verification failed',
-        reference_id: referenceId,
-        bvn_verified: bvnVerified,
+        message: isVerified 
+          ? 'Verification completed successfully' 
+          : `Verification ${verificationData.verification_status?.toLowerCase() || 'failed'}`,
+        reference_id: verificationData.reference || referenceId,
+        verification_status: verificationData.verification_status || 'UNKNOWN',
+        response_code: verificationData.response_code || '',
+        created_at: verificationData.created_at || '',
       };
     } catch (error) {
       console.error(
-        'Dojah KYC verification details failed:',
+        'Prembly KYC verification details failed:',
         error.response?.data || error.message,
       );
 
@@ -336,7 +335,11 @@ export class UsersService {
       }
 
       if (error.response?.status === 401) {
-        throw new UnauthorizedException('Invalid Dojah API credentials');
+        throw new UnauthorizedException('Invalid Prembly API credentials');
+      }
+
+      if (error.response?.status === 403) {
+        throw new UnauthorizedException('Insufficient permissions for Prembly API');
       }
 
       throw new InternalServerErrorException(

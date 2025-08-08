@@ -31,6 +31,12 @@ KUDI_SMS_API_KEY=your-kudi-sms-api-key
 KUDI_SMS_SENDER_ID=NQkly
 ```
 
+### Prembly API Configuration
+```env
+PREMBLY_BASE_URL=https://api.prembly.com
+PREMBLY_API_KEY=your-prembly-api-key
+```
+
 ## ✅ ConfigService Integration
 
 The `UsersService` has been updated to use NestJS `ConfigService` instead of direct `process.env` access:
@@ -61,13 +67,23 @@ const senderId = this.configService.get<string>('KUDI_SMS_SENDER_ID', 'NQkly');
 
 1. **Update Kudi SMS API Key**: Replace `your-kudi-sms-api-key` with your actual API key from [Kudi SMS](https://kudisms.com)
 
-2. **Update Database Credentials**: If needed, update the database credentials in `.env`
+2. **Update Prembly API Key**: Replace `your-prembly-api-key` with your actual API key from [Prembly](https://prembly.com)
 
-3. **Test the Forgot Password Endpoint**:
+3. **Update Database Credentials**: If needed, update the database credentials in `.env`
+
+4. **Test the Forgot Password Endpoint**:
    ```bash
    curl -X POST http://localhost:3000/v1/users/forgot-password \
      -H "Content-Type: application/json" \
      -d '{"email": "test@example.com"}'
+   ```
+
+5. **Test the KYC Verification Endpoint**:
+   ```bash
+   curl -X POST http://localhost:3000/v1/users/verify-kyc \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+     -d '{"reference_id": "2e81dde5-6f75-4ec9-83e3-2d78565a6f8d"}'
    ```
 
 ## ✅ Server Status

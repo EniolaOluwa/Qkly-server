@@ -457,8 +457,8 @@ export class LoginResponseDto {
 
 export class VerifyKycDto {
   @ApiProperty({
-    description: 'Reference ID of the verification from Dojah',
-    example: 'DJ-31038041E0',
+    description: 'Reference ID of the verification from Prembly',
+    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
   })
   @IsString()
   @IsNotEmpty()
@@ -474,21 +474,36 @@ export class KycVerificationResponseDto {
 
   @ApiProperty({
     description: 'Response message',
-    example: 'BVN verification completed successfully',
+    example: 'Verification details retrieved successfully',
   })
   message: string;
 
   @ApiProperty({
     description: 'Reference ID of the verification',
-    example: 'DJ-31038041E0',
+    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
   })
   reference_id: string;
 
   @ApiProperty({
-    description: 'BVN verification status',
-    example: true,
+    description: 'Verification status from Prembly',
+    example: 'VERIFIED',
+    enum: ['VERIFIED', 'FAILED', 'PENDING'],
   })
-  bvn_verified: boolean;
+  verification_status: string;
+
+  @ApiProperty({
+    description: 'Response code from Prembly',
+    example: '00',
+  })
+  response_code: string;
+
+
+
+  @ApiProperty({
+    description: 'Date when verification was created',
+    example: '2023-05-26T09:52:49.677Z',
+  })
+  created_at: string;
 }
 
 export class KycErrorResponseDto {

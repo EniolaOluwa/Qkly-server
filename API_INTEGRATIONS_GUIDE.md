@@ -50,24 +50,23 @@ KUDI_SMS_SENDER_ID=NQkly
 - `src/users/users.service.ts` - `sendOtpViaSms()` method
 - **POST** `/v1/users/forgot-password` - Triggers SMS OTP
 
-## 🔐 Dojah API Integration
+## 🔐 Prembly API Integration
 
-**Purpose**: KYC/BVN verification for user identity
+**Purpose**: KYC/Identity verification for user verification status
 
 ### Environment Variables
 ```env
-DOJAH_BASE_URL=https://api.dojah.io
-DOJAH_APP_ID=your-dojah-app-id
-DOJAH_SECRET_KEY=your-dojah-secret-key
+PREMBLY_BASE_URL=https://api.prembly.com
+PREMBLY_API_KEY=your-prembly-api-key
 ```
 
 ### Setup Steps
-1. Sign up at [Dojah](https://dojah.io)
-2. Get App ID and Secret Key from dashboard
+1. Sign up at [Prembly](https://prembly.com)
+2. Get API key from dashboard
 3. Update credentials in `.env`
 
 ### API Endpoints Used
-- **GET** `/api/v1/kyc/verification` - BVN verification status
+- **GET** `/identitypass/verification/{id}/status` - Get verification status
 
 ### Integration Points
 - `src/users/users.service.ts` - `getKycVerificationDetails()` method

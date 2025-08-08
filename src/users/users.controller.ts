@@ -228,11 +228,11 @@ export class UsersController {
   @ApiOperation({
     summary: 'Verify user KYC status',
     description:
-      'Retrieves BVN verification status from Dojah using reference ID. Requires JWT authentication.',
+      'Retrieves verification status from Prembly using reference ID. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
-    description: 'BVN verification details retrieved successfully',
+    description: 'Verification details retrieved successfully',
     type: KycVerificationResponseDto,
   })
   @ApiResponse({
