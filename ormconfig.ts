@@ -17,5 +17,5 @@ export default new DataSource({
   entities: ['src/**/*.entity.ts'],
   migrations: ['src/migrations/*.ts'],
   synchronize: false, // Set to false when using migrations
-  logging: configService.get('NODE_ENV') === 'development',
+  logging: false, // Disabled database query logging
 }); 

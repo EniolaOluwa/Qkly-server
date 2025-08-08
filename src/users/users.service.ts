@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { User } from './user.entity';
 import { Otp, OtpType, OtpPurpose } from './otp.entity';
+import { OnboardingStep } from './onboarding-step.enum';
 import {
   RegisterUserDto,
   LoginDto,
@@ -146,6 +147,7 @@ export class UsersService {
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
         isPhoneVerified: user.isPhoneVerified,
+        onboardingStep: user.onboardingStep,
       };
     } catch (error) {
       if (error instanceof UnauthorizedException) {
@@ -158,7 +160,7 @@ export class UsersService {
   async generatePhoneOtp(
     userId: number,
     phone: string,
-  ): Promise<{ message: string; expiryInMinutes: number }> {
+  ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
     try {
       // Find user by ID and phone number
       const user = await this.userRepository.findOne({
@@ -190,12 +192,13 @@ export class UsersService {
 
       await this.otpRepository.save(otp);
 
-      // In a real application, you would send the OTP via SMS here
-      console.log(`OTP for ${phone}: ${otpCode}`); // For development/testing
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(phone, otpCode);
 
       return {
         message: 'OTP sent successfully to your phone number',
         expiryInMinutes: 5,
+        expiryTimestamp: expiresAt,
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -250,9 +253,10 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Update user as phone verified
+      // Update user as phone verified and set onboarding step to 1 (PHONE_VERIFICATION)
       await this.userRepository.update(userId, {
         isPhoneVerified: true,
+        onboardingStep: OnboardingStep.PHONE_VERIFICATION,
       });
 
       return {
@@ -414,8 +418,8 @@ export class UsersService {
 
       await this.otpRepository.save(otp);
 
-      // Send OTP via Kudi SMS
-      await this.sendOtpViaSms(user.phone, otpCode);
+      // Send OTP via Termii SMS
+      await this.sendOtpViaTermii(user.phone, otpCode);
 
       // Return masked phone number
       const maskedPhone = this.maskPhoneNumber(user.phone);
@@ -438,55 +442,58 @@ export class UsersService {
     }
   }
 
-  private async sendOtpViaSms(phoneNumber: string, otp: string): Promise<void> {
+  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
     try {
-      const kudiApiUrl = this.configService.get<string>(
-        'KUDI_SMS_API_URL',
-        'https://api.kudisms.com/api/v1',
+      const termiiBaseUrl = this.configService.get<string>(
+        'TERMII_BASE_URL',
+        'https://api.ng.termii.com',
       );
-      const kudiApiKey = this.configService.get<string>('KUDI_SMS_API_KEY');
+      const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
       const senderId = this.configService.get<string>(
-        'KUDI_SMS_SENDER_ID',
+        'TERMII_SENDER_ID',
         'NQkly',
       );
+      const channel = this.configService.get<string>(
+        'TERMII_CHANNEL',
+        'generic',
+      );
 
-      if (!kudiApiKey) {
+      if (!termiiApiKey) {
         throw new InternalServerErrorException(
-          'Kudi SMS API key not configured',
+          'Termii SMS API key not configured',
         );
       }
 
-      const message = `Your NQkly password reset OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+      const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
 
-      // Format payload according to Kudi SMS API documentation
+      // Format payload according to Termii SMS API documentation
       const payload = {
-        phone_number: phoneNumber,
-        message: message,
-        sender_id: senderId,
+        to: phoneNumber,
+        from: senderId,
+        sms: message,
+        type: 'plain',
+        channel: channel,
+        api_key: termiiApiKey,
       };
 
-      console.log(`Sending OTP via Kudi SMS to ${phoneNumber}: ${otp}`); // For development/testing
+      console.log(`Sending OTP via Termii SMS to ${phoneNumber}: ${otp}`); // For development/testing
 
       const response = await firstValueFrom(
-        this.httpService.post(`${kudiApiUrl}/send-sms-otp`, payload, {
+        this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
           headers: {
-            Authorization: `Bearer ${kudiApiKey}`,
             'Content-Type': 'application/json',
           },
         }),
       );
 
-      if (
-        response.data.status !== 'success' &&
-        response.data.success !== true
-      ) {
+      if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
         throw new InternalServerErrorException(
-          'Failed to send SMS via Kudi API',
+          'Failed to send SMS via Termii API',
         );
       }
     } catch (error) {
       console.error(
-        'Failed to send SMS via Kudi:',
+        'Failed to send SMS via Termii:',
         error.response?.data || error.message,
       );
       // In development, don't fail the request if SMS sending fails

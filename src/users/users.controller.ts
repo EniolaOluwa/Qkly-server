@@ -148,15 +148,21 @@ export class UsersController {
   }
 
   @Post('generate-phone-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Generate OTP for phone number verification',
     description:
-      'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes.',
+      'Generates a 6-digit OTP code for phone number verification. OTP expires in 5 minutes. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
     description: 'OTP generated successfully',
     type: GeneratePhoneOtpResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
   })
   @ApiResponse({
     status: 404,
@@ -168,18 +174,21 @@ export class UsersController {
   })
   async generatePhoneOtp(
     @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
+    @Request() req,
   ): Promise<GeneratePhoneOtpResponseDto> {
     return this.usersService.generatePhoneOtp(
-      generatePhoneOtpDto.userId,
+      req.user.userId,
       generatePhoneOtpDto.phone,
     );
   }
 
   @Post('verify-phone-otp')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Verify OTP for phone number verification',
     description:
-      'Verifies the OTP code and marks the phone number as verified if successful.',
+      'Verifies the OTP code and marks the phone number as verified if successful. Requires JWT authentication.',
   })
   @ApiResponse({
     status: 200,
@@ -191,6 +200,10 @@ export class UsersController {
     description: 'Invalid OTP or OTP expired',
   })
   @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
     status: 404,
     description: 'User with this ID and phone number not found',
   })
@@ -200,9 +213,10 @@ export class UsersController {
   })
   async verifyPhoneOtp(
     @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
+    @Request() req,
   ): Promise<VerifyPhoneOtpResponseDto> {
     return this.usersService.verifyPhoneOtp(
-      verifyPhoneOtpDto.userId,
+      req.user.userId,
       verifyPhoneOtpDto.phone,
       verifyPhoneOtpDto.otp,
     );

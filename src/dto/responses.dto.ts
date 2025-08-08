@@ -278,14 +278,6 @@ export class BusinessResponseDto {
 
 export class GeneratePhoneOtpDto {
   @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
-  @ApiProperty({
     description: 'Phone number for OTP verification',
     example: '+1234567890',
   })
@@ -306,17 +298,15 @@ export class GeneratePhoneOtpResponseDto {
     example: 5,
   })
   expiryInMinutes: number;
+
+  @ApiProperty({
+    description: 'OTP expiry timestamp (ISO 8601 format)',
+    example: '2024-01-20T10:35:00.000Z',
+  })
+  expiryTimestamp: Date;
 }
 
 export class VerifyPhoneOtpDto {
-  @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
   @ApiProperty({
     description: 'Phone number for OTP verification',
     example: '+1234567890',
@@ -457,6 +447,12 @@ export class LoginResponseDto {
     example: false,
   })
   isPhoneVerified: boolean;
+
+  @ApiProperty({
+    description: 'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
+    example: 0,
+  })
+  onboardingStep: number;
 }
 
 export class VerifyKycDto {
