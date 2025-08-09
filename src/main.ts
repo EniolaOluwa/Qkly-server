@@ -6,6 +6,10 @@ import { LoggingInterceptor } from './utils/logging.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Configure request body size limits for file uploads
+  app.use(require('express').json({ limit: '50mb' }));
+  app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
+
   // Global interceptors
   app.useGlobalInterceptors(new LoggingInterceptor());
 
