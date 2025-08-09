@@ -26,8 +26,8 @@ import {
   BusinessResponseDto,
 } from '../dto/responses.dto';
 
-@ApiTags('businesses')
-@Controller('businesses')
+@ApiTags('business')
+@Controller('business')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class BusinessesController {
@@ -213,6 +213,7 @@ export class BusinessesController {
       },
       businessDescription: business.businessDescription,
       location: business.location,
+      logo: business.logo,
       createdAt: business.createdAt,
       updatedAt: business.updatedAt,
     };
@@ -241,6 +242,7 @@ export class BusinessesController {
       },
       businessDescription: business.businessDescription,
       location: business.location,
+      logo: business.logo,
       createdAt: business.createdAt,
       updatedAt: business.updatedAt,
     }));
@@ -274,6 +276,7 @@ export class BusinessesController {
       },
       businessDescription: business.businessDescription,
       location: business.location,
+      logo: business.logo,
       createdAt: business.createdAt,
       updatedAt: business.updatedAt,
     };
@@ -316,6 +319,7 @@ export class BusinessesController {
       },
       businessDescription: business.businessDescription,
       location: business.location,
+      logo: business.logo,
       createdAt: business.createdAt,
       updatedAt: business.updatedAt,
     };

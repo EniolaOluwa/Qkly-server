@@ -14,6 +14,7 @@ import {
   CreateBusinessDto,
   UpdateBusinessDto,
 } from '../dto/responses.dto';
+import { CloudinaryUtil } from '../utils/cloudinary.util';
 
 @Injectable()
 export class BusinessesService {
@@ -22,6 +23,7 @@ export class BusinessesService {
     private businessRepository: Repository<Business>,
     @InjectRepository(BusinessType)
     private businessTypeRepository: Repository<BusinessType>,
+    private cloudinaryUtil: CloudinaryUtil,
   ) {}
 
   // Business Type methods
@@ -121,12 +123,23 @@ export class BusinessesService {
       // Verify business type exists
       await this.findBusinessTypeById(createBusinessDto.businessTypeId);
 
+      let logoUrl: string | undefined;
+
+      // Upload logo to Cloudinary if provided
+      if (createBusinessDto.logo) {
+        const uploadResult = await this.cloudinaryUtil.uploadImage(
+          createBusinessDto.logo,
+        );
+        logoUrl = uploadResult.secure_url;
+      }
+
       // Create new business
       const business = this.businessRepository.create({
         businessName: createBusinessDto.businessName,
         businessTypeId: createBusinessDto.businessTypeId,
         businessDescription: createBusinessDto.businessDescription,
         location: createBusinessDto.location,
+        logo: logoUrl,
       });
 
       // Save business to database
@@ -171,6 +184,29 @@ export class BusinessesService {
       if (updateBusinessDto.businessTypeId) {
         await this.findBusinessTypeById(updateBusinessDto.businessTypeId);
         business.businessTypeId = updateBusinessDto.businessTypeId;
+      }
+
+      // Handle logo update
+      if (updateBusinessDto.logo) {
+        // Delete old logo if it exists
+        if (business.logo) {
+          try {
+            // Extract public_id from the Cloudinary URL
+            const urlParts = business.logo.split('/');
+            const publicIdWithExtension = urlParts[urlParts.length - 1];
+            const publicId = `Qkly/business-logo/${publicIdWithExtension.split('.')[0]}`;
+            await this.cloudinaryUtil.deleteImage(publicId);
+          } catch (deleteError) {
+            console.warn('Could not delete old logo:', deleteError);
+            // Continue with upload even if deletion fails
+          }
+        }
+
+        // Upload new logo
+        const uploadResult = await this.cloudinaryUtil.uploadImage(
+          updateBusinessDto.logo,
+        );
+        business.logo = uploadResult.secure_url;
       }
 
       // Update other fields

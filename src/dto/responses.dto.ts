@@ -193,6 +193,15 @@ export class CreateBusinessDto {
   @IsString()
   @IsNotEmpty()
   location: string;
+
+  @ApiProperty({
+    description: 'Business logo as base64 encoded string',
+    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  logo?: string;
 }
 
 export class UpdateBusinessDto {
@@ -231,6 +240,15 @@ export class UpdateBusinessDto {
   @IsString()
   @IsOptional()
   location?: string;
+
+  @ApiProperty({
+    description: 'Business logo as base64 encoded string',
+    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  logo?: string;
 }
 
 export class BusinessResponseDto {
@@ -263,6 +281,13 @@ export class BusinessResponseDto {
     example: '123 Main St, New York, NY 10001',
   })
   location: string;
+
+  @ApiProperty({
+    description: 'Business logo URL from Cloudinary',
+    example: 'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/business-logos/logo.jpg',
+    required: false,
+  })
+  logo?: string;
 
   @ApiProperty({
     description: 'Creation timestamp',

@@ -30,6 +30,9 @@ export class Business {
   @Column({ nullable: false })
   location: string;
 
+  @Column({ nullable: true })
+  logo: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
