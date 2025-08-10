@@ -22,8 +22,7 @@
     "migration:create": "typeorm-ts-node-commonjs migration:create",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d ormconfig.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d ormconfig.ts",
-    "migration:show": "typeorm-ts-node-commonjs migration:show -d ormconfig.ts",
-    "deploy": "yarn build && yarn migration:run && ls && cd dist && yarn start:prod"
+    "migration:show": "typeorm-ts-node-commonjs migration:show -d ormconfig.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
