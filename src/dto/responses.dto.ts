@@ -10,6 +10,7 @@ import {
   Matches,
   IsUUID,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class WelcomeResponseDto {
   @ApiProperty({
@@ -227,6 +228,16 @@ export class CreateBusinessDto {
     description: 'Business type ID',
     example: 1,
   })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed)) {
+        throw new Error('Business type ID must be a valid number');
+      }
+      return parsed;
+    }
+    return value;
+  })
   @IsNumber()
   @IsNotEmpty()
   businessTypeId: number;
@@ -249,13 +260,13 @@ export class CreateBusinessDto {
   location: string;
 
   @ApiProperty({
-    description: 'Business logo as base64 encoded string',
-    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
-    required: false,
+    description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
+    required: true,
   })
-  @IsString()
   @IsOptional()
-  logo?: string;
+  logo?: Express.Multer.File;
 }
 
 export class UpdateBusinessDto {
@@ -272,6 +283,17 @@ export class UpdateBusinessDto {
     description: 'Business type ID',
     example: 1,
     required: false,
+  })
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed)) {
+        throw new Error('Business type ID must be a valid number');
+      }
+      return parsed;
+    }
+    return value;
   })
   @IsNumber()
   @IsOptional()
@@ -296,13 +318,13 @@ export class UpdateBusinessDto {
   location?: string;
 
   @ApiProperty({
-    description: 'Business logo as base64 encoded string',
-    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+    description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
     required: false,
   })
-  @IsString()
   @IsOptional()
-  logo?: string;
+  logo?: Express.Multer.File;
 }
 
 export class BusinessResponseDto {

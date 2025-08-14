@@ -123,15 +123,15 @@ export class BusinessesService {
       // Verify business type exists
       await this.findBusinessTypeById(createBusinessDto.businessTypeId);
 
-      let logoUrl: string | undefined;
-
-      // Upload logo to Cloudinary if provided
-      if (createBusinessDto.logo) {
-        const uploadResult = await this.cloudinaryUtil.uploadImage(
-          createBusinessDto.logo,
-        );
-        logoUrl = uploadResult.secure_url;
+      // Upload logo to Cloudinary (logo is required but validated in controller)
+      if (!createBusinessDto.logo) {
+        throw new Error('Logo is required for business creation');
       }
+      
+      const uploadResult = await this.cloudinaryUtil.uploadImage(
+        createBusinessDto.logo.buffer,
+      );
+      const logoUrl = uploadResult.secure_url;
 
       // Create new business
       const business = this.businessRepository.create({
@@ -204,7 +204,7 @@ export class BusinessesService {
 
         // Upload new logo
         const uploadResult = await this.cloudinaryUtil.uploadImage(
-          updateBusinessDto.logo,
+          updateBusinessDto.logo.buffer,
         );
         business.logo = uploadResult.secure_url;
       }

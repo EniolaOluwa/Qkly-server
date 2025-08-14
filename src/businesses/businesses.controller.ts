@@ -8,12 +8,17 @@ import {
   Param,
   ValidationPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { BusinessesService } from './businesses.service';
 import { JwtAuthGuard } from '../users/jwt-auth.guard';
@@ -176,6 +181,20 @@ export class BusinessesController {
 
   // Business endpoints
   @Post()
+  @UseInterceptors(FileInterceptor('logo', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
+      }
+    },
+  }))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create a new business',
     description: 'Creates a new business with the provided information',
@@ -199,9 +218,16 @@ export class BusinessesController {
   })
   async createBusiness(
     @Body(ValidationPipe) createBusinessDto: CreateBusinessDto,
+    @UploadedFile() logo: Express.Multer.File,
   ): Promise<BusinessResponseDto> {
-    const business =
-      await this.businessesService.createBusiness(createBusinessDto);
+    // Validate that logo is provided
+    if (!logo) {
+      throw new BadRequestException('Logo is required for business creation');
+    }
+    
+    // Add the uploaded file to the DTO
+    const businessDto = { ...createBusinessDto, logo };
+    const business = await this.businessesService.createBusiness(businessDto);
     return {
       id: business.id,
       businessName: business.businessName,
@@ -283,6 +309,20 @@ export class BusinessesController {
   }
 
   @Put(':id')
+  @UseInterceptors(FileInterceptor('logo', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
+      }
+    },
+  }))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update business',
     description: 'Updates an existing business',
@@ -303,10 +343,15 @@ export class BusinessesController {
   async updateBusiness(
     @Param('id') id: number,
     @Body(ValidationPipe) updateBusinessDto: UpdateBusinessDto,
+    @UploadedFile() logo?: Express.Multer.File,
   ): Promise<BusinessResponseDto> {
+    // File type validation is handled by the FileInterceptor
+
+    // Add the uploaded file to the DTO
+    const businessDto = { ...updateBusinessDto, logo };
     const business = await this.businessesService.updateBusiness(
       id,
-      updateBusinessDto,
+      businessDto,
     );
     return {
       id: business.id,
