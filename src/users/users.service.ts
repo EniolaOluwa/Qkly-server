@@ -17,6 +17,7 @@ import { Otp, OtpType, OtpPurpose } from './otp.entity';
 import { OnboardingStep } from './onboarding-step.enum';
 import {
   RegisterUserDto,
+  RegisterUserResponseDto,
   LoginDto,
   LoginResponseDto,
   KycVerificationResponseDto,
@@ -38,15 +39,24 @@ export class UsersService {
 
   async registerUser(
     registerUserDto: RegisterUserDto,
-  ): Promise<{ message: string; userId: number; email: string }> {
+  ): Promise<RegisterUserResponseDto> {
     try {
-      // Check if user already exists
-      const existingUser = await this.userRepository.findOne({
+      // Check if user with email already exists
+      const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
 
-      if (existingUser) {
+      if (existingUserByEmail) {
         throw new ConflictException('User with this email already exists');
+      }
+
+      // Check if user with phone already exists
+      const existingUserByPhone = await this.userRepository.findOne({
+        where: { phone: registerUserDto.phone },
+      });
+
+      if (existingUserByPhone) {
+        throw new ConflictException('User with this phone number already exists');
       }
 
       // Hash the password
@@ -67,10 +77,33 @@ export class UsersService {
       // Save user to database
       const savedUser = await this.userRepository.save(user);
 
+      // Generate JWT payload
+      const payload = {
+        sub: savedUser.id,
+        email: savedUser.email,
+        firstName: savedUser.firstName,
+        lastName: savedUser.lastName,
+        deviceId: registerUserDto.deviceid,
+        role: savedUser.role,
+      };
+
+      // Generate JWT token
+      const accessToken = this.jwtService.sign(payload);
+
+      // Return user information with token
       return {
         message: 'User registered successfully',
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: 3600, // 1 hour in seconds
         userId: savedUser.id,
         email: savedUser.email,
+        firstName: savedUser.firstName,
+        lastName: savedUser.lastName,
+        phone: savedUser.phone,
+        isEmailVerified: savedUser.isEmailVerified,
+        isPhoneVerified: savedUser.isPhoneVerified,
+        onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
       if (error instanceof ConflictException) {

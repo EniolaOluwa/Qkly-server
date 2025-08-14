@@ -102,6 +102,24 @@ export class RegisterUserResponseDto {
   message: string;
 
   @ApiProperty({
+    description: 'JWT access token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  accessToken: string;
+
+  @ApiProperty({
+    description: 'Token type',
+    example: 'Bearer',
+  })
+  tokenType: string;
+
+  @ApiProperty({
+    description: 'Token expiration time in seconds',
+    example: 3600,
+  })
+  expiresIn: number;
+
+  @ApiProperty({
     description: 'User ID',
     example: 1,
   })
@@ -112,6 +130,42 @@ export class RegisterUserResponseDto {
     example: 'john.doe@example.com',
   })
   email: string;
+
+  @ApiProperty({
+    description: 'User first name',
+    example: 'John',
+  })
+  firstName: string;
+
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+  })
+  lastName: string;
+
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+2348123456789',
+  })
+  phone: string;
+
+  @ApiProperty({
+    description: 'Email verification status',
+    example: false,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Phone verification status',
+    example: false,
+  })
+  isPhoneVerified: boolean;
+
+  @ApiProperty({
+    description: 'Current onboarding step',
+    example: 0,
+  })
+  onboardingStep: number;
 }
 
 export class CreateBusinessTypeDto {
