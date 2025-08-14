@@ -10,6 +10,7 @@ import {
   Matches,
   IsUUID,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class WelcomeResponseDto {
   @ApiProperty({
@@ -102,6 +103,24 @@ export class RegisterUserResponseDto {
   message: string;
 
   @ApiProperty({
+    description: 'JWT access token',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  accessToken: string;
+
+  @ApiProperty({
+    description: 'Token type',
+    example: 'Bearer',
+  })
+  tokenType: string;
+
+  @ApiProperty({
+    description: 'Token expiration time in seconds',
+    example: 3600,
+  })
+  expiresIn: number;
+
+  @ApiProperty({
     description: 'User ID',
     example: 1,
   })
@@ -112,6 +131,42 @@ export class RegisterUserResponseDto {
     example: 'john.doe@example.com',
   })
   email: string;
+
+  @ApiProperty({
+    description: 'User first name',
+    example: 'John',
+  })
+  firstName: string;
+
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+  })
+  lastName: string;
+
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+2348123456789',
+  })
+  phone: string;
+
+  @ApiProperty({
+    description: 'Email verification status',
+    example: false,
+  })
+  isEmailVerified: boolean;
+
+  @ApiProperty({
+    description: 'Phone verification status',
+    example: false,
+  })
+  isPhoneVerified: boolean;
+
+  @ApiProperty({
+    description: 'Current onboarding step',
+    example: 0,
+  })
+  onboardingStep: number;
 }
 
 export class CreateBusinessTypeDto {
@@ -173,6 +228,16 @@ export class CreateBusinessDto {
     description: 'Business type ID',
     example: 1,
   })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed)) {
+        throw new Error('Business type ID must be a valid number');
+      }
+      return parsed;
+    }
+    return value;
+  })
   @IsNumber()
   @IsNotEmpty()
   businessTypeId: number;
@@ -195,13 +260,13 @@ export class CreateBusinessDto {
   location: string;
 
   @ApiProperty({
-    description: 'Business logo as base64 encoded string',
-    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
-    required: false,
+    description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
+    required: true,
   })
-  @IsString()
   @IsOptional()
-  logo?: string;
+  logo?: Express.Multer.File;
 }
 
 export class UpdateBusinessDto {
@@ -218,6 +283,17 @@ export class UpdateBusinessDto {
     description: 'Business type ID',
     example: 1,
     required: false,
+  })
+  @Transform(({ value }) => {
+    if (value === undefined || value === null) return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed)) {
+        throw new Error('Business type ID must be a valid number');
+      }
+      return parsed;
+    }
+    return value;
   })
   @IsNumber()
   @IsOptional()
@@ -242,13 +318,13 @@ export class UpdateBusinessDto {
   location?: string;
 
   @ApiProperty({
-    description: 'Business logo as base64 encoded string',
-    example: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...',
+    description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
     required: false,
   })
-  @IsString()
   @IsOptional()
-  logo?: string;
+  logo?: Express.Multer.File;
 }
 
 export class BusinessResponseDto {

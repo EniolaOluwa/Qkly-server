@@ -54,7 +54,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Register a new user',
     description:
-      'Creates a new user account with the provided information. Password is hashed using SHA256.',
+      'Creates a new user account with the provided information. Password is hashed using SHA256. Returns a JWT token for immediate authentication.',
   })
   @ApiResponse({
     status: 201,
@@ -67,7 +67,7 @@ export class UsersController {
   })
   @ApiResponse({
     status: 409,
-    description: 'Conflict - User with this email already exists',
+    description: 'Conflict - User with this email or phone number already exists',
   })
   @ApiResponse({
     status: 500,
