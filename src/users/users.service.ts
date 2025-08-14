@@ -106,6 +106,7 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
+      console.log("error:", error);
       if (error instanceof ConflictException) {
         throw error;
       }

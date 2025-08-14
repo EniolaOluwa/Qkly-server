@@ -71,28 +71,27 @@ export class RegisterUserDto {
   password: string;
 
   @ApiProperty({
-    description: 'Device ID',
-    example: 'device_123456',
+    description: 'Device ID (UUID format)',
+    example: 'CD3A09EA-F804-4510-8982-7A33AFDDC858',
   })
   @IsString()
   @IsNotEmpty()
+  @IsUUID(4, { message: 'Device ID must be a valid UUID' })
   deviceid: string;
 
   @ApiProperty({
     description: 'Longitude coordinate',
-    example: -122.4194,
+    example: -122.406417,
   })
   @IsNumber()
-  @IsOptional()
-  longitude?: number;
+  longitude: number;
 
   @ApiProperty({
     description: 'Latitude coordinate',
     example: 37.7749,
   })
   @IsNumber()
-  @IsOptional()
-  latitude?: number;
+  latitude: number;
 }
 
 export class RegisterUserResponseDto {
@@ -459,28 +458,27 @@ export class LoginDto {
   password: string;
 
   @ApiProperty({
-    description: 'Device ID',
-    example: 'device_123456',
+    description: 'Device ID (UUID format)',
+    example: 'CD3A09EA-F804-4510-8982-7A33AFDDC858',
   })
   @IsString()
   @IsNotEmpty()
+  @IsUUID(4, { message: 'Device ID must be a valid UUID' })
   deviceid: string;
 
   @ApiProperty({
     description: 'Longitude coordinate',
-    example: -122.4194,
+    example: -122.406417,
   })
   @IsNumber()
-  @IsOptional()
-  longitude?: number;
+  longitude: number;
 
   @ApiProperty({
     description: 'Latitude coordinate',
     example: 37.7749,
   })
   @IsNumber()
-  @IsOptional()
-  latitude?: number;
+  latitude: number;
 }
 
 export class LoginResponseDto {

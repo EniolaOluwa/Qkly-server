@@ -87,10 +87,10 @@ export class User {
   @Column({ nullable: true })
   deviceId: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  @Column({ type: 'float', nullable: false })
   longitude: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  @Column({ type: 'float', nullable: false })
   latitude: number;
 
   @CreateDateColumn()
