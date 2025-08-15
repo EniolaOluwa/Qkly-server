@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Request,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -197,7 +198,7 @@ export class BusinessesController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create a new business',
-    description: 'Creates a new business with the provided information',
+    description: 'Creates a new business with the provided information. User must be on business information onboarding step. Successfully creating a business advances the user to KYC verification step.',
   })
   @ApiResponse({
     status: 201,
@@ -213,21 +214,68 @@ export class BusinessesController {
     description: 'Business type not found',
   })
   @ApiResponse({
+    status: 409,
+    description: 'Conflict - User already has a business or not on correct onboarding step',
+  })
+  @ApiResponse({
     status: 500,
     description: 'Internal server error',
   })
   async createBusiness(
     @Body(ValidationPipe) createBusinessDto: CreateBusinessDto,
     @UploadedFile() logo: Express.Multer.File,
+    @Request() req,
   ): Promise<BusinessResponseDto> {
     // Validate that logo is provided
     if (!logo) {
       throw new BadRequestException('Logo is required for business creation');
     }
     
+    // Extract user ID from JWT token
+    const userId = req.user.userId;
+    
     // Add the uploaded file to the DTO
     const businessDto = { ...createBusinessDto, logo };
-    const business = await this.businessesService.createBusiness(businessDto);
+    const business = await this.businessesService.createBusiness(businessDto, userId);
+    return {
+      id: business.id,
+      businessName: business.businessName,
+      businessType: {
+        id: business.businessType.id,
+        name: business.businessType.name,
+        createdAt: business.businessType.createdAt,
+        updatedAt: business.businessType.updatedAt,
+      },
+      businessDescription: business.businessDescription,
+      location: business.location,
+      logo: business.logo,
+      createdAt: business.createdAt,
+      updatedAt: business.updatedAt,
+    };
+  }
+
+  @Get('my-business')
+  @ApiOperation({
+    summary: 'Get current user business',
+    description: 'Retrieves the business associated with the authenticated user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User business retrieved successfully',
+    type: BusinessResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User has no business',
+  })
+  async getMyBusiness(@Request() req): Promise<BusinessResponseDto | { message: string }> {
+    const userId = req.user.userId;
+    const business = await this.businessesService.findBusinessByUserId(userId);
+    
+    if (!business) {
+      return { message: 'User has no business' };
+    }
+    
     return {
       id: business.id,
       businessName: business.businessName,

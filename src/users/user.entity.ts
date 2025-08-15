@@ -4,7 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { Business } from '../businesses/business.entity';
@@ -60,10 +60,10 @@ export class User {
   @Column({ nullable: true, comment: 'Monnify wallet bank code' })
   walletBankCode: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, unique: true })
   businessId: number;
 
-  @ManyToOne(() => Business, { nullable: true })
+  @OneToOne(() => Business, (business) => business.user, { nullable: true })
   @JoinColumn({ name: 'businessId' })
   business: Business;
 

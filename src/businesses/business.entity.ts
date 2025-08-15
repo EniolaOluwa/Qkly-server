@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToOne,
   JoinColumn,
 } from 'typeorm';
 import { BusinessType } from './business-type.entity';
+import { User } from '../users/user.entity';
 
 @Entity('businesses')
 export class Business {
@@ -32,6 +34,13 @@ export class Business {
 
   @Column({ nullable: true })
   logo: string;
+
+  @Column({ nullable: false, unique: true })
+  userId: number;
+
+  @OneToOne(() => User, (user) => user.business, { nullable: false })
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @CreateDateColumn()
   createdAt: Date;

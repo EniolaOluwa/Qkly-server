@@ -8,6 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
+import { User } from '../users/user.entity';
+import { OnboardingStep } from '../users/onboarding-step.enum';
 import {
   CreateBusinessTypeDto,
   UpdateBusinessTypeDto,
@@ -23,6 +25,8 @@ export class BusinessesService {
     private businessRepository: Repository<Business>,
     @InjectRepository(BusinessType)
     private businessTypeRepository: Repository<BusinessType>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private cloudinaryUtil: CloudinaryUtil,
   ) {}
 
@@ -118,8 +122,35 @@ export class BusinessesService {
   // Business methods
   async createBusiness(
     createBusinessDto: CreateBusinessDto,
+    userId: number,
   ): Promise<Business> {
     try {
+      // Check if user already has a business
+      const existingBusiness = await this.businessRepository.findOne({
+        where: { userId },
+      });
+
+      if (existingBusiness) {
+        throw new ConflictException(
+          'User already has a business. Only one business per user is allowed',
+        );
+      }
+
+      // Check if user is on the correct onboarding step
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
+        throw new ConflictException(
+          `User must be have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
+        );
+      }
+
       // Verify business type exists
       await this.findBusinessTypeById(createBusinessDto.businessTypeId);
 
@@ -140,15 +171,22 @@ export class BusinessesService {
         businessDescription: createBusinessDto.businessDescription,
         location: createBusinessDto.location,
         logo: logoUrl,
+        userId,
       });
 
       // Save business to database
       const savedBusiness = await this.businessRepository.save(business);
 
+      // Update user's onboarding step to KYC_VERIFICATION
+      await this.userRepository.update(userId, {
+        onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
+        businessId: savedBusiness.id,
+      });
+
       // Return business with relations loaded
       return await this.findBusinessById(savedBusiness.id);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to create business');
@@ -157,7 +195,7 @@ export class BusinessesService {
 
   async findAllBusinesses(): Promise<Business[]> {
     return await this.businessRepository.find({
-      relations: ['businessType'],
+      relations: ['businessType', 'user'],
       order: { businessName: 'ASC' },
     });
   }
@@ -165,12 +203,19 @@ export class BusinessesService {
   async findBusinessById(id: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['businessType'],
+      relations: ['businessType', 'user'],
     });
     if (!business) {
       throw new NotFoundException(`Business with ID ${id} not found`);
     }
     return business;
+  }
+
+  async findBusinessByUserId(userId: number): Promise<Business | null> {
+    return await this.businessRepository.findOne({
+      where: { userId },
+      relations: ['businessType', 'user'],
+    });
   }
 
   async updateBusiness(

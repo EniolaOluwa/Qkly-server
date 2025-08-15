@@ -3,13 +3,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
+import { User } from '../users/user.entity';
 import { BusinessesController } from './businesses.controller';
 import { BusinessesService } from './businesses.service';
 import { CloudinaryUtil } from '../utils/cloudinary.util';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Business, BusinessType]),
+    TypeOrmModule.forFeature([Business, BusinessType, User]),
     ConfigModule,
   ],
   controllers: [BusinessesController],
