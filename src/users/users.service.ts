@@ -24,6 +24,7 @@ import {
   CreatePinResponseDto,
 } from '../dto/responses.dto';
 import { CryptoUtil } from '../utils/crypto.util';
+import { WalletProvisioningUtil } from '../utils/wallet-provisioning.util';
 
 @Injectable()
 export class UsersService {
@@ -35,6 +36,7 @@ export class UsersService {
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
+    private walletProvisioningUtil: WalletProvisioningUtil,
   ) {}
 
   async registerUser(
@@ -310,6 +312,8 @@ export class UsersService {
 
   async getKycVerificationDetails(
     referenceId: string,
+    userId?: number,
+    customerEmail?: string,
   ): Promise<KycVerificationResponseDto> {
     try {
       const premblyBaseUrl = this.configService.get<string>(
@@ -343,6 +347,30 @@ export class UsersService {
 
       // Map Prembly response to our DTO
       const isVerified = verificationData.verification_status === 'VERIFIED';
+      
+      // If verification is successful and we have user context, provision wallet
+      if (isVerified && userId && customerEmail) {
+        try {
+          // Extract BVN data from Prembly response
+          const bvnVerificationData = this.walletProvisioningUtil.extractBvnDataFromPremblyResponse(verificationData);
+          
+          // Provision wallet on successful BVN verification
+          const walletResult = await this.walletProvisioningUtil.provisionWalletOnBvnSuccess(
+            userId,
+            customerEmail,
+            bvnVerificationData,
+          );
+
+          if (walletResult.success) {
+            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+          } else {
+            console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
+          }
+        } catch (walletError) {
+          // Log wallet provisioning error but don't fail the verification response
+          console.error('Wallet provisioning failed:', walletError);
+        }
+      }
       
       return {
         status: fullResponse.status === true,

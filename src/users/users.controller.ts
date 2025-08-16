@@ -266,6 +266,8 @@ export class UsersController {
   ): Promise<KycVerificationResponseDto> {
     return this.usersService.getKycVerificationDetails(
       verifyKycDto.reference_id,
+      req.user.userId,
+      req.user.email,
     );
   }
 
