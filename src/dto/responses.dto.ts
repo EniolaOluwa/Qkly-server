@@ -71,12 +71,11 @@ export class RegisterUserDto {
   password: string;
 
   @ApiProperty({
-    description: 'Device ID (UUID format)',
-    example: 'CD3A09EA-F804-4510-8982-7A33AFDDC858',
+    description: 'Device ID',
+    example: 'android_device_12345',
   })
   @IsString()
   @IsNotEmpty()
-  @IsUUID(4, { message: 'Device ID must be a valid UUID' })
   deviceid: string;
 
   @ApiProperty({
@@ -458,12 +457,11 @@ export class LoginDto {
   password: string;
 
   @ApiProperty({
-    description: 'Device ID (UUID format)',
-    example: 'CD3A09EA-F804-4510-8982-7A33AFDDC858',
+    description: 'Device ID',
+    example: 'ios_device_67890',
   })
   @IsString()
   @IsNotEmpty()
-  @IsUUID(4, { message: 'Device ID must be a valid UUID' })
   deviceid: string;
 
   @ApiProperty({
