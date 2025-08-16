@@ -84,7 +84,7 @@ export class User {
   @Column({ default: false, comment: 'Whether user has completed all onboarding steps' })
   isOnboardingCompleted: boolean;
 
-  @Column({ nullable: true })
+  @Column({ nullable: false })
   deviceId: string;
 
   @Column({ type: 'float', nullable: false })
