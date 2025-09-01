@@ -10,6 +10,7 @@ import { User } from './user.entity';
 import { Otp } from './otp.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { RoleGuard } from './role.guard';
+import { WalletProvisioningUtil } from '../utils/wallet-provisioning.util';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { RoleGuard } from './role.guard';
     }),
   ],
   controllers: [UsersController],
-  providers: [UsersService, JwtStrategy, RoleGuard],
+  providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
   exports: [UsersService, RoleGuard, JwtStrategy],
 })
 export class UsersModule {}

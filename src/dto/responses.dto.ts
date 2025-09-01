@@ -555,53 +555,55 @@ export class LoginResponseDto {
 
 export class VerifyKycDto {
   @ApiProperty({
-    description: 'Reference ID of the verification from Prembly',
-    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
+    description: 'BVN (Bank Verification Number) for verification',
+    example: '22222222222',
+    minLength: 11,
+    maxLength: 11,
   })
   @IsString()
   @IsNotEmpty()
-  reference_id: string;
+  @MinLength(11)
+  @MaxLength(11)
+  @Matches(/^\d{11}$/, { message: 'BVN must be exactly 11 digits' })
+  bvn: string;
+
+  @ApiProperty({
+    description: 'Selfie image file for BVN verification (JPEG, PNG supported)',
+    type: 'string',
+    format: 'binary',
+    required: true,
+  })
+  @IsOptional()
+  selfie_image?: Express.Multer.File;
 }
 
 export class KycVerificationResponseDto {
   @ApiProperty({
-    description: 'Overall verification status',
-    example: true,
-  })
-  status: boolean;
-
-  @ApiProperty({
     description: 'Response message',
-    example: 'Verification details retrieved successfully',
+    example: 'BVN verification completed successfully',
   })
   message: string;
 
   @ApiProperty({
-    description: 'Reference ID of the verification',
-    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
+    description: 'First name from BVN records (only returned on successful verification)',
+    example: 'JOHN',
+    required: false,
   })
-  reference_id: string;
+  first_name?: string;
 
   @ApiProperty({
-    description: 'Verification status from Prembly',
-    example: 'VERIFIED',
-    enum: ['VERIFIED', 'FAILED', 'PENDING'],
+    description: 'Middle name from BVN records (only returned on successful verification)',
+    example: 'ANON',
+    required: false,
   })
-  verification_status: string;
+  middle_name?: string;
 
   @ApiProperty({
-    description: 'Response code from Prembly',
-    example: '00',
+    description: 'Last name from BVN records (only returned on successful verification)',
+    example: 'DOE',
+    required: false,
   })
-  response_code: string;
-
-
-
-  @ApiProperty({
-    description: 'Date when verification was created',
-    example: '2023-05-26T09:52:49.677Z',
-  })
-  created_at: string;
+  last_name?: string;
 }
 
 export class KycErrorResponseDto {
