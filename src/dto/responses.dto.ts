@@ -579,85 +579,31 @@ export class VerifyKycDto {
 
 export class KycVerificationResponseDto {
   @ApiProperty({
-    description: 'Overall verification status',
-    example: true,
-  })
-  status: boolean;
-
-  @ApiProperty({
     description: 'Response message',
     example: 'BVN verification completed successfully',
   })
   message: string;
 
   @ApiProperty({
-    description: 'BVN used for verification',
-    example: '22222222222',
-  })
-  bvn: string;
-
-  @ApiProperty({
-    description: 'First name from BVN records',
+    description: 'First name from BVN records (only returned on successful verification)',
     example: 'JOHN',
+    required: false,
   })
-  first_name: string;
+  first_name?: string;
 
   @ApiProperty({
-    description: 'Middle name from BVN records',
+    description: 'Middle name from BVN records (only returned on successful verification)',
     example: 'ANON',
+    required: false,
   })
-  middle_name: string;
+  middle_name?: string;
 
   @ApiProperty({
-    description: 'Last name from BVN records',
+    description: 'Last name from BVN records (only returned on successful verification)',
     example: 'DOE',
+    required: false,
   })
-  last_name: string;
-
-  @ApiProperty({
-    description: 'Date of birth from BVN records',
-    example: '01-January-1907',
-  })
-  date_of_birth: string;
-
-  @ApiProperty({
-    description: 'Phone number from BVN records',
-    example: '08103817187',
-  })
-  phone_number: string;
-
-  @ApiProperty({
-    description: 'Gender from BVN records',
-    example: 'Male',
-  })
-  gender: string;
-
-  @ApiProperty({
-    description: 'Selfie verification result',
-    type: 'object',
-    properties: {
-      confidence_value: {
-        type: 'number',
-        example: 99.99620056152344,
-        description: 'Confidence percentage (0-100%)'
-      },
-      match: {
-        type: 'boolean',
-        example: true,
-        description: 'Whether selfie matches BVN photo (true for 90%+ confidence)'
-      }
-    },
-  })
-  selfie_verification: {
-    confidence_value: number;
-    match: boolean;
-  };
-
-  @ApiProperty({
-    description: 'URL to the processed selfie image',
-    example: 'https://image-rekognitions.s3.amazonaws.com/bvn_n_selfie_172.jpg',
-  })
-  selfie_image_url: string;
+  last_name?: string;
 }
 
 export class KycErrorResponseDto {

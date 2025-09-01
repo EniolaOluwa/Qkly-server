@@ -439,24 +439,19 @@ export class UsersService {
         }
       }
       
-      return {
-        status: isVerified,
-        message: isVerified 
-          ? 'BVN verification completed successfully' 
-          : 'BVN verification failed - selfie does not match BVN records',
-        bvn: verificationData.bvn,
-        first_name: verificationData.first_name,
-        middle_name: verificationData.middle_name,
-        last_name: verificationData.last_name,
-        date_of_birth: verificationData.date_of_birth,
-        phone_number: verificationData.phone_number1 || verificationData.phone_number2 || '',
-        gender: verificationData.gender,
-        selfie_verification: {
-          confidence_value: selfieVerification?.confidence_value || 0,
-          match: selfieVerification?.match || false,
-        },
-        selfie_image_url: verificationData.selfie_image_url || '',
-      };
+      // Return response based on verification result
+      if (isVerified) {
+        return {
+          message: 'BVN verification completed successfully',
+          first_name: verificationData.first_name,
+          middle_name: verificationData.middle_name,
+          last_name: verificationData.last_name,
+        };
+      } else {
+        return {
+          message: 'BVN verification failed - selfie does not match BVN records',
+        };
+      }
     } catch (error) {
       console.error(
         'Dojah BVN verification failed:',
