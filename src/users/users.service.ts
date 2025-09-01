@@ -310,54 +310,121 @@ export class UsersService {
     }
   }
 
-  async getKycVerificationDetails(
-    referenceId: string,
-    userId?: number,
-    customerEmail?: string,
+  async verifyBvnWithSelfie(
+    userId: number,
+    bvn: string,
+    selfieImageFile: Express.Multer.File,
   ): Promise<KycVerificationResponseDto> {
     try {
-      const premblyBaseUrl = this.configService.get<string>(
-        'PREMBLY_BASE_URL',
-        'https://api.prembly.com',
+      // Get Dojah API configuration
+      const dojahBaseUrl = this.configService.get<string>(
+        'DOJAH_BASE_URL',
+        'https://api.dojah.io',
       );
-      const premblyApiKey = this.configService.get<string>('PREMBLY_API_KEY');
+      const dojahAppId = this.configService.get<string>('DOJAH_APP_ID');
+      const dojahPublicKey = this.configService.get<string>('DOJAH_PUBLIC_KEY');
 
-      if (!premblyApiKey) {
+      if (!dojahAppId || !dojahPublicKey) {
         throw new InternalServerErrorException(
-          'Prembly API credentials not configured',
+          'Dojah API credentials not configured',
         );
       }
 
-      // Call Prembly API to get verification status by reference ID
-      const response = await firstValueFrom(
-        this.httpService.get(`${premblyBaseUrl}/identitypass/verification/${referenceId}/status`, {
-          headers: {
-            'x-api-key': premblyApiKey,
-            'Content-Type': 'application/json',
-          },
-        }),
-      );
-
-      const fullResponse = response.data;
-      const verificationData = fullResponse?.data;
-
-      if (!verificationData) {
-        throw new NotFoundException('Verification data not found');
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      if (!user) {
+        throw new NotFoundException('User not found');
       }
 
-      // Map Prembly response to our DTO
-      const isVerified = verificationData.verification_status === 'VERIFIED';
+      // Validate file type and size
+      if (!selfieImageFile) {
+        throw new BadRequestException('Selfie image file is required');
+      }
+
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (!allowedMimeTypes.includes(selfieImageFile.mimetype)) {
+        throw new BadRequestException(
+          'Invalid file type. Only JPEG and PNG images are supported.',
+        );
+      }
+
+      // Check file size (max 5MB)
+      const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
+      if (selfieImageFile.size > maxSizeInBytes) {
+        throw new BadRequestException(
+          'File size too large. Maximum size allowed is 5MB.',
+        );
+      }
+
+      // Convert file buffer to base64
+      const base64Image = selfieImageFile.buffer.toString('base64');
       
-      // If verification is successful and we have user context, provision wallet
-      if (isVerified && userId && customerEmail) {
+      // Format according to Dojah docs - ensure it starts with /9 for JPEG
+      let formattedSelfieImage = base64Image;
+      
+      // For non-JPEG images, we might need to convert or validate differently
+      if (selfieImageFile.mimetype === 'image/png') {
+        // PNG images have different base64 headers, but Dojah expects JPEG format
+        // You might want to convert PNG to JPEG here if needed
+        console.warn('PNG image provided. Dojah API expects JPEG format.');
+      }
+      
+      // Validate that the base64 string starts with expected JPEG signature
+      if (!formattedSelfieImage.startsWith('/9')) {
+        throw new BadRequestException(
+          'Invalid image format. The image must be a valid JPEG file.',
+        );
+      }
+
+      // Call Dojah API for BVN verification with selfie
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${dojahBaseUrl}/api/v1/kyc/bvn/verify`,
+          {
+            bvn: bvn,
+            selfie_image: formattedSelfieImage,
+          },
+          {
+            headers: {
+              'AppId': dojahAppId,
+              'Authorization': dojahPublicKey,
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+
+      const verificationData = response.data?.entity;
+
+      if (!verificationData) {
+        throw new InternalServerErrorException('Invalid response from Dojah API');
+      }
+
+      // Check if verification was successful
+      const selfieVerification = verificationData.selfie_verification;
+      const isVerified = selfieVerification?.match === true;
+      
+      // If verification is successful, update user's BVN and onboarding step
+      if (isVerified) {
+        await this.userRepository.update(userId, {
+          bvn: bvn,
+          onboardingStep: OnboardingStep.KYC_VERIFICATION,
+        });
+
+        // Try to provision wallet if utilities are available
         try {
-          // Extract BVN data from Prembly response
-          const bvnVerificationData = this.walletProvisioningUtil.extractBvnDataFromPremblyResponse(verificationData);
+          const bvnVerificationData = {
+            bvn: verificationData.bvn,
+            customerName: `${verificationData.first_name} ${verificationData.last_name}`.trim(),
+            firstName: verificationData.first_name,
+            lastName: verificationData.last_name,
+            dateOfBirth: verificationData.date_of_birth,
+            verification_status: 'VERIFIED',
+          };
           
-          // Provision wallet on successful BVN verification
           const walletResult = await this.walletProvisioningUtil.provisionWalletOnBvnSuccess(
             userId,
-            customerEmail,
+            user.email,
             bvnVerificationData,
           );
 
@@ -373,39 +440,43 @@ export class UsersService {
       }
       
       return {
-        status: fullResponse.status === true,
+        status: isVerified,
         message: isVerified 
-          ? 'Verification completed successfully' 
-          : `Verification ${verificationData.verification_status?.toLowerCase() || 'failed'}`,
-        reference_id: verificationData.reference || referenceId,
-        verification_status: verificationData.verification_status || 'UNKNOWN',
-        response_code: verificationData.response_code || '',
-        created_at: verificationData.created_at || '',
+          ? 'BVN verification completed successfully' 
+          : 'BVN verification failed - selfie does not match BVN records',
+        bvn: verificationData.bvn,
+        first_name: verificationData.first_name,
+        middle_name: verificationData.middle_name,
+        last_name: verificationData.last_name,
+        date_of_birth: verificationData.date_of_birth,
+        phone_number: verificationData.phone_number1 || verificationData.phone_number2 || '',
+        gender: verificationData.gender,
+        selfie_verification: {
+          confidence_value: selfieVerification?.confidence_value || 0,
+          match: selfieVerification?.match || false,
+        },
+        selfie_image_url: verificationData.selfie_image_url || '',
       };
     } catch (error) {
       console.error(
-        'Prembly KYC verification details failed:',
+        'Dojah BVN verification failed:',
         error.response?.data || error.message,
       );
 
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
 
-      if (error.response?.status === 404) {
-        throw new NotFoundException('Verification reference ID not found');
-      }
-
       if (error.response?.status === 401) {
-        throw new UnauthorizedException('Invalid Prembly API credentials');
+        throw new UnauthorizedException('Invalid Dojah API credentials');
       }
 
       if (error.response?.status === 403) {
-        throw new UnauthorizedException('Insufficient permissions for Prembly API');
+        throw new UnauthorizedException('Insufficient permissions for Dojah API');
       }
 
       throw new InternalServerErrorException(
-        'Failed to retrieve KYC verification details',
+        'Failed to verify BVN with selfie',
       );
     }
   }

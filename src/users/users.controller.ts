@@ -7,12 +7,17 @@ import {
   Param,
   UseGuards,
   Request,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import {
@@ -228,20 +233,34 @@ export class UsersController {
 
   @Post('verify-kyc')
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('selfie_image', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG and PNG images are supported.'), false);
+      }
+    },
+  }))
+  @ApiConsumes('multipart/form-data')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Verify user KYC status',
+    summary: 'Verify user BVN with selfie image',
     description:
-      'Retrieves verification status from Prembly using reference ID. Requires JWT authentication.',
+      'Verifies user BVN using Dojah API with selfie image verification. Updates user onboarding step and BVN on successful verification. Requires JWT authentication. Accepts multipart/form-data with BVN and selfie image file.',
   })
   @ApiResponse({
     status: 200,
-    description: 'Verification details retrieved successfully',
+    description: 'BVN verification completed successfully',
     type: KycVerificationResponseDto,
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - Invalid reference ID format',
+    description: 'Bad request - Invalid BVN format or selfie image',
     type: KycErrorResponseDto,
   })
   @ApiResponse({
@@ -251,23 +270,28 @@ export class UsersController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Not found - Verification reference ID not found',
+    description: 'Not found - User not found',
     type: KycErrorResponseDto,
   })
   @ApiResponse({
     status: 500,
     description:
-      'Internal server error - Failed to retrieve verification details',
+      'Internal server error - Failed to verify BVN',
     type: KycErrorResponseDto,
   })
   async verifyKyc(
     @Body(ValidationPipe) verifyKycDto: VerifyKycDto,
+    @UploadedFile() selfieImage: Express.Multer.File,
     @Request() req,
   ): Promise<KycVerificationResponseDto> {
-    return this.usersService.getKycVerificationDetails(
-      verifyKycDto.reference_id,
+    if (!selfieImage) {
+      throw new BadRequestException('Selfie image is required');
+    }
+
+    return this.usersService.verifyBvnWithSelfie(
       req.user.userId,
-      req.user.email,
+      verifyKycDto.bvn,
+      selfieImage,
     );
   }
 

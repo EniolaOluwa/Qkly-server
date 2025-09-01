@@ -555,12 +555,26 @@ export class LoginResponseDto {
 
 export class VerifyKycDto {
   @ApiProperty({
-    description: 'Reference ID of the verification from Prembly',
-    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
+    description: 'BVN (Bank Verification Number) for verification',
+    example: '22222222222',
+    minLength: 11,
+    maxLength: 11,
   })
   @IsString()
   @IsNotEmpty()
-  reference_id: string;
+  @MinLength(11)
+  @MaxLength(11)
+  @Matches(/^\d{11}$/, { message: 'BVN must be exactly 11 digits' })
+  bvn: string;
+
+  @ApiProperty({
+    description: 'Selfie image file for BVN verification (JPEG, PNG supported)',
+    type: 'string',
+    format: 'binary',
+    required: true,
+  })
+  @IsOptional()
+  selfie_image?: Express.Multer.File;
 }
 
 export class KycVerificationResponseDto {
@@ -572,36 +586,78 @@ export class KycVerificationResponseDto {
 
   @ApiProperty({
     description: 'Response message',
-    example: 'Verification details retrieved successfully',
+    example: 'BVN verification completed successfully',
   })
   message: string;
 
   @ApiProperty({
-    description: 'Reference ID of the verification',
-    example: '2e81dde5-6f75-4ec9-83e3-2d78565a6f8d',
+    description: 'BVN used for verification',
+    example: '22222222222',
   })
-  reference_id: string;
+  bvn: string;
 
   @ApiProperty({
-    description: 'Verification status from Prembly',
-    example: 'VERIFIED',
-    enum: ['VERIFIED', 'FAILED', 'PENDING'],
+    description: 'First name from BVN records',
+    example: 'JOHN',
   })
-  verification_status: string;
+  first_name: string;
 
   @ApiProperty({
-    description: 'Response code from Prembly',
-    example: '00',
+    description: 'Middle name from BVN records',
+    example: 'ANON',
   })
-  response_code: string;
-
-
+  middle_name: string;
 
   @ApiProperty({
-    description: 'Date when verification was created',
-    example: '2023-05-26T09:52:49.677Z',
+    description: 'Last name from BVN records',
+    example: 'DOE',
   })
-  created_at: string;
+  last_name: string;
+
+  @ApiProperty({
+    description: 'Date of birth from BVN records',
+    example: '01-January-1907',
+  })
+  date_of_birth: string;
+
+  @ApiProperty({
+    description: 'Phone number from BVN records',
+    example: '08103817187',
+  })
+  phone_number: string;
+
+  @ApiProperty({
+    description: 'Gender from BVN records',
+    example: 'Male',
+  })
+  gender: string;
+
+  @ApiProperty({
+    description: 'Selfie verification result',
+    type: 'object',
+    properties: {
+      confidence_value: {
+        type: 'number',
+        example: 99.99620056152344,
+        description: 'Confidence percentage (0-100%)'
+      },
+      match: {
+        type: 'boolean',
+        example: true,
+        description: 'Whether selfie matches BVN photo (true for 90%+ confidence)'
+      }
+    },
+  })
+  selfie_verification: {
+    confidence_value: number;
+    match: boolean;
+  };
+
+  @ApiProperty({
+    description: 'URL to the processed selfie image',
+    example: 'https://image-rekognitions.s3.amazonaws.com/bvn_n_selfie_172.jpg',
+  })
+  selfie_image_url: string;
 }
 
 export class KycErrorResponseDto {
