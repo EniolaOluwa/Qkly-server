@@ -7,6 +7,8 @@ import { UsersModule } from './core/users/users.module';
 import { BusinessesModule } from './core/businesses/businesses.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { ReviewModule } from './core/store/review.module';
+import { ProductModule } from './core/product/product.module';
+import { OrderModule } from './core/order/order.module';
 
 
 @Module({
@@ -29,6 +31,8 @@ import { ReviewModule } from './core/store/review.module';
       logging: false, // Disabled database query logging
     }),
     UsersModule,
+    ProductModule,
+    OrderModule,
     BusinessesModule,
     WalletsModule,
     ReviewModule,

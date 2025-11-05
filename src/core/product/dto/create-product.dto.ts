@@ -151,3 +151,13 @@ hasVariation?: boolean;
 
 
 
+export class FindAllProductsDto {
+  page?: number;
+  limit?: number;
+  userId?: number;
+  businessId?: number;
+  categoryId?: number;
+  search?: string;     // optional keyword search
+  sortBy?: string;     // e.g. 'price' or 'createdAt'
+  sortOrder?: 'ASC' | 'DESC';
+}

@@ -4,9 +4,10 @@ import { Repository } from 'typeorm';
 import { Product } from './entity/product.entity';
 import { User } from '../users';
 import { Business } from '../businesses/business.entity';
-import { CreateProductDto } from './dto/create-product.dto';
+import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateOrderDto } from '../order/dto/update-order.dto';
 import { AppResponse } from '../../common/app.response';
+import { QklyErrorResp } from '../../common/dto/error.interface';
 
 
 @Injectable()
@@ -53,17 +54,81 @@ export class ProductService {
   }
 
 
-  async findAllProducts(): Promise<Product[]> {
-    try {
-      return await this.productRepository.find({
-        relations: ['user', 'business', 'sizes'],
-      });
-    } catch (error) {
-      error.location = `ProductService.${this.findAllProducts.name} method`;
-      AppResponse.error(error);
-      throw error
+  // async findAllProducts(): Promise<Product[]> {
+  //   try {
+  //     return await this.productRepository.find({
+  //       relations: ['user', 'business', 'sizes'],
+  //     });
+  //   } catch (error) {
+  //     error.location = `ProductService.${this.findAllProducts.name} method`;
+  //     AppResponse.error(error);
+  //     throw error
+  //   }
+  // }
+
+  async findAllProducts(
+  query: FindAllProductsDto,
+): Promise<{
+  data: Product[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}> {
+  try {
+    const { page = 1, limit = 10, userId, businessId, categoryId } = query;
+
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.user', 'user')
+      .leftJoinAndSelect('product.business', 'business')
+      .leftJoinAndSelect('product.sizes', 'sizes');
+
+    // ✅ Apply filters dynamically
+    if (userId) {
+      qb.andWhere('product.userId = :userId', { userId });
     }
+
+    if (businessId) {
+      qb.andWhere('product.businessId = :businessId', { businessId });
+    }
+
+    if (categoryId) {
+      qb.andWhere('product.categoryId = :categoryId', { categoryId });
+    }
+
+    // ✅ Count total before pagination
+    const total = await qb.getCount();
+
+    // ✅ Apply pagination
+    const safePage = Math.max(1, page);
+    const skip = (safePage - 1) * limit;
+
+    const data = await qb
+      .skip(skip)
+      .take(limit)
+      .orderBy('product.createdAt', 'DESC')
+      .getMany();
+
+    // ✅ Metadata
+    const meta = {
+      total,
+      page: safePage,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+
+    return { data, meta };
+  } catch (error) {
+    const err = error as QklyErrorResp;
+    error.location = `ProductService.${this.findAllProducts.name} method`;
+    AppResponse.error(err);
+    throw error
   }
+}
+
 
   
   async findProductById(id: number): Promise<Product> {
@@ -143,4 +208,8 @@ export class ProductService {
       throw error
     }
   }
+
+
+
+   
 }

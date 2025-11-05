@@ -12,6 +12,7 @@ import {
   UseGuards,
   Request,
   SetMetadata,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,7 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import { Product } from './entity/product.entity';
-import { CreateProductDto } from './dto/create-product.dto';
+import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -45,9 +46,20 @@ export class ProductsController {
   }
 
   @Get()
-  async findAllProducts(): Promise<Product[]> {
-    return await this.productService.findAllProducts();
-  }
+    async findAllProducts(
+      @Query() query: FindAllProductsDto,
+    ): Promise<{
+      data: Product[];
+      meta: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+    }> {
+      return await this.productService.findAllProducts(query);
+    }
+
 
   @Get('my-business-products')
   @ApiOperation({
