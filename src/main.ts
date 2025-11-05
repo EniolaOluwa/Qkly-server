@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './utils/logging.interceptor';
+import { ValidationPipe } from './pipes';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,6 +13,7 @@ async function bootstrap() {
 
   // Global interceptors
   app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalPipes(new ValidationPipe());
 
   // Set global prefix for all routes
   app.setGlobalPrefix('v1');
@@ -24,6 +26,7 @@ async function bootstrap() {
     .addTag('health', 'Health check endpoints')
     .addTag('app', 'Application endpoints')
     .addTag('users', 'User management endpoints')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

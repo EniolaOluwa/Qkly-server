@@ -13,24 +13,19 @@ import { UsersModule } from './users/users.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { WalletsModule } from './wallets/wallets.module';
 import { StoreModule } from './store/store.module';
+import { dataSource } from './database';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      cache: true,
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '6543', 10),
-      username: process.env.DB_USERNAME || 'eniolafakeye',
-      password: process.env.DB_PASSWORD || 'password@12345',
-      database: process.env.DB_NAME || 'nqkly_db',
-      entities: [User, Business, BusinessType, Otp, Order, Product],
-      migrations: ['dist/migrations/*.js'],
-      synchronize: false, // Set to false when using migrations
-      migrationsRun: true, // Set to true to run migrations on app start
-      logging: false, // Disabled database query logging
+    TypeOrmModule.forRootAsync({
+      useFactory: () => {
+        return {};
+      },
+      dataSourceFactory: () => dataSource.initialize(),
     }),
     UsersModule,
     BusinessesModule,
@@ -40,4 +35,4 @@ import { StoreModule } from './store/store.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

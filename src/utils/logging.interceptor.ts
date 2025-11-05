@@ -11,6 +11,10 @@ import { throwError } from 'rxjs';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
+
+export const IgnoredPropertyName = Symbol('IgnoredPropertyName');
+
+
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger(LoggingInterceptor.name);
@@ -21,10 +25,10 @@ export class LoggingInterceptor implements NestInterceptor {
     const { method, url, body } = request;
     const userAgent = request.get('User-Agent') || '';
     const startTime = Date.now();
-    
+
     // Generate unique request ID
     const requestId = uuidv4();
-    
+
     // Attach request ID to the request object for potential use in controllers
     (request as any).requestId = requestId;
 
@@ -32,6 +36,12 @@ export class LoggingInterceptor implements NestInterceptor {
     this.logger.log(
       `[${requestId}] REQUEST: ${method} ${url} - User-Agent: ${userAgent} - Body: ${JSON.stringify(body)}`
     );
+
+    const isIgnored = context.getHandler()[IgnoredPropertyName];
+    if (isIgnored) {
+      return next.handle();
+    }
+
 
     return next.handle().pipe(
       tap((responseBody) => {
