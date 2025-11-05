@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Product } from './product.entity';
-import { MeasurementType } from './dto/create-product.dto';
+import { MeasurementType } from '../dto/create-product.dto';
+
 
 @Entity('product_sizes')
 export class ProductSize {

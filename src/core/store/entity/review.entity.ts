@@ -7,8 +7,10 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { Business } from '../businesses/business.entity';
-import { Product } from './product.entity';
+import { Product } from '../../product/entity/product.entity';
+import { Business } from '../../businesses/business.entity';
+
+
 
 @Entity('reviews')
 export class Review {

@@ -11,7 +11,9 @@ import {
   IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TransactionMedium, ProductDetails } from '../order.entity';
+import { TransactionMedium, ProductDetails } from '../entity/order.entity';
+
+
 
 export class ProductDetailsDto implements ProductDetails {
   @ApiProperty({

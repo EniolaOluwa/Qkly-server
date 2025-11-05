@@ -7,33 +7,11 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from '../users/user.entity';
-import { Business } from '../businesses/business.entity';
+import { User } from '../../users/user.entity';
+import { Business } from '../../businesses/business.entity';
+import { OrderStatus, ProductDetails, TransactionMedium, TransactionStatus } from '../interfaces/order.interface';
 
-export interface ProductDetails {
-  productId: number;
-  quantity: number;
-  colour: string;
-}
 
-export enum OrderStatus {
-  ORDERED = 'ordered',
-  DISPATCHED = 'dispatched',
-  DELIVERED = 'delivered',
-  RETURNED = 'returned',
-}
-
-export enum TransactionMedium {
-  WEB = 'web',
-  MOBILE = 'mobile',
-}
-
-export enum TransactionStatus {
-  PENDING = 'pending',
-  SUCCESSFUL = 'successful',
-  FAILED = 'failed',
-  CANCELLED = 'cancelled',
-}
 
 @Entity('orders')
 export class Order {
@@ -109,3 +87,6 @@ export class Order {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+export { TransactionMedium, ProductDetails, OrderStatus };
+

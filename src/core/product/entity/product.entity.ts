@@ -8,8 +8,8 @@ import {
   JoinColumn,
   OneToMany,
 } from 'typeorm';
-import { User } from '../users/user.entity';
-import { Business } from '../businesses/business.entity';
+import { User } from '../../users/user.entity';
+import { Business } from '../../businesses/business.entity';
 import { ProductSize } from './productSize.entity';
 
 @Entity('products')
@@ -32,13 +32,16 @@ export class Product {
   business: Business;
 
   @Column('simple-array', { nullable: true, comment: 'Array of image URLs' })
-  productImages: string[];
+  images: string[];
 
   @Column({ nullable: false })
-  productName: string;
+  name: string;
 
   @Column( 'text', { nullable: true })
   category: string; // suppose to be set of enum values 
+
+  @Column ( 'text', { nullable: false})
+  description?: string
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   price: number;
