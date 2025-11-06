@@ -28,16 +28,12 @@ import { Order } from './entity/order.entity';
 import { OrderStatus, TransactionStatus } from './interfaces/order.interface';
 
 
-export const IS_PUBLIC_KEY = 'isPublic';
-export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
-
-
 @ApiTags('orders')
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class OrdersController {
-  constructor(private readonly orderService: OrderService) {}
+  constructor(private readonly orderService: OrderService) { }
 
   // Order endpoints
   @Post()

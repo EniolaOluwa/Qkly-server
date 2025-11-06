@@ -1,16 +1,16 @@
+import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { HttpModule } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
-import { User } from './user.entity';
-import { Otp } from './otp.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtStrategy } from '../../common/auth/jwt.strategy';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
+import { Otp } from './otp.entity';
+import { User } from './user.entity';
+import { UsersController } from './users.controller';
+import { UsersService } from './users.service';
 
 @Module({
   imports: [
@@ -18,15 +18,16 @@ import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.u
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'your-super-secret-jwt-key-change-this-in-production',
+        secret: configService.get<string>('JWT_SECRET') || 'super-secret',
         signOptions: { expiresIn: '1h' },
       }),
-      inject: [ConfigService],
     }),
   ],
   controllers: [UsersController],
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
-  exports: [UsersService, RoleGuard, JwtStrategy],
+  exports: [UsersService, RoleGuard, JwtStrategy, JwtModule, PassportModule],
 })
-export class UsersModule {}
+export class UsersModule { }

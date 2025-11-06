@@ -47,10 +47,6 @@ export class UsersService {
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
-
-      console.log({ existingUserByEmail })
-
-
       if (existingUserByEmail) {
         throw new ConflictException('User with this email already exists');
       }
@@ -917,6 +913,7 @@ export class UsersService {
       );
     }
   }
+
 
   async resetPassword(
     newPassword: string,

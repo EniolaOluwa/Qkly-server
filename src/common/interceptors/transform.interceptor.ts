@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { Request } from 'express';
 import { finalize, map, Observable } from 'rxjs';
@@ -17,21 +18,12 @@ export class TransformInterceptor<T> implements NestInterceptor<T, any> {
     const handler = context.getHandler();
     const controllerClass = context.getClass();
 
-    // Check if method has the ignore flag
     const isMethodIgnored = Reflect.getMetadata(IgnoredPropertyName, handler) === true;
 
-    // Check if controller class has the ignore flag
     const isControllerIgnored = Reflect.getMetadata(IgnoredPropertyName, controllerClass) === true;
 
     const isIgnored = isMethodIgnored || isControllerIgnored;
 
-    console.log({
-      isIgnored,
-      isMethodIgnored,
-      isControllerIgnored,
-      handler: handler.name,
-      controller: controllerClass.name
-    });
 
     if (isIgnored) {
       return next.handle();

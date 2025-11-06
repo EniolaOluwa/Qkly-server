@@ -1,61 +1,61 @@
 import {
-  Controller,
-  Post,
+  BadRequestException,
   Body,
-  ValidationPipe,
+  Controller,
   Get,
   Param,
-  UseGuards,
+  Post,
   Request,
-  UseInterceptors,
   UploadedFile,
-  BadRequestException,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
-  ApiBearerAuth,
-  ApiConsumes,
 } from '@nestjs/swagger';
-import { UsersService } from './users.service';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { UserRole } from '../../common/auth/user-role.enum';
+import { Public } from '../../common/decorators/public.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 import {
-  RegisterUserDto,
-  RegisterUserResponseDto,
-  GeneratePhoneOtpDto,
-  GeneratePhoneOtpResponseDto,
-  VerifyPhoneOtpDto,
-  VerifyPhoneOtpResponseDto,
-  LoginDto,
-  LoginResponseDto,
-  VerifyKycDto,
-  KycVerificationResponseDto,
-  KycErrorResponseDto,
-  CreatePinDto,
   CreatePinResponseDto,
   CreatePinWithReferenceDto,
-  GenerateCreatePinOtpResponseDto,
-  VerifyCreatePinOtpDto,
-  VerifyCreatePinOtpResponseDto,
   ForgotPasswordDto,
   ForgotPasswordResponseDto,
-  VerifyPasswordResetOtpDto,
-  VerifyPasswordResetOtpResponseDto,
+  GenerateCreatePinOtpResponseDto,
+  GeneratePhoneOtpDto,
+  GeneratePhoneOtpResponseDto,
+  KycErrorResponseDto,
+  KycVerificationResponseDto,
+  LoginDto,
+  LoginResponseDto,
+  RegisterUserDto,
+  RegisterUserResponseDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
+  VerifyCreatePinOtpDto,
+  VerifyCreatePinOtpResponseDto,
+  VerifyKycDto,
+  VerifyPasswordResetOtpDto,
+  VerifyPasswordResetOtpResponseDto,
+  VerifyPhoneOtpDto,
+  VerifyPhoneOtpResponseDto
 } from '../../common/dto/responses.dto';
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { RoleGuard } from '../../common/guards/role.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { UserRole } from '../../common/auth/user-role.enum';
-import { TransformInterceptorIgnore } from '../../common/interceptors';
+import { UsersService } from './users.service';
 
 @ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
+  @Public()
   @Post('register')
   @ApiOperation({
     summary: 'Register a new user',
@@ -85,6 +85,7 @@ export class UsersController {
     return this.usersService.registerUser(registerUserDto);
   }
 
+  @Public()
   @Post('login')
   @ApiOperation({
     summary: 'Login user',
@@ -127,6 +128,7 @@ export class UsersController {
     description: 'Unauthorized - Invalid or missing token',
   })
   async getProfile(@Request() req) {
+    console.log({ req: req.user })
     return {
       message: 'Profile retrieved successfully',
       user: req.user,
@@ -156,6 +158,7 @@ export class UsersController {
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
+
 
   @Post('generate-phone-otp')
   @UseGuards(JwtAuthGuard)
@@ -191,6 +194,7 @@ export class UsersController {
       generatePhoneOtpDto.phone,
     );
   }
+
 
   @Post('verify-phone-otp')
   @UseGuards(JwtAuthGuard)
@@ -231,6 +235,7 @@ export class UsersController {
       verifyPhoneOtpDto.otp,
     );
   }
+
 
   @Post('verify-kyc')
   @UseGuards(JwtAuthGuard)
@@ -295,6 +300,7 @@ export class UsersController {
       selfieImage,
     );
   }
+
 
   @Post('create-pin')
   @UseGuards(JwtAuthGuard)
@@ -428,6 +434,8 @@ export class UsersController {
     return this.usersService.forgotPassword(forgotPasswordDto.email);
   }
 
+  @Public()
+
   @Post('verify-password-reset-otp')
   @ApiOperation({
     summary: 'Verify password reset OTP',
@@ -460,6 +468,7 @@ export class UsersController {
     );
   }
 
+  @Public()
   @Post('reset-password')
   @ApiOperation({
     summary: 'Reset password with reset token',

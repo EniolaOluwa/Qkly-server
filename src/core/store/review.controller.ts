@@ -24,9 +24,7 @@ import { ReviewService } from './review.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-
-export const IS_PUBLIC_KEY = 'isPublic';
-export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+import { Public } from '../../common/decorators/public.decorator';
 
 
 @ApiTags('store')
@@ -34,7 +32,7 @@ export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ReviewController {
-  constructor(private readonly reviewService: ReviewService) {}
+  constructor(private readonly reviewService: ReviewService) { }
 
   @Public()
   @Post('product/review')
