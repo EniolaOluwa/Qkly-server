@@ -3,17 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { User } from './users/user.entity';
-import { Business } from './businesses/business.entity';
-import { BusinessType } from './businesses/business-type.entity';
-import { Otp } from './users/otp.entity';
-import { Order } from './store/order.entity';
-import { Product } from './store/product.entity';
-import { UsersModule } from './users/users.module';
-import { BusinessesModule } from './businesses/businesses.module';
-import { WalletsModule } from './wallets/wallets.module';
-import { StoreModule } from './store/store.module';
+import { UsersModule } from './core/users/users.module';
+import { BusinessesModule } from './core/businesses/businesses.module';
+import { WalletsModule } from './core/wallets/wallets.module';
+import { ReviewModule } from './core/store/review.module';
+import { ProductModule } from './core/product/product.module';
+import { OrderModule } from './core/order/order.module';
 import { dataSource } from './database';
+
 
 @Module({
   imports: [
@@ -28,11 +25,15 @@ import { dataSource } from './database';
       dataSourceFactory: () => dataSource.initialize(),
     }),
     UsersModule,
+    ProductModule,
+    OrderModule,
     BusinessesModule,
     WalletsModule,
-    StoreModule,
+    ReviewModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService
+  ],
 })
 export class AppModule { }
