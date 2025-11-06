@@ -1,7 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { LoggingInterceptor } from './utils/logging.interceptor';
+import { LoggingInterceptor } from './common/logging/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,10 +21,12 @@ async function bootstrap() {
     .setTitle('NQkly API')
     .setDescription('The NQkly API documentation')
     .setVersion('1.0')
+    .addBearerAuth()
     .addTag('health', 'Health check endpoints')
     .addTag('app', 'Application endpoints')
     .addTag('users', 'User management endpoints')
     .build();
+
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document, {
