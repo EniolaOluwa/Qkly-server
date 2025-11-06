@@ -1,4 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -8,6 +9,7 @@ import {
   Min,
   Matches,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 
 
@@ -151,13 +153,61 @@ hasVariation?: boolean;
 
 
 
+// export class FindAllProductsDto {
+//   page?: number;
+//   limit?: number;
+//   userId?: number;
+//   businessId?: number;
+//   categoryId?: number;
+//   search?: string;     // optional keyword search
+//   sortBy?: string;     // e.g. 'price' or 'createdAt'
+//   sortOrder?: 'ASC' | 'DESC';
+// }
+
+
 export class FindAllProductsDto {
-  page?: number;
-  limit?: number;
+  @ApiPropertyOptional({ description: 'Page number', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  page?: number = 1;
+
+  @ApiPropertyOptional({ description: 'Number of items per page', example: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  limit?: number = 10;
+
+  @ApiPropertyOptional({ description: 'Filter by user ID', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   userId?: number;
+
+  @ApiPropertyOptional({ description: 'Filter by business ID', example: 3 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   businessId?: number;
+
+  @ApiPropertyOptional({ description: 'Filter by category ID', example: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
   categoryId?: number;
-  search?: string;     // optional keyword search
-  sortBy?: string;     // e.g. 'price' or 'createdAt'
-  sortOrder?: 'ASC' | 'DESC';
+
+  @ApiPropertyOptional({ description: 'Search keyword for product name or description', example: 'Nike' })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ description: 'Sort by a specific field', example: 'price' })
+  @IsOptional()
+  @IsString()
+  sortBy?: string;
+
+  @ApiPropertyOptional({ description: 'Sorting order (ASC or DESC)', example: 'ASC' })
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC' = 'ASC';
 }
