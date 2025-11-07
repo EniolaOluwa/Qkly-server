@@ -4,43 +4,46 @@ import {
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
+import { catchError, firstValueFrom } from 'rxjs';
 import { User } from '../users/user.entity';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
 } from './dto/wallet.dto';
-
+import {
+  MonnifyAxiosError,
+  MonnifySuccessResponse,
+  MonnifyAuthResponseBody,
+  MonnifyPaymentInitResponseBody,
+  MonnifyTransactionResponseBody
+} from './interfaces/monnify-response.interface';
 
 @Injectable()
 export class WalletsService {
-  // Monnify API configuration loaded from environment variables
+  private readonly logger = new Logger(WalletsService.name);
 
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    private httpService: HttpService,
-    private configService: ConfigService,
-  ) {}
+    private readonly userRepository: Repository<User>,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) { }
 
-  /**
-   * Get Monnify access token for authentication
-   * @returns Promise<string> Access token
-   */
-  private async getMonnifyAccessToken(): Promise<string> {
+
+  async getMonnifyAccessToken(): Promise<string> {
     try {
       const monnifyBaseUrl = this.configService.get<string>(
         'MONNIFY_BASE_URL',
         'https://sandbox.monnify.com',
       );
       const monnifyApiKey = this.configService.get<string>('MONNIFY_API_KEY');
-      const monnifySecretKey =
-        this.configService.get<string>('MONNIFY_SECRET_KEY');
+      const monnifySecretKey = this.configService.get<string>('MONNIFY_SECRET_KEY');
 
       if (!monnifyApiKey || !monnifySecretKey) {
         throw new InternalServerErrorException(
@@ -53,7 +56,7 @@ export class WalletsService {
       ).toString('base64');
 
       const response = await firstValueFrom(
-        this.httpService.post(
+        this.httpService.post<MonnifySuccessResponse<MonnifyAuthResponseBody>>(
           `${monnifyBaseUrl}/api/v1/auth/login`,
           {},
           {
@@ -62,6 +65,16 @@ export class WalletsService {
               'Content-Type': 'application/json',
             },
           },
+        ).pipe(
+          catchError((error: MonnifyAxiosError) => {
+            this.logger.error(
+              'Monnify authentication failed:',
+              error.response?.data || error.message,
+            );
+            throw new InternalServerErrorException(
+              `Failed to authenticate with Monnify: ${error.response?.data?.responseMessage || error.message}`,
+            );
+          }),
         ),
       );
 
@@ -74,13 +87,135 @@ export class WalletsService {
 
       throw new Error('Failed to get access token from Monnify');
     } catch (error) {
-      console.error(
+      this.logger.error(
         'Monnify authentication failed:',
         error.response?.data || error.message,
       );
       throw new InternalServerErrorException(
         'Failed to authenticate with Monnify',
       );
+    }
+  }
+
+
+  async initializeMonnifyPayment(payload: any): Promise<MonnifySuccessResponse<MonnifyPaymentInitResponseBody>> {
+    try {
+      const accessToken = await this.getMonnifyAccessToken();
+      const monnifyBaseUrl = this.configService.get<string>(
+        'MONNIFY_BASE_URL',
+        'https://sandbox.monnify.com',
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.post<MonnifySuccessResponse<MonnifyPaymentInitResponseBody>>(
+          `${monnifyBaseUrl}/api/v1/merchant/transactions/init-transaction`,
+          payload,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ).pipe(
+          catchError((error: MonnifyAxiosError) => {
+            this.logger.error(
+              `Monnify payment initialization failed: ${JSON.stringify(error.response?.data)}`,
+            );
+            throw new InternalServerErrorException(
+              `Failed to initialize payment: ${error.response?.data?.responseMessage || error.message}`,
+            );
+          }),
+        ),
+      );
+
+      const paymentResponse = response.data;
+
+      if (!paymentResponse.requestSuccessful) {
+        throw new InternalServerErrorException(
+          paymentResponse.responseMessage || 'Payment initialization failed',
+        );
+      }
+
+      return paymentResponse;
+    } catch (error) {
+      this.logger.error(
+        `Payment initialization failed: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Verify payment status with Monnify
+   * @param paymentReference - The payment reference to verify
+   * @returns Promise<MonnifyTransactionResponseBody> - Transaction details
+   */
+  async verifyMonnifyPayment(paymentReference: string): Promise<MonnifyTransactionResponseBody> {
+    try {
+      const accessToken = await this.getMonnifyAccessToken();
+      const monnifyBaseUrl = this.configService.get<string>(
+        'MONNIFY_BASE_URL',
+        'https://sandbox.monnify.com',
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.get<MonnifySuccessResponse<MonnifyTransactionResponseBody>>(
+          `${monnifyBaseUrl}/api/v1/merchant/transactions/query?paymentReference=${paymentReference}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          },
+        ).pipe(
+          catchError((error: MonnifyAxiosError) => {
+            this.logger.error(
+              `Monnify payment verification failed: ${JSON.stringify(error.response?.data)}`,
+            );
+            throw new InternalServerErrorException(
+              `Failed to verify payment: ${error.response?.data?.responseMessage || error.message}`,
+            );
+          }),
+        ),
+      );
+
+      const verificationResponse = response.data;
+
+      if (!verificationResponse.requestSuccessful) {
+        throw new InternalServerErrorException(
+          verificationResponse.responseMessage || 'Payment verification failed',
+        );
+      }
+
+      return verificationResponse.responseBody;
+    } catch (error) {
+      this.logger.error(
+        `Payment verification failed: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Map payment methods to Monnify format
+   * @param paymentMethod - The payment method
+   * @returns string[] - Array of payment methods for Monnify
+   */
+  getPaymentMethodsForMonnify(paymentMethod: string): string[] {
+    switch (paymentMethod) {
+      case 'CARD':
+        return ['CARD'];
+      case 'BANK_TRANSFER':
+        return ['ACCOUNT_TRANSFER'];
+      case 'USSD':
+        return ['USSD'];
+      case 'WALLET':
+        return ['WALLET'];
+      default:
+        // Allow all payment methods if not specified
+        return ['CARD', 'ACCOUNT_TRANSFER', 'USSD', 'WALLET'];
     }
   }
 
@@ -140,6 +275,26 @@ export class WalletsService {
               'Content-Type': 'application/json',
             },
           },
+        ).pipe(
+          catchError((error: MonnifyAxiosError) => {
+            this.logger.error(
+              `Failed to create wallet: ${JSON.stringify(error.response?.data)}`,
+            );
+
+            if (error.response?.status === 400) {
+              throw new BadRequestException(
+                error.response.data?.responseMessage || 'Invalid wallet creation data',
+              );
+            }
+
+            if (error.response?.status === 401) {
+              throw new UnauthorizedException('Invalid Monnify API credentials');
+            }
+
+            throw new InternalServerErrorException(
+              `Failed to create wallet: ${error.response?.data?.responseMessage || error.message}`,
+            );
+          }),
         ),
       );
 
@@ -180,26 +335,17 @@ export class WalletsService {
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException ||
+        error instanceof InternalServerErrorException
       ) {
         throw error;
       }
 
-      console.error(
+      this.logger.error(
         'Wallet generation failed:',
         error.response?.data || error.message,
       );
-
-      if (error.response?.status === 400) {
-        throw new BadRequestException(
-          error.response.data?.responseMessage ||
-            'Invalid wallet creation data',
-        );
-      }
-
-      if (error.response?.status === 401) {
-        throw new UnauthorizedException('Invalid Monnify API credentials');
-      }
 
       throw new InternalServerErrorException('Failed to create wallet');
     }
