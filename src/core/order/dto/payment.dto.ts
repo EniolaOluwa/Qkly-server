@@ -1,19 +1,100 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
-  IsNotEmpty,
-  IsString,
-  IsNumber,
   IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
   IsOptional,
   IsPositive,
-  IsObject,
-  ValidateNested,
-  IsUUID,
+  IsString,
   Matches,
   Min,
+  ValidateNested
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { PaymentMethod, PaymentStatus } from '../interfaces/order.interface';
+import { PaymentMethod } from '../interfaces/order.interface';
+
+// Move PaymentEventData class definition BEFORE PaymentCallbackDto
+export class PaymentEventCustomer {
+  @ApiProperty({ description: 'Customer name', example: 'John Doe' })
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty({ description: 'Customer email', example: 'john.doe@example.com' })
+  @IsString()
+  @IsNotEmpty()
+  email: string;
+}
+
+export class PaymentEventData {
+  @ApiProperty({ description: 'Product type', example: 'COLLECTION' })
+  @IsString()
+  productType: string;
+
+  @ApiProperty({ description: 'Transaction reference', example: 'TXN-ABCDEFGH' })
+  @IsNotEmpty()
+  @IsString()
+  transactionReference: string;
+
+  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
+  @IsNotEmpty()
+  @IsString()
+  paymentReference: string;
+
+  @ApiProperty({ description: 'Amount paid', example: 15000.00 })
+  @IsNumber()
+  @IsPositive()
+  amountPaid: number;
+
+  @ApiProperty({ description: 'Total payment', example: 15000.00 })
+  @IsNumber()
+  @IsPositive()
+  totalPayment: number;
+
+  @ApiProperty({ description: 'Settlement amount', example: 14700.00 })
+  @IsNumber()
+  settlementAmount: number;
+
+  @ApiProperty({ description: 'Payment status', example: 'PAID' })
+  @IsString()
+  paymentStatus: string;
+
+  @ApiProperty({ description: 'Payment method', example: 'CARD' })
+  @IsString()
+  paymentMethod: string;
+
+  @ApiProperty({ description: 'Paid on', example: '2023-01-15T10:30:00.000Z' })
+  @IsString()
+  paidOn: string;
+
+  @ApiProperty({ type: PaymentEventCustomer })
+  @ValidateNested()
+  @Type(() => PaymentEventCustomer)
+  customer: PaymentEventCustomer;
+
+  @ApiProperty({
+    description: 'Metadata (optional)',
+    example: { orderId: '12345' },
+    required: false
+  })
+  @IsOptional()
+  @IsObject()
+  metaData?: Record<string, any>;
+}
+
+export class PaymentCallbackDto {
+  @ApiProperty({ description: 'Event type', example: 'SUCCESSFUL_TRANSACTION' })
+  @IsNotEmpty()
+  @IsString()
+  eventType: string;
+
+  @ApiProperty({ type: PaymentEventData })
+  @IsNotEmpty()
+  @ValidateNested()
+  @Type(() => PaymentEventData)
+  eventData: PaymentEventData;
+}
 
 export class InitiatePaymentDto {
   @ApiProperty({ description: 'Order ID', example: 1 })
@@ -86,84 +167,12 @@ export class ProcessPaymentDto {
   metadata?: Record<string, any>;
 }
 
-// For Monnify webhook callback
-export class PaymentCallbackDto {
-  @ApiProperty({ description: 'Event type', example: 'SUCCESSFUL_TRANSACTION' })
-  @IsNotEmpty()
-  @IsString()
-  eventType: string;
-
-  @ApiProperty()
-  @IsNotEmpty()
-  @ValidateNested()
-  @Type(() => PaymentEventData)
-  eventData: PaymentEventData;
-}
-
-export class PaymentEventData {
-  @ApiProperty({ description: 'Product type', example: 'COLLECTION' })
-  @IsString()
-  productType: string;
-
-  @ApiProperty({ description: 'Transaction reference', example: 'TXN-ABCDEFGH' })
-  @IsNotEmpty()
-  @IsString()
-  transactionReference: string;
-
-  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
-  @IsNotEmpty()
-  @IsString()
-  paymentReference: string;
-
-  @ApiProperty({ description: 'Amount paid', example: 15000.00 })
-  @IsNumber()
-  @IsPositive()
-  amountPaid: number;
-
-  @ApiProperty({ description: 'Total payment', example: 15000.00 })
-  @IsNumber()
-  @IsPositive()
-  totalPayment: number;
-
-  @ApiProperty({ description: 'Settlement amount', example: 14700.00 })
-  @IsNumber()
-  settlementAmount: number;
-
-  @ApiProperty({ description: 'Payment status', example: 'PAID' })
-  @IsString()
-  paymentStatus: string;
-
-  @ApiProperty({ description: 'Payment method', example: 'CARD' })
-  @IsString()
-  paymentMethod: string;
-
-  @ApiProperty({ description: 'Paid on', example: '2023-01-15T10:30:00.000Z' })
-  @IsString()
-  paidOn: string;
-
-  @ApiProperty({ description: 'Customer name', example: 'John Doe' })
-  @IsString()
-  customer: { name: string; email: string };
-
-  @ApiProperty({
-    description: 'Metadata (optional)',
-    example: { orderId: '12345' },
-    required: false
-  })
-  @IsOptional()
-  @IsObject()
-  metaData?: Record<string, any>;
-}
-
 export class VerifyPaymentDto {
   @ApiProperty({ description: 'Transaction reference', example: 'TXN-ABCDEFGH' })
   @IsString()
   @IsNotEmpty()
   transactionReference: string;
 }
-
-
-
 
 export class RefundPaymentDto {
   @ApiProperty({ description: 'Order ID', example: 1 })
@@ -222,4 +231,3 @@ export class SettleBusinessDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
-

@@ -8,8 +8,10 @@ import { Product } from '../product/entity/product.entity';
 import { User } from '../users/user.entity';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
-import { OrdersController } from './order.controller';
+// import { OrdersController } from './order.controller';
 import { OrderService } from './order.service';
+import { OrdersController } from './order.controller';
+import { WalletsModule } from '../wallets/wallets.module';
 
 
 
@@ -22,6 +24,7 @@ import { OrderService } from './order.service';
     }),
     ConfigModule,
     CategoryModule,
+    WalletsModule
   ],
   controllers: [OrdersController],
   providers: [OrderService],

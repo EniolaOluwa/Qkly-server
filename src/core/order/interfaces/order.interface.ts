@@ -1,3 +1,5 @@
+import { PaymentEventCustomer } from "../dto/payment.dto";
+
 export enum OrderStatus {
   PENDING = 'PENDING',
   PROCESSING = 'PROCESSING',
@@ -135,10 +137,7 @@ export interface MonnifyTransaction {
   meta?: any;
 }
 
-export interface PaymentEventCustomer {
-  name: string;
-  email: string;
-}
+
 
 export interface PaymentEventData {
   productType: string;

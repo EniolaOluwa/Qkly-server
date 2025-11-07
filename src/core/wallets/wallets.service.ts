@@ -264,6 +264,8 @@ export class WalletsService {
         contractCode: monnifyContractCode,
       };
 
+      console.log({ walletData })
+
       // Call Monnify Create Wallet API
       const response = await firstValueFrom(
         this.httpService.post(
