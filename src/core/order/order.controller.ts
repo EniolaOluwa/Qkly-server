@@ -1,39 +1,38 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
-  ParseIntPipe,
-  HttpStatus,
+  Get,
   HttpCode,
-  UseGuards,
-  Request,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
   Query,
+  Request,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
   ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
   ApiBody,
+  ApiOperation,
+  ApiParam,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import { Response } from 'express';
 
-import { OrderService } from './order.service';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, PaymentCallbackDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { Order } from './entity/order.entity';
 import { OrderItem } from './entity/order-items.entity';
-import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
-import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
+import { Order } from './entity/order.entity';
+import { OrderService } from './order.service';
 
 @ApiTags('orders')
 @Controller('orders')

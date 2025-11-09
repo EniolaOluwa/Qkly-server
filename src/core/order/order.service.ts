@@ -631,7 +631,7 @@ export class OrderService {
 
       // Prepare payment initialization payload
       const payload = {
-        amount: order.total,
+        amount: Number(order.total),
         customerName: order.customerName,
         customerEmail: order.customerEmail,
         paymentReference: order.transactionReference,
@@ -640,12 +640,14 @@ export class OrderService {
         contractCode: monnifyContractCode,
         redirectUrl: actualRedirectUrl,
         paymentMethods: this.walletsService.getPaymentMethodsForMonnify(paymentMethod),
-        metaData: {
+        metadata: {
           orderId: order.id,
           orderReference: order.orderReference,
           ...metadata,
-        }
+        },
       };
+
+
 
       // Call Monnify Initialize Transaction API through WalletService
       const paymentResponse = await this.walletsService.initializeMonnifyPayment(payload);

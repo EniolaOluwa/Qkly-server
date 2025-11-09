@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,8 +27,14 @@ import {
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 
+
+const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
+
 @Injectable()
 export class UsersService {
+
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -64,7 +71,6 @@ export class UsersService {
       // Hash the password
       const hashedPassword = CryptoUtil.hashPassword(registerUserDto.password);
 
-      console.log({ hashedPassword })
 
       // Create new user
       const user = this.userRepository.create({
@@ -99,7 +105,7 @@ export class UsersService {
         message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
-        expiresIn: 3600, // 1 hour in seconds
+        expiresIn: EXPIRATION_TIME_SECONDS,
         userId: savedUser.id,
         email: savedUser.email,
         firstName: savedUser.firstName,
@@ -477,6 +483,7 @@ export class UsersService {
       );
     }
   }
+
 
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {

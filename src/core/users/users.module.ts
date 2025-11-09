@@ -11,6 +11,7 @@ import { Otp } from './otp.entity';
 import { User } from './user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { WalletsModule } from '../wallets/wallets.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { UsersService } from './users.service';
         signOptions: { expiresIn: '1h' },
       }),
     }),
+    WalletsModule
   ],
   controllers: [UsersController],
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],

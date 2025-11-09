@@ -30,16 +30,30 @@ export class TransformInterceptor<T> implements NestInterceptor<T, any> {
     }
 
     return next.handle().pipe(
-      map((response: any) => ({
-        success: response?.success ?? true,
-        data: response?.data ?? response,
-        meta: response?.meta ?? null,
-        message: response?.message ?? 'Success',
-      })),
+      map((response: any) => {
+        if (response == null) {
+          return {
+            success: true,
+            data: null,
+            meta: null,
+            message: 'Success',
+          };
+        }
+
+        const { message, meta, data, ...rest } = response;
+
+        return {
+          success: response?.success ?? true,
+          data: data ?? (Object.keys(rest).length ? rest : null),
+          meta: meta ?? null,
+          message: message ?? 'Success',
+        };
+      }),
       finalize(() => {
         Logger.log(`Execution time... ${Date.now() - now}ms`);
       })
     );
+
   }
 }
 

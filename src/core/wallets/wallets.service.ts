@@ -23,6 +23,7 @@ import {
   MonnifyPaymentInitResponseBody,
   MonnifyTransactionResponseBody
 } from './interfaces/monnify-response.interface';
+import { DateHelper } from '../../common/utils';
 
 @Injectable()
 export class WalletsService {
@@ -100,6 +101,8 @@ export class WalletsService {
 
   async initializeMonnifyPayment(payload: any): Promise<MonnifySuccessResponse<MonnifyPaymentInitResponseBody>> {
     try {
+      this.logger.debug(`Monnify Payload: ${JSON.stringify(payload, null, 2)}`);
+
       const accessToken = await this.getMonnifyAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
         'MONNIFY_BASE_URL',
@@ -209,13 +212,8 @@ export class WalletsService {
         return ['CARD'];
       case 'BANK_TRANSFER':
         return ['ACCOUNT_TRANSFER'];
-      case 'USSD':
-        return ['USSD'];
-      case 'WALLET':
-        return ['WALLET'];
       default:
-        // Allow all payment methods if not specified
-        return ['CARD', 'ACCOUNT_TRANSFER', 'USSD', 'WALLET'];
+        return ['CARD', 'ACCOUNT_TRANSFER'];
     }
   }
 
@@ -231,13 +229,14 @@ export class WalletsService {
         throw new NotFoundException('User not found');
       }
 
-      // Check if user already has a wallet
       if (user.walletReference) {
         throw new BadRequestException('User already has a wallet');
       }
 
+
       // Get Monnify access token
       const accessToken = await this.getMonnifyAccessToken();
+
 
       const monnifyBaseUrl = this.configService.get<string>(
         'MONNIFY_BASE_URL',
@@ -254,23 +253,25 @@ export class WalletsService {
       }
 
       // Prepare request body for Monnify Create Wallet API
-      const walletData = {
+      const payload = {
         walletReference: generateWalletDto.walletReference,
         walletName: generateWalletDto.walletName,
         customerEmail: generateWalletDto.customerEmail,
         customerName: `${user.firstName} ${user.lastName}`,
-        bvn: generateWalletDto.bvn,
-        currencyCode: generateWalletDto.currencyCode || 'NGN',
-        contractCode: monnifyContractCode,
+        // customerName: generateWalletDto.customerName ?? `${user.firstName} ${user.lastName}`,
+        bvnDetails: {
+          bvn: generateWalletDto.bvn,
+          bvnDateOfBirth: generateWalletDto.dateOfBirth
+        },
       };
 
-      console.log({ walletData })
+
 
       // Call Monnify Create Wallet API
       const response = await firstValueFrom(
         this.httpService.post(
           `${monnifyBaseUrl}/api/v1/disbursements/wallet`,
-          walletData,
+          payload,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -309,6 +310,9 @@ export class WalletsService {
       }
 
       const walletDetails = walletResponse.responseBody;
+
+
+      console.log({ walletDetails });
 
       // Update user with wallet information
       await this.userRepository.update(userId, {

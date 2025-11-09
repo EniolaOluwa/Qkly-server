@@ -51,6 +51,7 @@ import { RoleGuard } from '../../common/guards/role.guard';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
@@ -112,7 +113,6 @@ export class UsersController {
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get user profile',
@@ -128,7 +128,6 @@ export class UsersController {
     description: 'Unauthorized - Invalid or missing token',
   })
   async getProfile(@Request() req) {
-    console.log({ req: req.user })
     return {
       message: 'Profile retrieved successfully',
       user: req.user,
@@ -136,6 +135,7 @@ export class UsersController {
   }
 
   @Get(':id')
+  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get user by ID',
     description: 'Retrieves a user by their ID',

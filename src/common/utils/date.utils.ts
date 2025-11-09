@@ -184,4 +184,10 @@ export class DateHelper {
     });
     return dt.toMillis();
   }
+
+
+  static formatBvnDate(dateStr: string): string | null {
+    const dt = DateTime.fromFormat(dateStr, 'dd-MMM-yyyy');
+    return dt.isValid ? dt.toFormat('yyyy-MM-dd') : null;
+  }
 }
