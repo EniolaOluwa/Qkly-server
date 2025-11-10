@@ -8,13 +8,13 @@ export class AddSizeToProductsTable1762358518833 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "products" DROP COLUMN IF EXISTS "productImages"`);
         await queryRunner.query(`ALTER TABLE "products" DROP COLUMN IF EXISTS "productName"`);
 
-        // Add new columns safely
-        await queryRunner.query(`ALTER TABLE "products" ADD "images" text`);
-        await queryRunner.query(`COMMENT ON COLUMN "products"."images" IS 'Array of image URLs'`);
+        // ✅ Remove this line since 'images' already exists
+        // await queryRunner.query(`ALTER TABLE "products" ADD "images" text`);
+        // await queryRunner.query(`COMMENT ON COLUMN "products"."images" IS 'Array of image URLs'`);
 
         // Step 1: Add columns as nullable
-        await queryRunner.query(`ALTER TABLE "products" ADD "name" character varying`);
-        await queryRunner.query(`ALTER TABLE "products" ADD "description" text`);
+        await queryRunner.query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "name" character varying`);
+        await queryRunner.query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "description" text`);
 
         // Step 2: Backfill with safe defaults
         await queryRunner.query(`UPDATE "products" SET "name" = 'Unnamed Product' WHERE "name" IS NULL`);
@@ -26,12 +26,11 @@ export class AddSizeToProductsTable1762358518833 implements MigrationInterface {
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        // Reverse operations
         await queryRunner.query(`ALTER TABLE "products" DROP COLUMN IF EXISTS "description"`);
         await queryRunner.query(`ALTER TABLE "products" DROP COLUMN IF EXISTS "name"`);
-        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN IF EXISTS "images"`);
-        await queryRunner.query(`ALTER TABLE "products" ADD "productName" character varying NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "products" ADD "productImages" text`);
+        // ✅ Don’t drop 'images' here if it existed originally
+        await queryRunner.query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "productName" character varying NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "productImages" text`);
         await queryRunner.query(`COMMENT ON COLUMN "products"."productImages" IS 'Array of image URLs'`);
     }
 }

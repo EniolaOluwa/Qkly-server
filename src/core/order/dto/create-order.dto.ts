@@ -1,139 +1,130 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsNotEmpty,
   IsEmail,
   IsString,
-  IsNotEmpty,
   IsNumber,
   IsEnum,
-  IsOptional,
-  IsPhoneNumber,
-  ValidateNested,
   IsArray,
+  ValidateNested,
+  IsOptional,
+  Min,
+  ArrayMinSize,
+  IsPositive,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TransactionMedium, ProductDetails } from '../entity/order.entity';
+import { DeliveryMethod, PaymentMethod } from '../interfaces/order.interface';
 
-
-
-export class ProductDetailsDto implements ProductDetails {
-  @ApiProperty({
-    description: 'Product ID',
-    example: 1,
-  })
-  @IsNumber()
+export class OrderItemDto {
+  @ApiProperty({ description: 'Product ID', example: 1 })
   @IsNotEmpty()
+  @IsNumber()
   productId: number;
 
-  @ApiProperty({
-    description: 'Quantity of the product',
-    example: 2,
-  })
-  @IsNumber()
+  @ApiProperty({ description: 'Quantity', example: 2 })
   @IsNotEmpty()
+  @IsNumber()
+  @Min(1)
   quantity: number;
 
-  @ApiProperty({
-    description: 'Colour of the product',
-    example: 'Red',
-  })
+  @ApiProperty({ description: 'Color (optional)', example: 'Red', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  colour: string;
+  @MaxLength(50)
+  color?: string;
+
+  @ApiProperty({ description: 'Size (optional)', example: 'XL', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  size?: string;
 }
 
 export class CreateOrderDto {
-  @ApiProperty({
-    description: 'User ID who placed the order',
-    example: 1,
-  })
-  @IsNumber()
+  @ApiProperty({ description: 'Business ID', example: 1 })
   @IsNotEmpty()
-  userId: number;
-
-  @ApiProperty({
-    description: 'Business ID for the order',
-    example: 1,
-  })
   @IsNumber()
-  @IsNotEmpty()
   businessId: number;
 
-  @ApiProperty({
-    description: 'Unique transaction reference',
-    example: 'TXN_123456789',
-  })
-  @IsString()
+  @ApiProperty({ description: 'Customer name', example: 'John Doe' })
   @IsNotEmpty()
-  transactionRef: string;
-
-  @ApiProperty({
-    description: 'Customer full name',
-    example: 'John Doe',
-  })
   @IsString()
-  @IsNotEmpty()
+  @MinLength(3)
+  @MaxLength(100)
   customerName: string;
 
-  @ApiProperty({
-    description: 'Customer delivery address',
-    example: '123 Main Street, Lagos, Nigeria',
-  })
-  @IsString()
+  @ApiProperty({ description: 'Customer email', example: 'john.doe@example.com' })
   @IsNotEmpty()
-  deliveryAddress: string;
-
-  @ApiProperty({
-    description: 'Customer state',
-    example: 'Lagos',
-  })
-  @IsString()
-  @IsNotEmpty()
-  state: string;
-
-  @ApiProperty({
-    description: 'Customer email address',
-    example: 'john.doe@example.com',
-  })
   @IsEmail()
-  @IsNotEmpty()
+  @MaxLength(100)
   customerEmail: string;
 
-  @ApiProperty({
-    description: 'Customer phone number',
-    example: '+2348123456789',
-  })
-  @IsString()
+  @ApiProperty({ description: 'Customer phone number', example: '+2348012345678' })
   @IsNotEmpty()
+  @IsString()
+  @MinLength(10)
+  @MaxLength(20)
   customerPhoneNumber: string;
 
-  @ApiProperty({
-    description: 'Transaction medium',
-    enum: TransactionMedium,
-    example: TransactionMedium.WEB,
-  })
-  @IsEnum(TransactionMedium)
+  @ApiProperty({ description: 'Delivery address', example: '123 Main Street, Apartment 4B' })
   @IsNotEmpty()
-  transactionMedium: TransactionMedium;
+  @IsString()
+  @MinLength(10)
+  @MaxLength(255)
+  deliveryAddress: string;
+
+  @ApiProperty({ description: 'State', example: 'Lagos' })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(50)
+  state: string;
+
+  @ApiProperty({ description: 'City (optional)', example: 'Ikeja', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  city?: string;
 
   @ApiProperty({
-    description: 'Array of product details including product ID, quantity, and colour',
-    type: [ProductDetailsDto],
-    example: [
-      {
-        productId: 1,
-        quantity: 2,
-        colour: 'Red'
-      },
-      {
-        productId: 2,
-        quantity: 1,
-        colour: 'Blue'
-      }
-    ]
+    description: 'Payment method',
+    enum: PaymentMethod,
+    example: PaymentMethod.MONNIFY
+  })
+  @IsNotEmpty()
+  @IsEnum(PaymentMethod)
+  paymentMethod: PaymentMethod;
+
+  @ApiProperty({
+    description: 'Delivery method',
+    enum: DeliveryMethod,
+    example: DeliveryMethod.STANDARD
+  })
+  @IsNotEmpty()
+  @IsEnum(DeliveryMethod)
+  deliveryMethod: DeliveryMethod;
+
+  @ApiProperty({
+    description: 'Order items',
+    type: [OrderItemDto],
+    example: [{ productId: 1, quantity: 2, color: 'Blue', size: 'M' }]
   })
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => ProductDetailsDto)
-  @IsNotEmpty()
-  productDetails: ProductDetailsDto[];
+  @Type(() => OrderItemDto)
+  @ArrayMinSize(1)
+  items: OrderItemDto[];
+
+  @ApiProperty({ description: 'Notes (optional)', example: 'Please leave at front door', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+
+  @ApiProperty({ description: 'Promo code (optional)', example: 'SUMMER20', required: false })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  promoCode?: string;
 }

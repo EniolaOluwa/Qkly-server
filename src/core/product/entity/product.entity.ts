@@ -7,17 +7,23 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
+  DeleteDateColumn,
 } from 'typeorm';
 import { User } from '../../users/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { ProductSize } from './productSize.entity';
+import { Category } from '../../category/entity/category.entity';
 
 @Entity('products')
+@Index(['userId', 'businessId'])
+@Index(['createdAt'])
 export class Product {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column({ nullable: false })
+  @Index()
   userId: number;
 
   @ManyToOne(() => User, { nullable: false })
@@ -25,6 +31,7 @@ export class Product {
   user: User;
 
   @Column({ nullable: false })
+  @Index()
   businessId: number;
 
   @ManyToOne(() => Business, { nullable: false })
@@ -35,18 +42,26 @@ export class Product {
   images: string[];
 
   @Column({ nullable: false })
+  @Index()
   name: string;
 
-  @Column( 'text', { nullable: true })
-  category: string; // suppose to be set of enum values 
+  @ManyToOne(() => Category, { nullable: false })
+  @JoinColumn({ name: 'categoryId' })
+  category: Category;
 
-  @Column ( 'text', { nullable: false})
+  @Column()
+  @Index()
+  categoryId: number;
+
+  @Column('text', { nullable: false })
   description?: string
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
+  @Index()
   price: number;
 
   @Column({ type: 'int', default: 0 })
+  @Index()
   quantityInStock: number;
 
   @Column({ type: 'boolean', default: false, comment: 'Does this product include size or color variations?' })
@@ -63,4 +78,7 @@ export class Product {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }
