@@ -1,29 +1,32 @@
+import { HttpService } from '@nestjs/axios';
 import {
-  Injectable,
   BadRequestException,
+  Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
   UnauthorizedException,
-  Logger,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
 import { catchError, firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
 } from './dto/wallet.dto';
 import {
-  MonnifyAxiosError,
-  MonnifySuccessResponse,
   MonnifyAuthResponseBody,
+  MonnifyAxiosError,
   MonnifyPaymentInitResponseBody,
+  MonnifySuccessResponse,
   MonnifyTransactionResponseBody
 } from './interfaces/monnify-response.interface';
-import { DateHelper } from '../../common/utils';
+import { plainToInstance } from 'class-transformer';
+import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
+import { validateOrReject } from 'class-validator';
+import { WalletTransferOtpDto, WalletTransferRequestDto, WalletTransferResponseDto } from './dto/wallet-transfer.dto';
 
 @Injectable()
 export class WalletsService {
@@ -101,8 +104,6 @@ export class WalletsService {
 
   async initializeMonnifyPayment(payload: any): Promise<MonnifySuccessResponse<MonnifyPaymentInitResponseBody>> {
     try {
-      this.logger.debug(`Monnify Payload: ${JSON.stringify(payload, null, 2)}`);
-
       const accessToken = await this.getMonnifyAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
         'MONNIFY_BASE_URL',
@@ -149,11 +150,7 @@ export class WalletsService {
     }
   }
 
-  /**
-   * Verify payment status with Monnify
-   * @param paymentReference - The payment reference to verify
-   * @returns Promise<MonnifyTransactionResponseBody> - Transaction details
-   */
+
   async verifyMonnifyPayment(paymentReference: string): Promise<MonnifyTransactionResponseBody> {
     try {
       const accessToken = await this.getMonnifyAccessToken();
@@ -201,11 +198,7 @@ export class WalletsService {
     }
   }
 
-  /**
-   * Map payment methods to Monnify format
-   * @param paymentMethod - The payment method
-   * @returns string[] - Array of payment methods for Monnify
-   */
+
   getPaymentMethodsForMonnify(paymentMethod: string): string[] {
     switch (paymentMethod) {
       case 'CARD':
@@ -222,7 +215,6 @@ export class WalletsService {
     generateWalletDto: GenerateWalletDto,
   ): Promise<GenerateWalletResponseDto> {
     try {
-      // Find user by ID
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
       if (!user) {
@@ -234,7 +226,6 @@ export class WalletsService {
       }
 
 
-      // Get Monnify access token
       const accessToken = await this.getMonnifyAccessToken();
 
 
@@ -252,13 +243,11 @@ export class WalletsService {
         );
       }
 
-      // Prepare request body for Monnify Create Wallet API
       const payload = {
         walletReference: generateWalletDto.walletReference,
         walletName: generateWalletDto.walletName,
         customerEmail: generateWalletDto.customerEmail,
-        customerName: `${user.firstName} ${user.lastName}`,
-        // customerName: generateWalletDto.customerName ?? `${user.firstName} ${user.lastName}`,
+        customerName: generateWalletDto.customerName ?? `${user.firstName} ${user.lastName}`,
         bvnDetails: {
           bvn: generateWalletDto.bvn,
           bvnDateOfBirth: generateWalletDto.dateOfBirth
@@ -267,7 +256,6 @@ export class WalletsService {
 
 
 
-      // Call Monnify Create Wallet API
       const response = await firstValueFrom(
         this.httpService.post(
           `${monnifyBaseUrl}/api/v1/disbursements/wallet`,
@@ -303,6 +291,7 @@ export class WalletsService {
 
       const walletResponse = response.data;
 
+
       if (!walletResponse.requestSuccessful) {
         throw new BadRequestException(
           walletResponse.responseMessage || 'Wallet creation failed',
@@ -312,7 +301,6 @@ export class WalletsService {
       const walletDetails = walletResponse.responseBody;
 
 
-      console.log({ walletDetails });
 
       // Update user with wallet information
       await this.userRepository.update(userId, {
@@ -321,8 +309,8 @@ export class WalletsService {
         walletAccountNumber: walletDetails.accountNumber,
         walletAccountName:
           walletDetails.accountName || generateWalletDto.walletName,
-        walletBankName: walletDetails.bankName,
-        walletBankCode: walletDetails.bankCode,
+        walletBankName: walletDetails.bankName ?? walletDetails.topUpAccountDetails.bankName,
+        walletBankCode: walletDetails.bankCode ?? walletDetails.topUpAccountDetails.bankCode,
       });
 
       return {
@@ -332,8 +320,8 @@ export class WalletsService {
           walletDetails.walletReference || generateWalletDto.walletReference,
         accountNumber: walletDetails.accountNumber,
         accountName: walletDetails.accountName || generateWalletDto.walletName,
-        bankName: walletDetails.bankName,
-        bankCode: walletDetails.bankCode,
+        bankName: walletDetails.bankName || walletDetails.topUpAccountDetails.bankName,
+        bankCode: walletDetails.bankCode || walletDetails.topUpAccountDetails.bankCode,
         currencyCode:
           walletDetails.currencyCode || generateWalletDto.currencyCode || 'NGN',
         createdOn: walletDetails.createdOn || new Date().toISOString(),
@@ -393,6 +381,180 @@ export class WalletsService {
       throw new InternalServerErrorException(
         'Failed to retrieve wallet information',
       );
+    }
+  }
+
+
+  async getUserWalletWithBalance(userId: number): Promise<WalletBalanceResponseDto> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        select: [
+          'id',
+          'walletReference',
+          'walletAccountNumber',
+          'walletAccountName',
+          'walletBankName',
+          'walletBankCode',
+        ],
+      });
+
+      if (!user) throw new NotFoundException('User not found');
+      if (!user.walletReference) throw new BadRequestException('User does not have a wallet');
+
+      const accessToken = await this.getMonnifyAccessToken();
+      const monnifyBaseUrl = this.configService.get<string>(
+        'MONNIFY_BASE_URL',
+        'https://sandbox.monnify.com',
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.get(
+          `${monnifyBaseUrl}/api/v1/disbursements/wallet/balance`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            params: { walletReference: user.walletReference },
+          },
+        ).pipe(
+          catchError((error) => {
+            this.logger.error(
+              `Failed to fetch wallet balance: ${JSON.stringify(error.response?.data || error.message)}`
+            );
+            throw new InternalServerErrorException(
+              error.response?.data?.responseMessage || 'Failed to fetch wallet balance'
+            );
+          }),
+        ),
+      );
+
+      const balanceResponse = response.data;
+      if (!balanceResponse.requestSuccessful) {
+        throw new InternalServerErrorException(
+          balanceResponse.responseMessage || 'Failed to fetch wallet balance'
+        );
+      }
+
+      const walletDto = plainToInstance(WalletBalanceResponseDto, {
+        walletReference: user.walletReference,
+        accountNumber: user.walletAccountNumber,
+        accountName: user.walletAccountName,
+        bankName: user.walletBankName,
+        bankCode: user.walletBankCode,
+        availableBalance: balanceResponse.responseBody.availableBalance,
+        ledgerBalance: balanceResponse.responseBody.ledgerBalance,
+      });
+
+      return walletDto;
+    } catch (error) {
+      this.logger.error('Wallet retrieval with balance failed:', error.stack);
+      throw error;
+    }
+  }
+
+  async transferToWalletOrBank(
+    payload: WalletTransferRequestDto
+  ): Promise<WalletTransferResponseDto> {
+    try {
+      // Validate and transform payload
+      const dto = plainToInstance(WalletTransferRequestDto, payload);
+      await validateOrReject(dto);
+
+      const accessToken = await this.getMonnifyAccessToken();
+      const monnifyBaseUrl = this.configService.get<string>(
+        'MONNIFY_BASE_URL',
+        'https://sandbox.monnify.com',
+      );
+
+      // Default to system wallet if sourceAccountNumber not provided
+      const sourceAccountNumber =
+        dto.sourceAccountNumber || this.configService.get<string>('MONNIFY_WALLET_ACCOUNT');
+
+      const transferPayload = {
+        amount: dto.amount,
+        reference: dto.reference,
+        narration: dto.narration,
+        destinationAccountNumber: dto.destinationAccountNumber,
+        destinationBankCode: dto.destinationBankCode,
+        currency: dto.currency || 'NGN',
+        sourceAccountNumber,
+        async: dto.async ?? false,
+      };
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${monnifyBaseUrl}/api/v2/disbursements/single`,
+          transferPayload,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        ).pipe(
+          catchError((error) => {
+            this.logger.error(
+              `Merchant transfer failed: ${JSON.stringify(error.response?.data || error.message)}`
+            );
+            throw new InternalServerErrorException(
+              error.response?.data?.responseMessage || 'Transfer failed'
+            );
+          }),
+        ),
+      );
+
+      const transferResponse = response.data;
+
+      if (!transferResponse.requestSuccessful) {
+        return plainToInstance(WalletTransferResponseDto, {
+          status: 'FAILED',
+          responseBody: transferResponse,
+        });
+      }
+
+      return plainToInstance(WalletTransferResponseDto, {
+        status: 'SUCCESS',
+        responseBody: transferResponse.responseBody,
+      });
+    } catch (error) {
+      this.logger.error('Transfer to wallet/bank failed', error.stack);
+      throw new InternalServerErrorException('Transfer to merchant failed');
+    }
+  }
+
+
+
+  async validateTransferOtp(payload: WalletTransferOtpDto) {
+    try {
+      // Validate input DTO
+      const dto = plainToInstance(WalletTransferOtpDto, payload);
+      await validateOrReject(dto);
+
+      const accessToken = await this.getMonnifyAccessToken();
+      const monnifyBaseUrl = this.configService.get<string>(
+        'MONNIFY_BASE_URL',
+        'https://sandbox.monnify.com',
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${monnifyBaseUrl}/api/v2/disbursements/single/validate-otp`,
+          { reference: dto.reference, authorizationCode: dto.otp },
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error('OTP validation failed', error.stack);
+      throw new InternalServerErrorException('OTP validation failed');
     }
   }
 }

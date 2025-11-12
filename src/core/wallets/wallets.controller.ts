@@ -1,33 +1,29 @@
 import {
-  Controller,
-  Post,
-  Get,
   Body,
-  ValidationPipe,
-  UseGuards,
-  Request,
+  Controller,
+  Get,
   Param,
-  Query,
-  HttpCode,
-  HttpStatus,
+  Post,
+  Request,
+  UseGuards,
+  ValidationPipe
 } from '@nestjs/common';
 import {
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
   ApiBearerAuth,
-  ApiQuery,
+  ApiOperation,
   ApiParam,
+  ApiResponse,
+  ApiTags
 } from '@nestjs/swagger';
-import { WalletsService } from './wallets.service';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
   InitiatePaymentDto,
-  PaymentMethodDto,
-  PaymentResponseDto,
+  PaymentResponseDto
 } from './dto/wallet.dto';
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { WalletsService } from './wallets.service';
 
 @ApiTags('wallets')
 @Controller('wallets')
@@ -104,6 +100,12 @@ export class WalletsController {
       message: 'Wallet information retrieved successfully',
       wallet: walletInfo,
     };
+  }
+
+
+  @Get(':userId/balance')
+  async getWalletBalance(@Request() req): Promise<WalletBalanceResponseDto> {
+    return await this.walletsService.getUserWalletWithBalance(req.user.userId);
   }
 
   @Post('payments/initialize')
