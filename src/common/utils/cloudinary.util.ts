@@ -34,7 +34,7 @@ export class CloudinaryUtil {
     try {
       // Convert buffer to base64 if needed
       let dataToUpload: string;
-      
+
       if (Buffer.isBuffer(imageData)) {
         dataToUpload = `data:image/jpeg;base64,${imageData.toString('base64')}`;
       } else if (typeof imageData === 'string') {

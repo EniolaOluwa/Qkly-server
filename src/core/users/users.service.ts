@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -26,8 +27,14 @@ import {
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 
+
+const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
+
 @Injectable()
 export class UsersService {
+
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -37,7 +44,7 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
-  ) {}
+  ) { }
 
   async registerUser(
     registerUserDto: RegisterUserDto,
@@ -47,10 +54,10 @@ export class UsersService {
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
-
       if (existingUserByEmail) {
         throw new ConflictException('User with this email already exists');
       }
+
 
       // Check if user with phone already exists
       const existingUserByPhone = await this.userRepository.findOne({
@@ -63,6 +70,7 @@ export class UsersService {
 
       // Hash the password
       const hashedPassword = CryptoUtil.hashPassword(registerUserDto.password);
+
 
       // Create new user
       const user = this.userRepository.create({
@@ -97,7 +105,7 @@ export class UsersService {
         message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
-        expiresIn: 3600, // 1 hour in seconds
+        expiresIn: EXPIRATION_TIME_SECONDS,
         userId: savedUser.id,
         email: savedUser.email,
         firstName: savedUser.firstName,
@@ -358,17 +366,17 @@ export class UsersService {
 
       // Convert file buffer to base64
       const base64Image = selfieImageFile.buffer.toString('base64');
-      
+
       // Format according to Dojah docs - ensure it starts with /9 for JPEG
       let formattedSelfieImage = base64Image;
-      
+
       // For non-JPEG images, we might need to convert or validate differently
       if (selfieImageFile.mimetype === 'image/png') {
         // PNG images have different base64 headers, but Dojah expects JPEG format
         // You might want to convert PNG to JPEG here if needed
         console.warn('PNG image provided. Dojah API expects JPEG format.');
       }
-      
+
       // Validate that the base64 string starts with expected JPEG signature
       if (!formattedSelfieImage.startsWith('/9')) {
         throw new BadRequestException(
@@ -403,7 +411,7 @@ export class UsersService {
       // Check if verification was successful
       const selfieVerification = verificationData.selfie_verification;
       const isVerified = selfieVerification?.match === true;
-      
+
       // If verification is successful, update user's BVN and onboarding step
       if (isVerified) {
         await this.userRepository.update(userId, {
@@ -421,7 +429,7 @@ export class UsersService {
             dateOfBirth: verificationData.date_of_birth,
             verification_status: 'VERIFIED',
           };
-          
+
           const walletResult = await this.walletProvisioningUtil.provisionWalletOnBvnSuccess(
             userId,
             user.email,
@@ -438,7 +446,7 @@ export class UsersService {
           console.error('Wallet provisioning failed:', walletError);
         }
       }
-      
+
       // Return response based on verification result
       if (isVerified) {
         return {
@@ -475,6 +483,7 @@ export class UsersService {
       );
     }
   }
+
 
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
@@ -881,7 +890,7 @@ export class UsersService {
 
       // Generate a UUID reset token (valid for 15 minutes)
       const resetToken = require('crypto').randomUUID();
-      
+
       // Store the reset token in the OTP table for 15 minutes validity
       const resetTokenOtp = this.otpRepository.create({
         userId: user.id,
@@ -911,6 +920,7 @@ export class UsersService {
       );
     }
   }
+
 
   async resetPassword(
     newPassword: string,

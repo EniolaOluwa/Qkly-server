@@ -4,7 +4,7 @@ import { UserRole } from '../auth/user-role.enum';
 
 @Injectable()
 export class RoleGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<UserRole[]>('roles', [
@@ -13,7 +13,7 @@ export class RoleGuard implements CanActivate {
     ]);
 
     if (!requiredRoles) {
-      return true; // No role requirement specified
+      return true;
     }
 
     const request = context.switchToHttp().getRequest();
@@ -28,7 +28,7 @@ export class RoleGuard implements CanActivate {
     }
 
     const hasRole = requiredRoles.includes(user.role);
-    
+
     if (!hasRole) {
       throw new ForbiddenException(`Insufficient permissions. Required roles: ${requiredRoles.join(', ')}`);
     }

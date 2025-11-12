@@ -1,4 +1,5 @@
 export enum OnboardingStep {
+
   PERSONAL_INFORMATION = 0,
   PHONE_VERIFICATION = 1,
   BUSINESS_INFORMATION = 2,

@@ -28,7 +28,7 @@ export class User {
   @Column({ nullable: false })
   password: string;
 
-  @Column({ length: 13, nullable: false, unique: true })
+  @Column({ length: 20, nullable: false, unique: true })
   phone: string;
 
   @Column({ length: 11, nullable: true })
@@ -59,6 +59,19 @@ export class User {
 
   @Column({ nullable: true, comment: 'Monnify wallet bank code' })
   walletBankCode: string;
+
+
+  @Column({ nullable: true, comment: 'User’s preferred bank account number for payouts' })
+  personalAccountNumber: string;
+
+  @Column({ nullable: true, comment: 'User’s preferred bank account name for payouts' })
+  personalAccountName: string;
+
+  @Column({ nullable: true, comment: 'User’s preferred bank name for payouts' })
+  personalBankName: string;
+
+  @Column({ nullable: true, comment: 'User’s preferred bank code for payouts' })
+  personalBankCode: string;
 
   @Column({ nullable: true, unique: true })
   businessId: number;

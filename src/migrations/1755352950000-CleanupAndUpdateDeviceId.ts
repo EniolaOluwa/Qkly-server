@@ -24,7 +24,7 @@ export class CleanupAndUpdateDeviceId1755352950000 implements MigrationInterface
 
         // Now we can safely make deviceId NOT NULL
         await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "deviceId" SET NOT NULL`);
-        
+
         // Add unique constraint to phone if it doesn't exist
         await queryRunner.query(`
             DO $$ 
@@ -43,7 +43,7 @@ export class CleanupAndUpdateDeviceId1755352950000 implements MigrationInterface
     public async down(queryRunner: QueryRunner): Promise<void> {
         // Revert deviceId to nullable
         await queryRunner.query(`ALTER TABLE "users" ALTER COLUMN "deviceId" DROP NOT NULL`);
-        
+
         // Remove unique constraint on phone
         await queryRunner.query(`
             DO $$ 
