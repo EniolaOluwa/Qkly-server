@@ -1,47 +1,38 @@
+import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Req, Request, Res, UseGuards } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
-  Request,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
-import {
-  ApiBearerAuth,
   ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
-  ApiTags,
+  ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
-
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
+import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common/swagger/api-decorators';
+import { verifyMonnifySignature } from '../../common/utils/webhook.utils';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
-import { InitiatePaymentDto, PaymentCallbackDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
+import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';
+import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../users';
 
 @ApiTags('orders')
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
 export class OrdersController {
-  constructor(private readonly orderService: OrderService) { }
+  private readonly logger = new Logger(OrdersController.name);
+
+  constructor(private readonly orderService: OrderService,
+    private readonly configService: ConfigService,
+  ) { }
 
   @Post()
+  @ApiAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a new order',
@@ -60,14 +51,12 @@ export class OrdersController {
   }
 
   @Get()
-  @ApiOperation({
-    summary: 'Find all orders with filtering and pagination',
-    description: 'Retrieves all orders with optional filters and pagination',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders retrieved successfully',
-  })
+  @ApiAuth()
+  @ApiPaginatedResponse(
+    Order,
+    'Find all orders with filtering and pagination',
+    'Retrieves all orders with optional filters and pagination'
+  )
   async findAllOrders(
     @Query() query: FindAllOrdersDto & PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
@@ -75,10 +64,11 @@ export class OrdersController {
   }
 
   @Get('my-business-orders')
-  @ApiOperation({
-    summary: "Get orders for authenticated user's businesses",
-    description: 'Retrieves all orders that belong to businesses owned by the authenticated user.',
-  })
+  @ApiPaginatedResponse(
+    Order,
+    "Get orders for authenticated user's businesses",
+    'Retrieves all orders that belong to businesses owned by the authenticated user.'
+  )
   @ApiQuery({
     name: 'page',
     required: false,
@@ -101,24 +91,12 @@ export class OrdersController {
   }
 
   @Get('user')
-  @ApiOperation({
-    summary: 'Get orders for authenticated user',
-    description: 'Retrieves orders for the authenticated user using JWT token.',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (starts from 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders retrieved successfully',
-  })
+  @ApiAuth()
+  @ApiPaginatedResponse(
+    Order,
+    'Get orders for authenticated user',
+    'Retrieves orders for the authenticated user using JWT token.'
+  )
   async findOrdersForCurrentUser(
     @Request() req,
     @Query() paginationDto: PaginationDto
@@ -127,29 +105,8 @@ export class OrdersController {
   }
 
   @Get('user/:userId')
-  @ApiOperation({
-    summary: 'Get orders by user ID',
-    description: 'Retrieves orders for a specific user.',
-  })
-  @ApiParam({
-    name: 'userId',
-    required: true,
-    description: 'User ID to get orders for.',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (starts from 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders retrieved successfully',
-  })
+  @ApiAuth()
+  @ApiFindOneDecorator(Order, 'userId', 'Retrieves orders for a specific user. Returns paginated list.')
   async findOrdersByUserId(
     @Param('userId', ParseIntPipe) userId: number,
     @Query() paginationDto: PaginationDto
@@ -158,29 +115,7 @@ export class OrdersController {
   }
 
   @Get('business/:businessId')
-  @ApiOperation({
-    summary: 'Get orders by business ID',
-    description: 'Retrieves orders for a specific business.',
-  })
-  @ApiParam({
-    name: 'businessId',
-    required: true,
-    description: 'Business ID to get orders for.',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (starts from 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders retrieved successfully',
-  })
+  @ApiFindOneDecorator(Order, 'businessId', 'Retrieves orders for a specific business. Returns paginated list.')
   async findOrdersByBusinessId(
     @Param('businessId', ParseIntPipe) businessId: number,
     @Query() paginationDto: PaginationDto
@@ -189,29 +124,14 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @ApiOperation({
-    summary: 'Get order by ID',
-    description: 'Retrieves a specific order by ID',
-  })
-  @ApiParam({
-    name: 'id',
-    required: true,
-    description: 'Order ID to retrieve',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Order retrieved successfully',
-    type: Order,
-  })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Order not found',
-  })
+  @ApiAuth()
+  @ApiFindOneDecorator(Order)
   async findOrderById(@Param('id', ParseIntPipe) id: number): Promise<Order> {
     return await this.orderService.findOrderById(id);
   }
 
   @Post('payment/initialize')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Initialize payment for order',
     description: 'Initializes payment with Monnify and returns checkout URL',
@@ -234,6 +154,7 @@ export class OrdersController {
   }
 
   @Post('payment/verify')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Verify payment status',
     description: 'Verifies payment status with Monnify',
@@ -252,6 +173,7 @@ export class OrdersController {
   }
 
   @Post('payment/process')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Process payment for order',
     description: 'Manually processes payment for an order',
@@ -278,21 +200,8 @@ export class OrdersController {
     return await this.orderService.processPayment(processPaymentDto);
   }
 
-  @Post('payment/callback')
-  @ApiOperation({
-    summary: 'Payment callback endpoint',
-    description: 'Webhook for Monnify payment callbacks',
-  })
-  @ApiBody({ type: PaymentCallbackDto })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Payment callback processed successfully',
-  })
-  async handlePaymentCallback(@Body() paymentCallbackDto: PaymentCallbackDto): Promise<Order> {
-    return await this.orderService.handlePaymentCallback(paymentCallbackDto);
-  }
-
   @Patch(':id/status')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Update order status',
     description: 'Updates the status of an order',
@@ -320,6 +229,7 @@ export class OrdersController {
   }
 
   @Patch(':orderId/items/:itemId/status')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Update order item status',
     description: 'Updates the status of a specific item in an order',
@@ -353,6 +263,7 @@ export class OrdersController {
   }
 
   @Get(':id/invoice')
+  @ApiAuth()
   @ApiOperation({
     summary: 'Generate invoice for order',
     description: 'Generates a PDF invoice for the order',
@@ -386,6 +297,7 @@ export class OrdersController {
   }
 
   @Delete(':id')
+  @ApiAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete order',
@@ -406,5 +318,66 @@ export class OrdersController {
   })
   async deleteOrder(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return await this.orderService.deleteOrder(id);
+  }
+  @Public()
+  @Post('webhook/monnify')
+  @HttpCode(200)
+  async handleMonnifyWebhook(
+    @Headers('monnify-signature') signature: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response, // Add passthrough: true
+  ) {
+    try {
+      this.logger.log('Received Monnify webhook');
+
+      const rawBody = (request as any).rawBody;
+      const webhookData = request.body as any;
+
+      this.logger.log(`Raw body: ${rawBody}`);
+      this.logger.log(`Webhook data: ${JSON.stringify(webhookData)}`);
+
+      if (!webhookData) {
+        this.logger.error('Webhook data is missing from request body');
+        return {
+          success: false,
+          message: 'Invalid webhook data'
+        };
+      }
+
+      this.logger.log(`Webhook event type: ${webhookData.eventType}`);
+
+      const clientSecret = this.configService.get<string>('MONNIFY_SECRET_KEY');
+      if (signature && clientSecret && rawBody) {
+        const isValid = verifyMonnifySignature(signature, rawBody, clientSecret);
+        if (!isValid) {
+          this.logger.error('Invalid Monnify signature');
+          return {
+            success: false,
+            message: 'Invalid signature'
+          };
+        }
+      } else {
+        this.logger.warn('Monnify signature verification skipped');
+      }
+
+      this.orderService.processPaymentWebhook(webhookData)
+        .then(result => {
+          this.logger.log(`Webhook processed successfully`);
+        })
+        .catch(error => {
+          this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
+        });
+
+      return {
+        success: true,
+        message: 'Webhook received'
+      };
+    } catch (error) {
+      this.logger.error(`Error handling webhook: ${error.message}`, error.stack);
+      return {
+        success: false,
+        message: 'Error processing webhook'
+      };
+    }
   }
 }

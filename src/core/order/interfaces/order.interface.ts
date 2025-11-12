@@ -54,20 +54,6 @@ export interface OrderItemDetails {
   size?: string;
 }
 
-export interface PaymentDetails {
-  paymentMethod: PaymentMethod;
-  paymentReference: string;
-  transactionReference?: string;
-  accountNumber?: string;
-  bankName?: string;
-  cardLast4?: string;
-  cardType?: string;
-  paymentDate: Date;
-  amount: number;
-  currency: string;
-  meta?: any;
-}
-
 export interface DeliveryDetails {
   trackingNumber?: string;
   carrier?: string;
@@ -77,6 +63,7 @@ export interface DeliveryDetails {
   deliveryProof?: string;
   signedBy?: string;
   meta?: any;
+
 }
 
 export interface SettlementDetails {
@@ -92,8 +79,6 @@ export interface SettlementDetails {
   bankName?: string;
   meta?: any;
 }
-
-// Add Monnify specific interfaces
 
 export interface MonnifyPaymentResponse {
   requestSuccessful: boolean;
@@ -151,4 +136,61 @@ export interface PaymentEventData {
   paidOn: string;
   customer: PaymentEventCustomer;
   metaData?: Record<string, any>;
+}
+
+
+
+export interface PaymentDetails {
+  paymentMethod: PaymentMethod;
+  paymentReference: string;
+  transactionReference: string;
+  paymentDate: Date;
+  amount: number;
+  currency: string;
+
+  status?: string;
+  statusMessage?: string;
+  failureReason?: string;
+  failedAt?: Date;
+
+  provider?: string;
+  providerFee?: number;
+  settlementAmount?: number;
+
+  card?: {
+    last4?: string;
+    bin?: string;
+    type?: string;
+    expiryMonth?: string;
+    expiryYear?: string;
+    cardHolder?: string;
+    reusable?: boolean;
+  };
+
+  bank?: {
+    accountNumber?: string;
+    bankName?: string;
+    bankCode?: string;
+    accountName?: string;
+    narration?: string;
+  };
+
+  mobile?: {
+    phoneNumber?: string;
+    provider?: string;
+    reference?: string;
+  };
+
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+
+  providerResponse?: Record<string, any>;
+
+  meta?: Record<string, any>;
+
+  receiptNumber?: string;
+  invoiceReference?: string;
 }

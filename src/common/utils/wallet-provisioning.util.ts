@@ -60,7 +60,6 @@ export class WalletProvisioningUtil {
     bvnVerificationData: BvnVerificationData,
   ): Promise<WalletProvisioningResult> {
     try {
-      // Validate that BVN verification was successful
       if (bvnVerificationData.verification_status !== 'VERIFIED') {
         return {
           success: false,
@@ -69,7 +68,6 @@ export class WalletProvisioningUtil {
         };
       }
 
-      // Find user to check if they already have a wallet
       const user = await this.userRepository.findOne({
         where: { id: userId },
         select: ['id', 'walletReference', 'bvn', 'firstName', 'lastName'],
@@ -84,7 +82,6 @@ export class WalletProvisioningUtil {
         };
       }
 
-      // Check if user already has a wallet
       if (user.walletReference) {
         this.logger.warn(`User ${userId} already has a wallet: ${user.walletReference}`);
         return {
@@ -94,10 +91,8 @@ export class WalletProvisioningUtil {
         };
       }
 
-      // Generate wallet reference using UUID
       const walletReference = uuidv4();
 
-      // Get environment name for wallet naming
       const envName = this.configService.get<string>('NODE_ENV', 'development');
       const walletName = `${envName}-${walletReference}`;
 

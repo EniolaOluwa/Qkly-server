@@ -54,7 +54,7 @@ export class Product {
   categoryId: number;
 
   @Column('text', { nullable: false })
-  description?: string
+  description: string
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   @Index()

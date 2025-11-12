@@ -15,6 +15,9 @@ import { JwtAuthGuard } from './core/users';
 import { JwtStrategy } from './common/auth/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { CategoryModule } from './core/category/category.module';
+import { AdminController } from './core/admin/admin.controller';
+import { AdminModule } from './core/admin/admin.module';
+import { StoreFrontModule } from './core/store-front/store-front.module';
 
 
 @Module({
@@ -32,8 +35,10 @@ import { CategoryModule } from './core/category/category.module';
     WalletsModule,
     ReviewModule,
     CategoryModule,
+    AdminModule,
+    StoreFrontModule
   ],
-  controllers: [AppController],
+  controllers: [AppController, AdminController],
   providers: [
     {
       provide: APP_GUARD, // global guard for all modules
