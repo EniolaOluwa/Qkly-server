@@ -17,6 +17,7 @@ import {
   IsPositive,
   IsUUID,
 } from 'class-validator';
+import { PaymentMethod } from '../../order/interfaces/order.interface';
 
 
 @ValidatorConstraint({ name: 'isIsoDateFormat', async: false })
@@ -186,7 +187,7 @@ export class InitiatePaymentDto {
   @IsString()
   @IsOptional()
   @IsIn(['CARD', 'BANK_TRANSFER', 'USSD', 'WALLET', ''])
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
 
   @ApiPropertyOptional({
     description: 'Payment reference',
@@ -212,6 +213,9 @@ export class InitiatePaymentDto {
   @IsString()
   @IsOptional()
   redirectUrl?: string;
+
+  @IsOptional()
+  metadata?: object
 }
 
 export class PaymentMethodDto {

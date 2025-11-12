@@ -17,6 +17,7 @@ import { PassportModule } from '@nestjs/passport';
 import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
 import { AdminModule } from './core/admin/admin.module';
+import { StoreFrontModule } from './core/store-front/store-front.module';
 
 
 @Module({
@@ -35,6 +36,7 @@ import { AdminModule } from './core/admin/admin.module';
     ReviewModule,
     CategoryModule,
     AdminModule,
+    StoreFrontModule
   ],
   controllers: [AppController, AdminController],
   providers: [
