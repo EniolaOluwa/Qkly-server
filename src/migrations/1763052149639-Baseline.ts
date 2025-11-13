@@ -1,14 +1,20 @@
 import { MigrationInterface, QueryRunner } from "typeorm";
 
-export class OrderRefctoring1762502502668 implements MigrationInterface {
-    name = 'OrderRefctoring1762502502668'
+export class Baseline1763052149639 implements MigrationInterface {
+    name = 'Baseline1763052149639'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE TYPE "public"."product_sizes_measurement_enum" AS ENUM('SIZE', 'LABEL')`);
+        await queryRunner.query(`CREATE TABLE "product_sizes" ("id" SERIAL NOT NULL, "measurement" "public"."product_sizes_measurement_enum" NOT NULL, "value" text NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "productId" integer, CONSTRAINT "PK_19c3d021f81c5b1ff367bad6164" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE TABLE "categories" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "parentId" integer, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_8b0be371d28245da6e4f4b61878" UNIQUE ("name"), CONSTRAINT "PK_24dbc6126a28ff948da33e97d3b" PRIMARY KEY ("id"))`);
+        await queryRunner.query(`CREATE INDEX "IDX_8b0be371d28245da6e4f4b6187" ON "categories" ("name") `);
         await queryRunner.query(`CREATE TYPE "public"."order_items_status_enum" AS ENUM('PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED')`);
         await queryRunner.query(`CREATE TABLE "order_items" ("id" SERIAL NOT NULL, "orderId" integer NOT NULL, "productId" integer NOT NULL, "productName" character varying NOT NULL, "productDescription" text, "price" numeric(10,2) NOT NULL, "quantity" integer NOT NULL DEFAULT '1', "subtotal" numeric(10,2) NOT NULL, "color" character varying, "size" character varying, "imageUrls" text, "status" "public"."order_items_status_enum" NOT NULL DEFAULT 'PENDING', "notes" text, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), "deletedAt" TIMESTAMP, CONSTRAINT "PK_005269d8574e6fac0493715c308" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE INDEX "IDX_f1d359a55923bb45b057fbdab0" ON "order_items" ("orderId") `);
         await queryRunner.query(`CREATE INDEX "IDX_cdb99c05982d5191ac8465ac01" ON "order_items" ("productId") `);
         await queryRunner.query(`CREATE INDEX "IDX_f421c8981cca05954f98667134" ON "order_items" ("status") `);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "color"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "title"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP CONSTRAINT "UQ_b44079e7599f6198a41c9dde63f"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "transactionRef"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "orderStatus"`);
@@ -19,6 +25,29 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`DROP TYPE "public"."orders_transactionmedium_enum"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "dateOfTransaction"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "productDetails"`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "walletReference" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletReference" IS 'Monnify wallet reference'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "walletAccountName" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletAccountName" IS 'Monnify wallet account name'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "walletBankName" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletBankName" IS 'Monnify wallet bank name'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "walletBankCode" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletBankCode" IS 'Monnify wallet bank code'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "personalAccountNumber" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalAccountNumber" IS 'User’s preferred bank account number for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "personalAccountName" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalAccountName" IS 'User’s preferred bank account name for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "personalBankName" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalBankName" IS 'User’s preferred bank name for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "personalBankCode" character varying`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalBankCode" IS 'User’s preferred bank code for payouts'`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "name" character varying NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "categoryId" integer NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "quantityInStock" integer NOT NULL DEFAULT '0'`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "hasVariation" boolean NOT NULL DEFAULT false`);
+        await queryRunner.query(`COMMENT ON COLUMN "products"."hasVariation" IS 'Does this product include size or color variations?'`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "colors" text`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "deletedAt" TIMESTAMP`);
         await queryRunner.query(`ALTER TABLE "orders" ADD "orderReference" character varying NOT NULL`);
         await queryRunner.query(`ALTER TABLE "orders" ADD CONSTRAINT "UQ_a8bdfcfdf8520db858774ab453c" UNIQUE ("orderReference")`);
         await queryRunner.query(`ALTER TABLE "orders" ADD "transactionReference" character varying`);
@@ -55,8 +84,26 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "reviews" ADD "isVisible" boolean NOT NULL DEFAULT true`);
         await queryRunner.query(`ALTER TABLE "reviews" ADD "isVerifiedPurchase" boolean NOT NULL DEFAULT false`);
         await queryRunner.query(`ALTER TABLE "reviews" ADD "deletedAt" TIMESTAMP`);
+        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "UQ_users_phone"`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "phone"`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "phone" character varying(20) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "UQ_a000cca60bcf04454e727699490" UNIQUE ("phone")`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletAccountNumber" IS 'Monnify wallet account number'`);
+        await queryRunner.query(`ALTER TABLE "products" ALTER COLUMN "description" SET NOT NULL`);
+        await queryRunner.query(`CREATE INDEX "IDX_99d90c2a483d79f3b627fb1d5e" ON "products" ("userId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_359bd8406fbfb50e3ea42b5631" ON "products" ("businessId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_4c9fb58de893725258746385e1" ON "products" ("name") `);
+        await queryRunner.query(`CREATE INDEX "IDX_ff56834e735fa78a15d0cf2192" ON "products" ("categoryId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_75895eeb1903f8a17816dafe0a" ON "products" ("price") `);
+        await queryRunner.query(`CREATE INDEX "IDX_0591b4a1abb428c6d86744cc0a" ON "products" ("quantityInStock") `);
+        await queryRunner.query(`CREATE INDEX "IDX_63fcb3d8806a6efd53dbc67430" ON "products" ("createdAt") `);
+        await queryRunner.query(`CREATE INDEX "IDX_69e49df9a08f8ded911758822f" ON "products" ("userId", "businessId") `);
         await queryRunner.query(`CREATE INDEX "IDX_151b79a83ba240b0cb31b2302d" ON "orders" ("userId") `);
         await queryRunner.query(`CREATE INDEX "IDX_778777c5d7d56ed1bbaa907b8e" ON "orders" ("businessId") `);
+        await queryRunner.query(`CREATE INDEX "IDX_775c9f06fc27ae3ff8fb26f2c4" ON "orders" ("status") `);
+        await queryRunner.query(`CREATE INDEX "IDX_01b20118a3f640214e7a8a6b29" ON "orders" ("paymentStatus") `);
+        await queryRunner.query(`CREATE INDEX "IDX_01b20118a3f640214e7a8a6b29" ON "orders" ("paymentStatus") `);
+        await queryRunner.query(`CREATE INDEX "IDX_775c9f06fc27ae3ff8fb26f2c4" ON "orders" ("status") `);
         await queryRunner.query(`CREATE INDEX "IDX_1f4b9818a08b822a31493fdee9" ON "orders" ("createdAt") `);
         await queryRunner.query(`CREATE INDEX "IDX_5025e0259ec0b1ffb5f0ea6685" ON "orders" ("userId", "businessId") `);
         await queryRunner.query(`CREATE INDEX "IDX_7ed5659e7139fc8bc039198cc1" ON "reviews" ("userId") `);
@@ -64,6 +111,9 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`CREATE INDEX "IDX_a6b3c434392f5d10ec17104366" ON "reviews" ("productId") `);
         await queryRunner.query(`CREATE INDEX "IDX_53a68dc905777554b7f702791f" ON "reviews" ("orderId") `);
         await queryRunner.query(`CREATE INDEX "IDX_1e6c554d615dd5a5bf0e11ee0e" ON "reviews" ("orderItemId") `);
+        await queryRunner.query(`ALTER TABLE "product_sizes" ADD CONSTRAINT "FK_699f5366c2ebf46a77589bd225e" FOREIGN KEY ("productId") REFERENCES "products"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "categories" ADD CONSTRAINT "FK_9a6f051e66982b5f0318981bcaa" FOREIGN KEY ("parentId") REFERENCES "categories"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
+        await queryRunner.query(`ALTER TABLE "products" ADD CONSTRAINT "FK_ff56834e735fa78a15d0cf21926" FOREIGN KEY ("categoryId") REFERENCES "categories"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "order_items" ADD CONSTRAINT "FK_f1d359a55923bb45b057fbdab0d" FOREIGN KEY ("orderId") REFERENCES "orders"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "order_items" ADD CONSTRAINT "FK_cdb99c05982d5191ac8465ac010" FOREIGN KEY ("productId") REFERENCES "products"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
         await queryRunner.query(`ALTER TABLE "reviews" ADD CONSTRAINT "FK_7ed5659e7139fc8bc039198cc1f" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE NO ACTION ON UPDATE NO ACTION`);
@@ -77,6 +127,9 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "reviews" DROP CONSTRAINT "FK_7ed5659e7139fc8bc039198cc1f"`);
         await queryRunner.query(`ALTER TABLE "order_items" DROP CONSTRAINT "FK_cdb99c05982d5191ac8465ac010"`);
         await queryRunner.query(`ALTER TABLE "order_items" DROP CONSTRAINT "FK_f1d359a55923bb45b057fbdab0d"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP CONSTRAINT "FK_ff56834e735fa78a15d0cf21926"`);
+        await queryRunner.query(`ALTER TABLE "categories" DROP CONSTRAINT "FK_9a6f051e66982b5f0318981bcaa"`);
+        await queryRunner.query(`ALTER TABLE "product_sizes" DROP CONSTRAINT "FK_699f5366c2ebf46a77589bd225e"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_1e6c554d615dd5a5bf0e11ee0e"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_53a68dc905777554b7f702791f"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_a6b3c434392f5d10ec17104366"`);
@@ -84,8 +137,26 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`DROP INDEX "public"."IDX_7ed5659e7139fc8bc039198cc1"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_5025e0259ec0b1ffb5f0ea6685"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_1f4b9818a08b822a31493fdee9"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_775c9f06fc27ae3ff8fb26f2c4"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_01b20118a3f640214e7a8a6b29"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_01b20118a3f640214e7a8a6b29"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_775c9f06fc27ae3ff8fb26f2c4"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_778777c5d7d56ed1bbaa907b8e"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_151b79a83ba240b0cb31b2302d"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_69e49df9a08f8ded911758822f"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_63fcb3d8806a6efd53dbc67430"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_0591b4a1abb428c6d86744cc0a"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_75895eeb1903f8a17816dafe0a"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_ff56834e735fa78a15d0cf2192"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_4c9fb58de893725258746385e1"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_359bd8406fbfb50e3ea42b5631"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_99d90c2a483d79f3b627fb1d5e"`);
+        await queryRunner.query(`ALTER TABLE "products" ALTER COLUMN "description" DROP NOT NULL`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletAccountNumber" IS 'Virtual account number'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT "UQ_a000cca60bcf04454e727699490"`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "phone"`);
+        await queryRunner.query(`ALTER TABLE "users" ADD "phone" character varying(13) NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "users" ADD CONSTRAINT "UQ_users_phone" UNIQUE ("phone")`);
         await queryRunner.query(`ALTER TABLE "reviews" DROP COLUMN "deletedAt"`);
         await queryRunner.query(`ALTER TABLE "reviews" DROP COLUMN "isVerifiedPurchase"`);
         await queryRunner.query(`ALTER TABLE "reviews" DROP COLUMN "isVisible"`);
@@ -122,6 +193,29 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "transactionReference"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP CONSTRAINT "UQ_a8bdfcfdf8520db858774ab453c"`);
         await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "orderReference"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "deletedAt"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "colors"`);
+        await queryRunner.query(`COMMENT ON COLUMN "products"."hasVariation" IS 'Does this product include size or color variations?'`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "hasVariation"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "quantityInStock"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "categoryId"`);
+        await queryRunner.query(`ALTER TABLE "products" DROP COLUMN "name"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalBankCode" IS 'User’s preferred bank code for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "personalBankCode"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalBankName" IS 'User’s preferred bank name for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "personalBankName"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalAccountName" IS 'User’s preferred bank account name for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "personalAccountName"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."personalAccountNumber" IS 'User’s preferred bank account number for payouts'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "personalAccountNumber"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletBankCode" IS 'Monnify wallet bank code'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "walletBankCode"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletBankName" IS 'Monnify wallet bank name'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "walletBankName"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletAccountName" IS 'Monnify wallet account name'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "walletAccountName"`);
+        await queryRunner.query(`COMMENT ON COLUMN "users"."walletReference" IS 'Monnify wallet reference'`);
+        await queryRunner.query(`ALTER TABLE "users" DROP COLUMN "walletReference"`);
         await queryRunner.query(`ALTER TABLE "orders" ADD "productDetails" json NOT NULL`);
         await queryRunner.query(`ALTER TABLE "orders" ADD "dateOfTransaction" TIMESTAMP NOT NULL DEFAULT now()`);
         await queryRunner.query(`CREATE TYPE "public"."orders_transactionmedium_enum" AS ENUM('web', 'mobile')`);
@@ -132,11 +226,17 @@ export class OrderRefctoring1762502502668 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "orders" ADD "orderStatus" "public"."orders_orderstatus_enum" NOT NULL DEFAULT 'ordered'`);
         await queryRunner.query(`ALTER TABLE "orders" ADD "transactionRef" character varying NOT NULL`);
         await queryRunner.query(`ALTER TABLE "orders" ADD CONSTRAINT "UQ_b44079e7599f6198a41c9dde63f" UNIQUE ("transactionRef")`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "title" character varying NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "products" ADD "color" character varying`);
         await queryRunner.query(`DROP INDEX "public"."IDX_f421c8981cca05954f98667134"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_cdb99c05982d5191ac8465ac01"`);
         await queryRunner.query(`DROP INDEX "public"."IDX_f1d359a55923bb45b057fbdab0"`);
         await queryRunner.query(`DROP TABLE "order_items"`);
         await queryRunner.query(`DROP TYPE "public"."order_items_status_enum"`);
+        await queryRunner.query(`DROP INDEX "public"."IDX_8b0be371d28245da6e4f4b6187"`);
+        await queryRunner.query(`DROP TABLE "categories"`);
+        await queryRunner.query(`DROP TABLE "product_sizes"`);
+        await queryRunner.query(`DROP TYPE "public"."product_sizes_measurement_enum"`);
     }
 
 }
