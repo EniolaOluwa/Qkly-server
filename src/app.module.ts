@@ -16,6 +16,8 @@ import { JwtStrategy } from './common/auth/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
+import { LeadModule } from './core/lead/lead.module';
+import { EmailModule } from './core/email/email.module';
 
 
 @Module({
@@ -29,9 +31,11 @@ import { AdminController } from './core/admin/admin.controller';
     UsersModule,
     ProductModule,
     OrderModule,
+    EmailModule,
     BusinessesModule,
     WalletsModule,
     ReviewModule,
+    LeadModule,
     CategoryModule,
   ],
   controllers: [AppController, AdminController],
