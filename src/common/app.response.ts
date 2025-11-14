@@ -18,7 +18,6 @@ export const AppResponse = {
         }
     },
     error: (err: QklyErrorResp): never => {
-        // let loc = err?.location ?? ''
         const message = err?.message ? err.message : `internal server error @ ${err?.location}`;
         throw new AppException(message, err?.status ?? 500)
     }

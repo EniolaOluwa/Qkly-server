@@ -84,7 +84,6 @@ export class DateHelper {
     startTime: string;
     endTime: string;
   }): number {
-    // Combine date and time strings into a DateTime object
     const startDateTime = DateTime.fromFormat(
       `${eventData.date} ${eventData.startTime}`,
       'yyyy-MM-dd HH:mm'
@@ -95,13 +94,16 @@ export class DateHelper {
       'yyyy-MM-dd HH:mm'
     );
 
-    // Check if end date is less than start date
     if (endDateTime < startDateTime) {
       ErrorHelper.BadRequestException('End date/time cannot be less than start date/time');
     }
 
+<<<<<<< HEAD
     // Calculate the difference in minutes
     const minutesDifference = endDateTime.diff(startDateTime, 'minutes').as('minutes');
+=======
+    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').toObject().minutes;
+>>>>>>> 048663b8e868a77bbccca108b6292bdfc009e594
 
     return minutesDifference;
   }

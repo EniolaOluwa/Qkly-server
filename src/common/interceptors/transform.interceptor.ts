@@ -60,10 +60,8 @@ export class TransformInterceptor<T> implements NestInterceptor<T, any> {
 export function TransformInterceptorIgnore(): ClassDecorator & MethodDecorator {
   return function (target: any, propertyKey?: string | symbol, descriptor?: PropertyDescriptor) {
     if (descriptor) {
-      // Method decorator - attach to the method itself
       Reflect.defineMetadata(IgnoredPropertyName, true, descriptor.value);
     } else {
-      // Class decorator - attach to the class constructor
       Reflect.defineMetadata(IgnoredPropertyName, true, target);
     }
   };

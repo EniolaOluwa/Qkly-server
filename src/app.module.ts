@@ -15,7 +15,7 @@ import { JwtAuthGuard } from './core/users';
 import { JwtStrategy } from './common/auth/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { CategoryModule } from './core/category/category.module';
-import { LeadModule } from './core/lead/lead.module';
+import { AdminController } from './core/admin/admin.controller';
 
 
 @Module({
@@ -33,9 +33,8 @@ import { LeadModule } from './core/lead/lead.module';
     WalletsModule,
     ReviewModule,
     CategoryModule,
-    LeadModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, AdminController],
   providers: [
     {
       provide: APP_GUARD, // global guard for all modules

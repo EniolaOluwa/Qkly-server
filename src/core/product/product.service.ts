@@ -4,12 +4,11 @@ import { Repository } from 'typeorm';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
+import { CategoryService } from '../category/category.service';
 import { User } from '../users';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
-import { Category } from '../category/entity/category.entity';
-import { CategoryService } from '../category/category.service';
 
 
 
@@ -25,6 +24,23 @@ export class ProductService {
     private readonly categoryService: CategoryService
   ) { }
 
+
+  async verifyBusinessOwnership(userId: number, businessId: number): Promise<void> {
+    const business = await this.businessRepository.findOne({
+      where: { id: businessId }
+    });
+
+    if (!business) {
+      ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
+    }
+
+    if (business.userId !== userId) {
+      ErrorHelper.ForbiddenException(
+        'Access denied: You can only manage products for your own business'
+      );
+    }
+  }
+
   // Product methods
   async createProduct(userId: number, productData: CreateProductDto): Promise<Product> {
     try {
@@ -37,6 +53,9 @@ export class ProductService {
       if (!businessExists) {
         ErrorHelper.BadRequestException('Business does not exist.');
       }
+
+
+
 
       if (productData.hasVariation) {
         const hasSizes = productData.sizes && productData.sizes.length > 0;
@@ -95,9 +114,8 @@ export class ProductService {
       // Create a QueryBuilder for more flexibility
       const qb = this.productRepository
         .createQueryBuilder('product')
-        .leftJoinAndSelect('product.user', 'user')
-        .leftJoinAndSelect('product.business', 'business')
-        .leftJoinAndSelect('product.sizes', 'sizes');
+        .leftJoinAndSelect('product.sizes', 'sizes')
+
 
       // User filter
       if (userId) {
@@ -224,7 +242,7 @@ export class ProductService {
     try {
       const product = await this.productRepository.findOne({
         where: { id },
-        relations: ['user', 'business', 'sizes'],
+        relations: ['user', 'category', 'business'],
       });
 
       if (!product) {
@@ -251,8 +269,6 @@ export class ProductService {
       if (pageOptionsDto) {
         const qb = this.productRepository
           .createQueryBuilder('product')
-          .leftJoinAndSelect('product.user', 'user')
-          .leftJoinAndSelect('product.business', 'business')
           .leftJoinAndSelect('product.sizes', 'sizes')
           .where('product.userId = :userId', { userId });
 
@@ -273,7 +289,7 @@ export class ProductService {
 
       return await this.productRepository.find({
         where: { userId },
-        relations: ['user', 'business', 'sizes'],
+        relations: ['sizes'],
       });
     } catch (error) {
       ErrorHelper.InternalServerErrorException(`Error finding products by user id: ${error.message}`, error);
@@ -294,8 +310,6 @@ export class ProductService {
       if (pageOptionsDto) {
         const qb = this.productRepository
           .createQueryBuilder('product')
-          .leftJoinAndSelect('product.user', 'user')
-          .leftJoinAndSelect('product.business', 'business')
           .leftJoinAndSelect('product.sizes', 'sizes')
           .where('product.businessId = :businessId', { businessId });
 
