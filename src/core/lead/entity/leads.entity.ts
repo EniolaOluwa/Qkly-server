@@ -3,6 +3,7 @@ import { Entity, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColu
 import { LeadForm } from './leadForm.entity';
 
 
+
 @Entity({ name: 'leads'})
 export class Leads {
   @PrimaryGeneratedColumn()

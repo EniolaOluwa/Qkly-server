@@ -98,12 +98,7 @@ export class DateHelper {
       ErrorHelper.BadRequestException('End date/time cannot be less than start date/time');
     }
 
-<<<<<<< HEAD
-    // Calculate the difference in minutes
-    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').as('minutes');
-=======
-    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').toObject().minutes;
->>>>>>> 048663b8e868a77bbccca108b6292bdfc009e594
+    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').toObject().minutes ?? 0;
 
     return minutesDifference;
   }
