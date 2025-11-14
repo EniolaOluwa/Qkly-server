@@ -62,7 +62,7 @@ export class LeadService {
     async getLeadFormById(id: string): Promise<LeadForm> {
         try {
             const form = await this.leadFormRepo.findOne({
-                where: { id },
+                where: { id: Number(id) },
                 relations: ['leads'],
             });
 

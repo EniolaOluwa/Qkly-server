@@ -6,8 +6,8 @@ import { Leads } from './leads.entity';
 
 @Entity({ name: 'lead-forms' })
 export class LeadForm {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @Column()
   title: string;
