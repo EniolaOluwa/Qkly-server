@@ -4,12 +4,16 @@ export class Baseline1763052149639 implements MigrationInterface {
   name = 'Baseline1763052149639';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create types with IF NOT EXISTS to handle already existing types
     await queryRunner.query(
-      `CREATE TYPE "public"."product_sizes_measurement_enum" AS ENUM('SIZE', 'LABEL')`,
+      `CREATE TYPE IF NOT EXISTS "public"."product_sizes_measurement_enum" AS ENUM('SIZE', 'LABEL')`,
     );
-    await queryRunner.query(
-      `CREATE TABLE "product_sizes" ("id" SERIAL NOT NULL, "measurement" "public"."product_sizes_measurement_enum" NOT NULL, "value" text NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "productId" integer, CONSTRAINT "PK_19c3d021f81c5b1ff367bad6164" PRIMARY KEY ("id"))`,
-    );
+    // Create tables only if they don't exist
+    const productSizesExists = await queryRunner.hasTable('product_sizes');
+    if (!productSizesExists) {
+      await queryRunner.query(
+        `CREATE TABLE "product_sizes" ("id" SERIAL NOT NULL, "measurement" "public"."product_sizes_measurement_enum" NOT NULL, "value" text NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "productId" integer, CONSTRAINT "PK_19c3d021f81c5b1ff367bad6164" PRIMARY KEY ("id"))`,
+      );
     await queryRunner.query(
       `CREATE TABLE "categories" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "parentId" integer, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_8b0be371d28245da6e4f4b61878" UNIQUE ("name"), CONSTRAINT "PK_24dbc6126a28ff948da33e97d3b" PRIMARY KEY ("id"))`,
     );
