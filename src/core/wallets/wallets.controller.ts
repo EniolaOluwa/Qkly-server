@@ -6,25 +6,33 @@ import {
   ValidationPipe,
   UseGuards,
   Request,
+  Param,
+  Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiOperation,
   ApiResponse,
   ApiTags,
   ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
 } from '@nestjs/swagger';
 import { WalletsService } from './wallets.service';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
+  InitiatePaymentDto,
+  PaymentMethodDto,
+  PaymentResponseDto,
 } from './dto/wallet.dto';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-
 
 @ApiTags('wallets')
 @Controller('wallets')
 export class WalletsController {
-  constructor(private readonly walletsService: WalletsService) {}
+  constructor(private readonly walletsService: WalletsService) { }
 
   @Post('generate')
   @UseGuards(JwtAuthGuard)
@@ -95,6 +103,88 @@ export class WalletsController {
     return {
       message: 'Wallet information retrieved successfully',
       wallet: walletInfo,
+    };
+  }
+
+  @Post('payments/initialize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Initialize payment',
+    description: 'Initialize a payment transaction with Monnify.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payment initialized successfully',
+    type: PaymentResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid payment data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to initialize payment',
+  })
+  async initializePayment(
+    @Body(ValidationPipe) initiatePaymentDto: InitiatePaymentDto,
+    @Request() req,
+  ) {
+    // Add user details to the payment payload
+    const paymentPayload = {
+      ...initiatePaymentDto,
+      customerEmail: req.user.email,
+      customerName: req.user.name || `${req.user.firstName} ${req.user.lastName}`,
+      customerReference: req.user.userId.toString(),
+      paymentMethods: this.walletsService.getPaymentMethodsForMonnify(
+        initiatePaymentDto.paymentMethod
+      ),
+    };
+
+    const paymentResponse = await this.walletsService.initializeMonnifyPayment(paymentPayload);
+
+    return {
+      message: 'Payment initialized successfully',
+      data: paymentResponse.responseBody,
+    };
+  }
+
+  @Get('payments/verify/:reference')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Verify payment',
+    description: 'Verify payment status by reference.',
+  })
+  @ApiParam({
+    name: 'reference',
+    required: true,
+    description: 'Payment reference to verify',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment verification successful',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error - Failed to verify payment',
+  })
+  async verifyPayment(@Param('reference') reference: string) {
+    const verification = await this.walletsService.verifyMonnifyPayment(reference);
+
+    return {
+      message: 'Payment verification successful',
+      data: verification,
+      status: verification.paymentStatus,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -9,7 +9,8 @@ import {
   Min,
   Matches,
   IsEnum,
-  IsIn,
+  IsBoolean,
+  Max,
 } from 'class-validator';
 
 
@@ -28,7 +29,7 @@ export class SizeDto {
     enum: MeasurementType,
     example: MeasurementType.SIZE,
   })
-  @IsEnum(MeasurementType) 
+  @IsEnum(MeasurementType)
   measurement: MeasurementType;
 
   @ApiProperty({
@@ -43,15 +44,6 @@ export class SizeDto {
 
 
 export class CreateProductDto {
-  @ApiProperty({
-    description: 'User ID who owns the product',
-    example: 1,
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  userId: number;
-
-  
   @ApiProperty({
     description: 'Business ID for the product',
     example: 1,
@@ -83,20 +75,21 @@ export class CreateProductDto {
   })
   @IsOptional()
   @IsArray()
-  @IsString({ each: true})
+  @IsString({ each: true })
   @Matches(/^#[0-9A-Fa-f]{6}$/, {
+    each: true,
     message: 'Color must be a valid hex color code (e.g., #FF5733)',
   })
   colors?: string[];
 
 
   @ApiProperty({
-  description: 'Indicates if product has size or color variations',
-  example: true,
-  required: false,
-})
-@IsOptional()
-hasVariation?: boolean;
+    description: 'Indicates if product has size or color variations',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  hasVariation?: boolean;
 
 
   @ApiProperty({
@@ -105,7 +98,7 @@ hasVariation?: boolean;
   })
   @IsString()
   @IsNotEmpty()
- name: string;
+  name: string;
 
 
   @ApiProperty({
@@ -118,7 +111,7 @@ hasVariation?: boolean;
   description?: string;
 
 
-    @ApiProperty({
+  @ApiProperty({
     description: 'Quantity in stock',
     example: 100,
     required: false,
@@ -138,7 +131,7 @@ hasVariation?: boolean;
   price: number;
 
 
-    @ApiProperty({
+  @ApiProperty({
     description: 'List of size or label variations',
     type: [SizeDto],
     required: false,
@@ -147,67 +140,195 @@ hasVariation?: boolean;
   @IsArray()
   sizes?: SizeDto[];
 
+
+
+  @ApiPropertyOptional({
+    description: 'Product category name (text). Will be created if it does not exist.',
+    example: 'T-Shirts',
+  })
+  @IsString()
+  category: string;
 }
 
 
 
 
 
-// export class FindAllProductsDto {
-//   page?: number;
-//   limit?: number;
-//   userId?: number;
-//   businessId?: number;
-//   categoryId?: number;
-//   search?: string;     // optional keyword search
-//   sortBy?: string;     // e.g. 'price' or 'createdAt'
-//   sortOrder?: 'ASC' | 'DESC';
-// }
-
 
 export class FindAllProductsDto {
-  @ApiPropertyOptional({ description: 'Page number', example: 1 })
+  @ApiPropertyOptional({
+    description: 'Page number',
+    type: Number,
+    default: 1
+  })
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
   page?: number = 1;
 
-  @ApiPropertyOptional({ description: 'Number of items per page', example: 10 })
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    type: Number,
+    default: 10
+  })
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
+  @Min(1)
+  @Max(100)
+  @Type(() => Number)
   limit?: number = 10;
 
-  @ApiPropertyOptional({ description: 'Filter by user ID', example: 1 })
+  @ApiPropertyOptional({
+    description: 'Filter by user ID',
+    type: Number
+  })
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
+  @Type(() => Number)
   userId?: number;
 
-  @ApiPropertyOptional({ description: 'Filter by business ID', example: 3 })
+  @ApiPropertyOptional({
+    description: 'Filter by business ID',
+    type: Number
+  })
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
+  @Type(() => Number)
   businessId?: number;
 
-  @ApiPropertyOptional({ description: 'Filter by category ID', example: 5 })
+  @ApiPropertyOptional({
+    description: 'Filter by category ID',
+    type: Number
+  })
   @IsOptional()
-  @Type(() => Number)
   @IsNumber()
+  @Type(() => Number)
   categoryId?: number;
 
-  @ApiPropertyOptional({ description: 'Search keyword for product name or description', example: 'Nike' })
+  @ApiPropertyOptional({
+    description: 'Search in product name and description',
+    type: String
+  })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Sort by a specific field', example: 'price' })
+  @ApiPropertyOptional({
+    description: 'Sort by field',
+    enum: ['id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'],
+    default: 'createdAt'
+  })
   @IsOptional()
   @IsString()
-  sortBy?: string;
+  sortBy?: string = 'createdAt';
 
-  @ApiPropertyOptional({ description: 'Sorting order (ASC or DESC)', example: 'ASC' })
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    enum: ['ASC', 'DESC'],
+    default: 'DESC'
+  })
   @IsOptional()
-  @IsIn(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC' = 'ASC';
+  @IsEnum(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+
+  @ApiPropertyOptional({
+    description: 'Minimum price',
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  minPrice?: number;
+
+  @ApiPropertyOptional({
+    description: 'Maximum price',
+    type: Number
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Type(() => Number)
+  maxPrice?: number;
+
+  @ApiPropertyOptional({
+    description: 'Filter by stock availability',
+    type: Boolean
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  inStock?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filter by variation status',
+    type: Boolean
+  })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  hasVariation?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Filter by colors',
+    type: [String]
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  colors?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Filter by sizes',
+    type: [String]
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sizes?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Filter products created after this date',
+    type: String,
+    example: '2023-01-01'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  createdAfter?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Filter products created before this date',
+    type: String,
+    example: '2023-12-31'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  createdBefore?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Filter products updated after this date',
+    type: String,
+    example: '2023-01-01'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  updatedAfter?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Filter products updated before this date',
+    type: String,
+    example: '2023-12-31'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  updatedBefore?: Date;
 }

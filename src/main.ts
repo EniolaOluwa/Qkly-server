@@ -1,10 +1,16 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ValidationPipe } from './common/pipes';
 import { LoggingInterceptor } from './common/logging/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors';
+import { HttpExceptionFilter } from './filters';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Configure request body size limits for file uploads
   app.use(require('express').json({ limit: '50mb' }));
@@ -12,6 +18,9 @@ async function bootstrap() {
 
   // Global interceptors
   app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalFilters(new HttpExceptionFilter(app.get(ConfigService)));
 
   // Set global prefix for all routes
   app.setGlobalPrefix('v1');
