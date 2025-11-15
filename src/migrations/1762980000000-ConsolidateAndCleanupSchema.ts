@@ -64,7 +64,7 @@ export class ConsolidateAndCleanupSchema1762980000000 implements MigrationInterf
 
         // Add product indexes
         const productIndexes = ['IDX_99d90c2a483d79f3b627fb1d5e', 'IDX_359bd8406fbfb50e3ea42b5631', 'IDX_4c9fb58de893725258746385e1', 'IDX_ff56834e735fa78a15d0cf2192', 'IDX_75895eeb1903f8a17816dafe0a', 'IDX_0591b4a1abb428c6d86744cc0a', 'IDX_63fcb3d8806a6efd53dbc67430', 'IDX_69e49df9a08f8ded911758822f'];
-        
+
         for (const indexName of productIndexes) {
             try {
                 // Index names correspond to: userId, businessId, name, categoryId, price, quantityInStock, createdAt, userId+businessId
@@ -310,7 +310,7 @@ export class ConsolidateAndCleanupSchema1762980000000 implements MigrationInterf
             const reviewsTableAfter = await queryRunner.getTable('reviews');
             if (reviewsTableAfter) {
                 const reviewFKs = ['FK_7ed5659e7139fc8bc039198cc1f', 'FK_53a68dc905777554b7f702791fa', 'FK_1e6c554d615dd5a5bf0e11ee0e9'];
-                
+
                 for (const fkName of reviewFKs) {
                     const fkExists = reviewsTableAfter.foreignKeys.find(fk => fk.name === fkName);
                     if (!fkExists) {
@@ -345,7 +345,7 @@ export class ConsolidateAndCleanupSchema1762980000000 implements MigrationInterf
         // Reverse all changes from up()
         // This would be a complex reverse migration, so simplified version:
         console.log('Down migration not fully implemented. Manual intervention may be needed.');
-        
+
         // Basic cleanup if needed:
         const categoryTableExists = await queryRunner.hasTable('categories');
         const orderItemsTableExists = await queryRunner.hasTable('order_items');
