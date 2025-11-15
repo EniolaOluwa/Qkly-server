@@ -1,4 +1,6 @@
+import { Public } from '@app/common/decorators/public.decorator';
 import {
+    BadRequestException,
     Body,
     Controller,
     Delete,
@@ -8,621 +10,339 @@ import {
     Param,
     Patch,
     Post,
-    Query,
+    Request,
     UseGuards,
 } from '@nestjs/common';
 import {
-    ApiOperation,
-    ApiResponse,
-    ApiTags,
     ApiBadRequestResponse,
-    ApiNotFoundResponse,
-    ApiInternalServerErrorResponse,
-    ApiCreatedResponse,
-    ApiOkResponse,
     ApiBearerAuth,
+    ApiCreatedResponse,
+    ApiNotFoundResponse,
+    ApiOkResponse,
+    ApiOperation,
+    ApiTags
 } from '@nestjs/swagger';
-import { LeadService } from './lead.service';
-import { CreateLeadFormDto, UpdateLeadFormDto, LeadFormResponseDto, CreateLeadDto, UpdateLeadDto, LeadResponseDto } from './dto/lead.dto';
 import { HttpResponse } from '../../common/utils/http-response.utils';
 import { JwtAuthGuard } from '../users';
-import { Public } from '@app/common/decorators/public.decorator';
-
+import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
+import { LeadService } from './lead.service';
 
 @ApiTags('Lead Forms')
-@UseGuards(JwtAuthGuard)
 @Controller('lead-forms')
 export class LeadController {
-    constructor(private readonly leadService: LeadService) {}
+    constructor(private readonly leadService: LeadService) { }
 
-    /**
-     * Create a new lead form
-     */
     @Post()
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({
-        summary: 'Create a new lead form',
-        description: 'Creates a new lead form with the provided title, description, button text, and input fields.',
+        summary: 'Create a new lead form for your business',
+        description: 'Creates a new lead form associated with the authenticated user\'s business.',
     })
-    @ApiCreatedResponse({
-        description: 'Lead form created successfully',
-        schema: {
-            example: {
-                id: '123e4567-e89b-12d3-a456-426614174000',
-                title: 'Contact Us',
-                description: 'Please fill out this form',
-                buttonText: 'Submit',
-                inputs: [
-                    { type: 'email', placeholder: 'Enter your email' },
-                    { type: 'phone', placeholder: 'Enter your phone number' },
-                ],
-                logoUrl: 'https://example.com/logo.png',
-                isActive: true,
-                createdAt: '2024-01-15T10:30:00Z',
-                updatedAt: '2024-01-15T10:30:00Z',
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid input data',
-        schema: {
-            example: {
-                statusCode: 400,
-                message: 'Title, buttonText, and at least one input field are required',
-                error: 'Bad Request',
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async createLeadForm(@Body() dto: CreateLeadFormDto) {
-        const data = await this.leadService.createLeadForm(dto);
+    @ApiCreatedResponse({ description: 'Lead form created successfully' })
+    @ApiBadRequestResponse({ description: 'Invalid input data' })
+    async createLeadForm(@Body() dto: CreateLeadFormDto, @Request() req) {
+        const userId = req.user.id;
+        const businessId = req.user.businessId;
+
+        if (!businessId) {
+            throw new BadRequestException('User must have a business to create lead forms');
+        }
+
+        const data = await this.leadService.createLeadForm(dto, userId, businessId);
         return HttpResponse.success({
             data,
             message: 'Lead form created successfully',
         });
     }
 
-    /**
-     * Get all lead forms
-     */
     @Get()
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Retrieve all lead forms',
-        description: 'Fetches all lead forms with their associated leads, ordered by creation date (newest first).',
+        summary: 'Get all lead forms for your business',
+        description: 'Fetches all lead forms belonging to the authenticated user\'s business.',
     })
-    @ApiOkResponse({
-        description: 'List of lead forms retrieved successfully',
-        schema: {
-            example: {
-                data: [
-                    {
-                        id: '123e4567-e89b-12d3-a456-426614174000',
-                        title: 'Contact Us',
-                        description: 'Please fill out this form',
-                        buttonText: 'Submit',
-                        inputs: [
-                            { type: 'email', placeholder: 'Enter your email' },
-                        ],
-                        logoUrl: 'https://example.com/logo.png',
-                        isActive: true,
-                        leads: [],
-                        createdAt: '2024-01-15T10:30:00Z',
-                        updatedAt: '2024-01-15T10:30:00Z',
-                    },
-                ],
-                message: 'Lead forms retrieved successfully',
-                statusCode: 200,
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getAllLeadForms() {
-        const data = await this.leadService.getAllLeadForms();
+    @ApiOkResponse({ description: 'Lead forms retrieved successfully' })
+    async getAllLeadForms(@Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadFormsByBusinessId(businessId);
         return HttpResponse.success({
             data,
             message: 'Lead forms retrieved successfully',
         });
     }
 
-    /**
-     * Get active lead forms only
-     */
     @Get('active')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Retrieve active lead forms only',
-        description: 'Fetches all active lead forms with their associated leads.',
+        summary: 'Get active lead forms for your business',
+        description: 'Fetches all active lead forms belonging to the authenticated user\'s business.',
     })
-    @ApiOkResponse({
-        description: 'List of active lead forms retrieved successfully',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getActiveLeadForms() {
-        const data = await this.leadService.getActiveLeadForms();
+    @ApiOkResponse({ description: 'Active lead forms retrieved successfully' })
+    async getActiveLeadForms(@Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getActiveLeadForms(businessId);
         return HttpResponse.success({
             data,
             message: 'Active lead forms retrieved successfully',
         });
     }
 
-    /**
-     * Get a specific lead form by ID
-     */
     @Get(':id')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Retrieve a lead form by ID',
-        description: 'Fetches a specific lead form with all its details and associated leads.',
+        summary: 'Get a specific lead form',
+        description: 'Fetches a specific lead form belonging to your business.',
     })
-    @ApiOkResponse({
-        description: 'Lead form retrieved successfully',
-        schema: {
-            example: {
-                data: {
-                    id: '123e4567-e89b-12d3-a456-426614174000',
-                    title: 'Contact Us',
-                    description: 'Please fill out this form',
-                    buttonText: 'Submit',
-                    inputs: [
-                        { type: 'email', placeholder: 'Enter your email' },
-                    ],
-                    logoUrl: 'https://example.com/logo.png',
-                    isActive: true,
-                    leads: [],
-                    createdAt: '2024-01-15T10:30:00Z',
-                    updatedAt: '2024-01-15T10:30:00Z',
-                },
-                message: 'Lead form retrieved successfully',
-                statusCode: 200,
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-        schema: {
-            example: {
-                statusCode: 404,
-                message: 'Lead form with ID 123e4567-e89b-12d3-a456-426614174000 not found',
-                error: 'Not Found',
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getLeadFormById(@Param('id') id: string) {
-        const data = await this.leadService.getLeadFormById(id);
+    @ApiOkResponse({ description: 'Lead form retrieved successfully' })
+    @ApiNotFoundResponse({ description: 'Lead form not found' })
+    async getLeadFormById(@Param('id') id: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadFormById(Number(id), businessId);
         return HttpResponse.success({
             data,
             message: 'Lead form retrieved successfully',
         });
     }
 
-    /**
-     * Update a lead form
-     */
     @Patch(':id')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Update a lead form',
-        description: 'Updates specific fields of a lead form. All fields are optional.',
+        description: 'Updates a lead form belonging to your business.',
     })
-    @ApiOkResponse({
-        description: 'Lead form updated successfully',
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid input data',
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async updateLeadForm(@Param('id') id: string, @Body() dto: UpdateLeadFormDto) {
-        const data = await this.leadService.updateLeadForm(id, dto);
+    @ApiOkResponse({ description: 'Lead form updated successfully' })
+    @ApiBadRequestResponse({ description: 'Invalid input data' })
+    @ApiNotFoundResponse({ description: 'Lead form not found' })
+    async updateLeadForm(
+        @Param('id') id: string,
+        @Body() dto: UpdateLeadFormDto,
+        @Request() req
+    ) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.updateLeadForm(Number(id), dto, businessId);
         return HttpResponse.success({
             data,
             message: 'Lead form updated successfully',
         });
     }
 
-    /**
-     * Delete a lead form
-     */
     @Delete(':id')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Delete a lead form',
-        description: 'Permanently deletes a lead form and all its associated leads (if cascade is enabled).',
+        description: 'Permanently deletes a lead form and all its associated leads.',
     })
-    @ApiOkResponse({
-        description: 'Lead form deleted successfully',
-        schema: {
-            example: {
-                data: {
-                    success: true,
-                    message: 'Lead form with ID 123e4567-e89b-12d3-a456-426614174000 deleted successfully',
-                },
-                message: 'Lead form deleted successfully',
-                statusCode: 200,
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async deleteLeadForm(@Param('id') id: string) {
-        const data = await this.leadService.deleteLeadForm(id);
+    @ApiOkResponse({ description: 'Lead form deleted successfully' })
+    @ApiNotFoundResponse({ description: 'Lead form not found' })
+    async deleteLeadForm(@Param('id') id: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.deleteLeadForm(Number(id), businessId);
         return HttpResponse.success({
             data,
             message: 'Lead form deleted successfully',
         });
     }
 
-    /**
-     * Activate a lead form
-     */
     @Patch(':id/activate')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Activate a lead form',
-        description: 'Sets the lead form status to active, making it available for collecting leads.',
+        description: 'Makes a lead form active and available for collecting leads.',
     })
-    @ApiOkResponse({
-        description: 'Lead form activated successfully',
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async activateLeadForm(@Param('id') id: string) {
-        const data = await this.leadService.activateLeadForm(id);
+    @ApiOkResponse({ description: 'Lead form activated successfully' })
+    async activateLeadForm(@Param('id') id: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.toggleLeadFormStatus(Number(id), businessId, true);
         return HttpResponse.success({
             data,
             message: 'Lead form activated successfully',
         });
     }
 
-    /**
-     * Deactivate a lead form
-     */
     @Patch(':id/deactivate')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Deactivate a lead form',
-        description: 'Sets the lead form status to inactive, preventing it from collecting new leads.',
+        description: 'Makes a lead form inactive and stops it from collecting new leads.',
     })
-    @ApiOkResponse({
-        description: 'Lead form deactivated successfully',
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async deactivateLeadForm(@Param('id') id: string) {
-        const data = await this.leadService.deactivateLeadForm(id);
+    @ApiOkResponse({ description: 'Lead form deactivated successfully' })
+    async deactivateLeadForm(@Param('id') id: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.toggleLeadFormStatus(Number(id), businessId, false);
         return HttpResponse.success({
             data,
             message: 'Lead form deactivated successfully',
         });
     }
 
-    // ==================== LEADS ENDPOINTS ====================
 
-    /**
-     * Create a new lead
-     */
-    @Public()
-    @Post(':formId/leads')
-    @HttpCode(HttpStatus.CREATED)
-    @ApiOperation({
-        summary: 'Create a new lead',
-        description: 'Creates a new lead for a specific lead form with email and optional name and phone.',
-    })
-    @ApiCreatedResponse({
-        description: 'Lead created successfully',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    id: 1,
-                    name: 'John Doe',
-                    email: 'john@example.com',
-                    phone: '+234812345678',
-                    formId: '123e4567-e89b-12d3-a456-426614174000',
-                    createdAt: '2024-01-15T10:30:00Z',
-                },
-                message: 'Lead created successfully',
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid input data',
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async createLead(
-        @Param('formId') formId: string,
-        @Body() dto: CreateLeadDto,
-    ) {
-        // Override formId from URL parameter
-        dto.formId = formId;
-        const data = await this.leadService.createLead(dto);
-        return HttpResponse.success({
-            data,
-            message: 'Lead created successfully',
-        });
-    }
-
-    /**
-     * Get all leads for a specific form
-     */
     @Get(':formId/leads')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Get all leads for a specific form',
-        description: 'Retrieves all leads associated with a specific lead form.',
+        description: 'Retrieves all leads for a form belonging to your business.',
     })
-    @ApiOkResponse({
-        description: 'Leads retrieved successfully',
-        schema: {
-            example: {
-                success: true,
-                data: [
-                    {
-                        id: 1,
-                        name: 'John Doe',
-                        email: 'john@example.com',
-                        phone: '+234812345678',
-                        formId: '123e4567-e89b-12d3-a456-426614174000',
-                        createdAt: '2024-01-15T10:30:00Z',
-                    },
-                ],
-                message: 'Leads retrieved successfully',
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getLeadsByFormId(@Param('formId') formId: string) {
-        const data = await this.leadService.getLeadsByFormId(formId);
+    @ApiOkResponse({ description: 'Leads retrieved successfully' })
+    async getLeadsByFormId(@Param('formId') formId: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadsByFormId(Number(formId), businessId);
         return HttpResponse.success({
             data,
             message: 'Leads retrieved successfully',
         });
     }
 
-    /**
-     * Get lead count for a specific form
-     */
     @Get(':formId/leads/count')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Get lead count for a specific form',
         description: 'Returns the total count of leads for a specific form.',
     })
-    @ApiOkResponse({
-        description: 'Lead count retrieved successfully',
-        schema: {
-            example: {
-                success: true,
-                data: { count: 10 },
-                message: 'Lead count retrieved successfully',
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getLeadCountByFormId(@Param('formId') formId: string) {
-        const count = await this.leadService.getLeadCountByFormId(formId);
+    @ApiOkResponse({ description: 'Lead count retrieved successfully' })
+    async getLeadCountByFormId(@Param('formId') formId: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const count = await this.leadService.getLeadCountByFormId(Number(formId), businessId);
         return HttpResponse.success({
             data: { count },
             message: 'Lead count retrieved successfully',
         });
     }
 
-    /**
-     * Delete all leads for a specific form
-     */
     @Delete(':formId/leads')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Delete all leads for a specific form',
-        description: 'Permanently deletes all leads associated with a specific form.',
+        description: 'Permanently deletes all leads for a form.',
     })
-    @ApiOkResponse({
-        description: 'All leads deleted successfully',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    success: true,
-                    message: 'All leads for form deleted successfully',
-                    deletedCount: 5,
-                },
-                message: 'All leads deleted successfully',
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead form not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async deleteLeadsByFormId(@Param('formId') formId: string) {
-        const data = await this.leadService.deleteLeadsByFormId(formId);
+    @ApiOkResponse({ description: 'All leads deleted successfully' })
+    async deleteLeadsByFormId(@Param('formId') formId: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.deleteLeadsByFormId(Number(formId), businessId);
         return HttpResponse.success({
             data,
             message: 'All leads deleted successfully',
         });
     }
 
-    /**
-     * Get all leads (global)
-     */
-    @Get('leads')
+    @Get('business/leads')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Get all leads (global)',
-        description: 'Retrieves all leads from all forms.',
+        summary: 'Get all leads for your business',
+        description: 'Retrieves all leads across all forms for your business.',
     })
-    @ApiOkResponse({
-        description: 'All leads retrieved successfully',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getAllLeads() {
-        const data = await this.leadService.getAllLeads();
+    @ApiOkResponse({ description: 'All leads retrieved successfully' })
+    async getAllLeadsForBusiness(@Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadsByBusinessId(businessId);
         return HttpResponse.success({
             data,
             message: 'All leads retrieved successfully',
         });
     }
 
-    /**
-     * Get a specific lead by ID
-     */
-    @Get('leads/:leadId')
+    @Get('business/leads/count')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Get a specific lead by ID',
-        description: 'Retrieves details of a specific lead.',
+        summary: 'Get total lead count for your business',
+        description: 'Returns the total count of leads across all forms.',
     })
-    @ApiOkResponse({
-        description: 'Lead retrieved successfully',
+    @ApiOkResponse({ description: 'Lead count retrieved successfully' })
+    async getBusinessLeadCount(@Request() req) {
+        const businessId = req.user.businessId;
+        const count = await this.leadService.getLeadCountByBusinessId(businessId);
+        return HttpResponse.success({
+            data: { count },
+            message: 'Lead count retrieved successfully',
+        });
+    }
+
+    @Get('leads/:leadId')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({
+        summary: 'Get a specific lead',
+        description: 'Retrieves details of a specific lead belonging to your business.',
     })
-    @ApiNotFoundResponse({
-        description: 'Lead not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getLeadById(@Param('leadId') leadId: string) {
-        const data = await this.leadService.getLeadById(Number(leadId));
+    @ApiOkResponse({ description: 'Lead retrieved successfully' })
+    @ApiNotFoundResponse({ description: 'Lead not found' })
+    async getLeadById(@Param('leadId') leadId: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadById(Number(leadId), businessId);
         return HttpResponse.success({
             data,
             message: 'Lead retrieved successfully',
         });
     }
 
-    /**
-     * Get leads by email
-     */
     @Get('leads/search/:email')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
-        summary: 'Get leads by email',
-        description: 'Searches for leads by email address.',
+        summary: 'Search leads by email',
+        description: 'Searches for leads by email within your business.',
     })
-    @ApiOkResponse({
-        description: 'Leads retrieved successfully',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async getLeadsByEmail(@Param('email') email: string) {
-        const data = await this.leadService.getLeadsByEmail(email);
+    @ApiOkResponse({ description: 'Leads retrieved successfully' })
+    async getLeadsByEmail(@Param('email') email: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.getLeadsByEmail(email, businessId);
         return HttpResponse.success({
             data,
             message: 'Leads retrieved successfully',
         });
     }
 
-    /**
-     * Update a lead
-     */
     @Patch('leads/:leadId')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({
         summary: 'Update a lead',
-        description: 'Updates specific fields of a lead. All fields are optional.',
+        description: 'Updates a lead belonging to your business.',
     })
-    @ApiOkResponse({
-        description: 'Lead updated successfully',
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid input data',
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
+    @ApiOkResponse({ description: 'Lead updated successfully' })
+    @ApiBadRequestResponse({ description: 'Invalid input data' })
+    @ApiNotFoundResponse({ description: 'Lead not found' })
     async updateLead(
         @Param('leadId') leadId: string,
         @Body() dto: UpdateLeadDto,
+        @Request() req
     ) {
-        const data = await this.leadService.updateLead(Number(leadId), dto);
+        const businessId = req.user.businessId;
+        const data = await this.leadService.updateLead(Number(leadId), businessId, dto);
         return HttpResponse.success({
             data,
             message: 'Lead updated successfully',
         });
     }
 
-    /**
-     * Delete a lead
-     */
     @Delete('leads/:leadId')
+    @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Delete a lead',
         description: 'Permanently deletes a specific lead.',
     })
-    @ApiOkResponse({
-        description: 'Lead deleted successfully',
-        schema: {
-            example: {
-                success: true,
-                data: {
-                    success: true,
-                    message: 'Lead with ID 1 deleted successfully',
-                },
-                message: 'Lead deleted successfully',
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Lead not found',
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error occurred',
-    })
-    async deleteLead(@Param('leadId') leadId: string) {
-        const data = await this.leadService.deleteLead(Number(leadId));
+    @ApiOkResponse({ description: 'Lead deleted successfully' })
+    @ApiNotFoundResponse({ description: 'Lead not found' })
+    async deleteLead(@Param('leadId') leadId: string, @Request() req) {
+        const businessId = req.user.businessId;
+        const data = await this.leadService.deleteLead(Number(leadId), businessId);
         return HttpResponse.success({
             data,
             message: 'Lead deleted successfully',
