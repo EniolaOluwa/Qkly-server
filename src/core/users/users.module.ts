@@ -26,7 +26,7 @@ import { WalletsModule } from '../wallets/wallets.module';
         signOptions: { expiresIn: '1h' },
       }),
     }),
-    WalletsModule
+    WalletsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],

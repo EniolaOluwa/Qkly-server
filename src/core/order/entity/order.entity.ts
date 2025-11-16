@@ -21,6 +21,7 @@ import {
   PaymentDetails,
   DeliveryDetails,
   SettlementDetails,
+  RefundDetails,
 } from '../interfaces/order.interface';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -40,6 +41,7 @@ export class Order {
   @Column({ nullable: false })
   @Index()
   userId: number;
+
 
   @ManyToOne(() => User, { nullable: false })
   @JoinColumn({ name: 'userId' })
@@ -158,6 +160,24 @@ export class Order {
 
   @Column({ type: 'json', nullable: true })
   settlementDetails: SettlementDetails;
+
+
+  @Column({ type: 'boolean', default: false })
+  isRefunded: boolean;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  refundedAmount: number;
+
+  @Column({ nullable: true })
+  refundReference: string;
+
+  @Column({ nullable: true })
+  refundDate: Date;
+
+  @Column({ type: 'json', nullable: true })
+  refundDetails: RefundDetails;
+
+
 
   @CreateDateColumn()
   createdAt: Date;

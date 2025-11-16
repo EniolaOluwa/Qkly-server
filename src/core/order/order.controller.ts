@@ -1,5 +1,4 @@
 import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Req, Request, Res, UseGuards } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   ApiBody,
   ApiOperation,
@@ -9,17 +8,21 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common/swagger/api-decorators';
-import { verifyMonnifySignature } from '../../common/utils/webhook.utils';
+import { PaymentService } from '../payment/payment.service';
+import { JwtAuthGuard } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
+import { CreateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';
-import { Public } from '../../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../users';
+import { RefundService } from './refund.service';
+
+
 
 @ApiTags('orders')
 @Controller('orders')
@@ -27,8 +30,10 @@ import { JwtAuthGuard } from '../users';
 export class OrdersController {
   private readonly logger = new Logger(OrdersController.name);
 
-  constructor(private readonly orderService: OrderService,
-    private readonly configService: ConfigService,
+  constructor(
+    private readonly orderService: OrderService,
+    private readonly paymentService: PaymentService,
+    private readonly refundService: RefundService,
   ) { }
 
   @Post()
@@ -55,7 +60,7 @@ export class OrdersController {
   @ApiPaginatedResponse(
     Order,
     'Find all orders with filtering and pagination',
-    'Retrieves all orders with optional filters and pagination'
+    'Retrieves all orders with optional filters and pagination',
   )
   async findAllOrders(
     @Query() query: FindAllOrdersDto & PaginationDto,
@@ -67,7 +72,7 @@ export class OrdersController {
   @ApiPaginatedResponse(
     Order,
     "Get orders for authenticated user's businesses",
-    'Retrieves all orders that belong to businesses owned by the authenticated user.'
+    'Retrieves all orders that belong to businesses owned by the authenticated user.',
   )
   @ApiQuery({
     name: 'page',
@@ -85,9 +90,12 @@ export class OrdersController {
   })
   async findOrdersForMyBusinesses(
     @Request() req,
-    @Query() paginationDto: PaginationDto
+    @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(req.user.userId, paginationDto);
+    return await this.orderService.findOrdersByUserId(
+      req.user.userId,
+      paginationDto,
+    );
   }
 
   @Get('user')
@@ -95,32 +103,46 @@ export class OrdersController {
   @ApiPaginatedResponse(
     Order,
     'Get orders for authenticated user',
-    'Retrieves orders for the authenticated user using JWT token.'
+    'Retrieves orders for the authenticated user using JWT token.',
   )
   async findOrdersForCurrentUser(
     @Request() req,
-    @Query() paginationDto: PaginationDto
+    @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(req.user.userId, paginationDto);
+    return await this.orderService.findOrdersByUserId(
+      req.user.userId,
+      paginationDto,
+    );
   }
 
   @Get('user/:userId')
   @ApiAuth()
-  @ApiFindOneDecorator(Order, 'userId', 'Retrieves orders for a specific user. Returns paginated list.')
+  @ApiFindOneDecorator(
+    Order,
+    'userId',
+    'Retrieves orders for a specific user. Returns paginated list.',
+  )
   async findOrdersByUserId(
     @Param('userId', ParseIntPipe) userId: number,
-    @Query() paginationDto: PaginationDto
+    @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
     return await this.orderService.findOrdersByUserId(userId, paginationDto);
   }
 
   @Get('business/:businessId')
-  @ApiFindOneDecorator(Order, 'businessId', 'Retrieves orders for a specific business. Returns paginated list.')
+  @ApiFindOneDecorator(
+    Order,
+    'businessId',
+    'Retrieves orders for a specific business. Returns paginated list.',
+  )
   async findOrdersByBusinessId(
     @Param('businessId', ParseIntPipe) businessId: number,
-    @Query() paginationDto: PaginationDto
+    @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByBusinessId(businessId, paginationDto);
+    return await this.orderService.findOrdersByBusinessId(
+      businessId,
+      paginationDto,
+    );
   }
 
   @Get(':id')
@@ -130,11 +152,15 @@ export class OrdersController {
     return await this.orderService.findOrderById(id);
   }
 
+  // ============================================================
+  // PAYMENT ENDPOINTS (Updated API Documentation)
+  // ============================================================
+
   @Post('payment/initialize')
   @ApiAuth()
   @ApiOperation({
     summary: 'Initialize payment for order',
-    description: 'Initializes payment with Monnify and returns checkout URL',
+    description: 'Initializes payment with configured payment provider (Monnify/Paystack) and returns checkout URL',
   })
   @ApiBody({ type: InitiatePaymentDto })
   @ApiResponse({
@@ -157,7 +183,7 @@ export class OrdersController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Verify payment status',
-    description: 'Verifies payment status with Monnify',
+    description: 'Verifies payment status with configured payment provider',
   })
   @ApiBody({ type: VerifyPaymentDto })
   @ApiResponse({
@@ -196,7 +222,9 @@ export class OrdersController {
     status: HttpStatus.CONFLICT,
     description: 'Payment already processed',
   })
-  async processPayment(@Body() processPaymentDto: ProcessPaymentDto): Promise<Order> {
+  async processPayment(
+    @Body() processPaymentDto: ProcessPaymentDto,
+  ): Promise<Order> {
     return await this.orderService.processPayment(processPaymentDto);
   }
 
@@ -223,7 +251,7 @@ export class OrdersController {
   })
   async updateOrderStatus(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateStatusDto: UpdateOrderStatusDto
+    @Body() updateStatusDto: UpdateOrderStatusDto,
   ): Promise<Order> {
     return await this.orderService.updateOrderStatus(id, updateStatusDto);
   }
@@ -257,43 +285,13 @@ export class OrdersController {
   async updateOrderItemStatus(
     @Param('orderId', ParseIntPipe) orderId: number,
     @Param('itemId', ParseIntPipe) itemId: number,
-    @Body() updateStatusDto: UpdateOrderItemStatusDto
+    @Body() updateStatusDto: UpdateOrderItemStatusDto,
   ): Promise<OrderItem> {
-    return await this.orderService.updateOrderItemStatus(orderId, itemId, updateStatusDto);
-  }
-
-  @Get(':id/invoice')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Generate invoice for order',
-    description: 'Generates a PDF invoice for the order',
-  })
-  @ApiParam({
-    name: 'id',
-    required: true,
-    description: 'Order ID',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Invoice generated successfully',
-  })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Order not found',
-  })
-  async generateInvoice(
-    @Param('id', ParseIntPipe) id: number,
-    @Res() res: Response
-  ) {
-    const pdfBuffer = await this.orderService.generateInvoice(id);
-
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename=invoice-${id}.pdf`,
-      'Content-Length': pdfBuffer.length,
-    });
-
-    res.end(pdfBuffer);
+    return await this.orderService.updateOrderItemStatus(
+      orderId,
+      itemId,
+      updateStatusDto,
+    );
   }
 
   @Delete(':id')
@@ -319,65 +317,225 @@ export class OrdersController {
   async deleteOrder(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return await this.orderService.deleteOrder(id);
   }
+
+
   @Public()
   @Post('webhook/monnify')
   @HttpCode(200)
+  @ApiOperation({
+    summary: 'Monnify webhook handler',
+    description: 'Receives and processes payment webhooks from Monnify',
+  })
   async handleMonnifyWebhook(
     @Headers('monnify-signature') signature: string,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response, // Add passthrough: true
+    @Res({ passthrough: true }) response: Response,
   ) {
     try {
       this.logger.log('Received Monnify webhook');
 
-      const rawBody = (request as any).rawBody;
       const webhookData = request.body as any;
-
-      this.logger.log(`Raw body: ${rawBody}`);
-      this.logger.log(`Webhook data: ${JSON.stringify(webhookData)}`);
+      const rawBody = (request as any).rawBody;
 
       if (!webhookData) {
         this.logger.error('Webhook data is missing from request body');
         return {
           success: false,
-          message: 'Invalid webhook data'
+          message: 'Invalid webhook data',
         };
       }
 
       this.logger.log(`Webhook event type: ${webhookData.eventType}`);
 
-      const clientSecret = this.configService.get<string>('MONNIFY_SECRET_KEY');
-      if (signature && clientSecret && rawBody) {
-        const isValid = verifyMonnifySignature(signature, rawBody, clientSecret);
+      // Validate webhook signature using PaymentService
+      if (signature && rawBody) {
+        const isValid = this.paymentService.validateWebhookSignature(
+          webhookData,
+          signature,
+        );
+
         if (!isValid) {
-          this.logger.error('Invalid Monnify signature');
+          this.logger.error('Invalid Monnify webhook signature');
           return {
             success: false,
-            message: 'Invalid signature'
+            message: 'Invalid signature',
           };
         }
+        this.logger.log('Monnify webhook signature validated successfully');
       } else {
-        this.logger.warn('Monnify signature verification skipped');
+        this.logger.warn('Monnify signature verification skipped - missing signature or body');
       }
 
-      this.orderService.processPaymentWebhook(webhookData)
-        .then(result => {
-          this.logger.log(`Webhook processed successfully`);
+      // Process webhook asynchronously
+      this.orderService
+        .processPaymentWebhook(webhookData)
+        .then((result) => {
+          this.logger.log(
+            `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
+          );
         })
-        .catch(error => {
-          this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
+        .catch((error) => {
+          this.logger.error(
+            `Error processing Monnify webhook: ${error.message}`,
+            error.stack,
+          );
         });
 
       return {
         success: true,
-        message: 'Webhook received'
+        message: 'Webhook received',
       };
     } catch (error) {
-      this.logger.error(`Error handling webhook: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error handling Monnify webhook: ${error.message}`,
+        error.stack,
+      );
       return {
         success: false,
-        message: 'Error processing webhook'
+        message: 'Error processing webhook',
       };
     }
+  }
+
+  @Public()
+  @Post('webhook/paystack')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Paystack webhook handler',
+    description: 'Receives and processes payment webhooks from Paystack',
+  })
+  async handlePaystackWebhook(
+    @Headers('x-paystack-signature') signature: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    try {
+
+
+      this.logger.log('Received Paystack webhook');
+
+      const webhookData = request.body as any;
+
+      if (!webhookData) {
+        this.logger.error('Webhook data is missing from request body');
+        return {
+          success: false,
+          message: 'Invalid webhook data',
+        };
+      }
+
+      this.logger.log(`Webhook event type: ${webhookData.event}`);
+
+
+
+      // Validate webhook signature using PaymentService
+      if (signature) {
+        const isValid = this.paymentService.validateWebhookSignature(
+          webhookData,
+          signature,
+        );
+
+        if (!isValid) {
+          this.logger.error('Invalid Paystack webhook signature');
+          return {
+            success: false,
+            message: 'Invalid signature',
+          };
+        }
+        this.logger.log('Paystack webhook signature validated successfully');
+      } else {
+        this.logger.warn('Paystack signature verification skipped - missing signature');
+      }
+
+      // Process webhook asynchronously
+      this.orderService
+        .processPaymentWebhook(webhookData)
+        .then((result) => {
+          this.logger.log(
+            `Paystack webhook processed successfully: ${JSON.stringify(result)}`,
+          );
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Error processing Paystack webhook: ${error.message}`,
+            error.stack,
+          );
+        });
+
+      return {
+        success: true,
+        message: 'Webhook received',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error handling Paystack webhook: ${error.message}`,
+        error.stack,
+      );
+      return {
+        success: false,
+        message: 'Error processing webhook',
+      };
+    }
+  }
+
+  @Get('payment/provider')
+  @ApiAuth()
+  @ApiOperation({
+    summary: 'Get active payment provider',
+    description: 'Returns the currently configured payment provider (MONNIFY or PAYSTACK)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Payment provider retrieved successfully',
+    schema: {
+      example: {
+        provider: 'PAYSTACK',
+        status: 'active',
+      },
+    },
+  })
+  async getPaymentProvider() {
+    return {
+      provider: this.paymentService.getActiveProvider(),
+      status: 'active',
+    };
+  }
+
+
+  @Get('payment/health')
+  @Public()
+  @ApiOperation({
+    summary: 'Check payment system health',
+    description: 'Verifies connectivity with the configured payment provider',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Payment system is healthy',
+  })
+  async checkPaymentHealth() {
+    return await this.paymentService.healthCheck();
+  }
+
+
+  @Post('refund')
+  @ApiOperation({ summary: 'Process a refund for an order' })
+  @ApiResponse({ status: 200, description: 'Refund processed successfully' })
+  async processRefund(
+    @Body() createRefundDto: CreateRefundDto,
+    @Request() req
+  ): Promise<any> {
+
+    const userId = req.user.id
+    return await this.refundService.processRefund(createRefundDto, userId);
+  }
+
+  /**
+   * Get refund history for an order
+   */
+  @Get(':orderId/refunds')
+  @ApiOperation({ summary: 'Get refund history for an order' })
+  @ApiResponse({ status: 200, description: 'Refund history retrieved' })
+  async getOrderRefunds(@Param('orderId') orderId: number): Promise<any> {
+    return await this.refundService.getOrderRefunds(orderId);
   }
 }
