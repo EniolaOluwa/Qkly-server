@@ -26,6 +26,9 @@ import {
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
+import { EmailService } from '../email/email.service';
+import { MailDispatcherDto } from '../email/dto/sendMail.dto';
+import { signup } from '../email/templates/register.template';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -44,7 +47,9 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
+    private readonly emailService: EmailService,
   ) { }
+
 
   async registerUser(
     registerUserDto: RegisterUserDto,
@@ -58,7 +63,6 @@ export class UsersService {
         throw new ConflictException('User with this email already exists');
       }
 
-
       // Check if user with phone already exists
       const existingUserByPhone = await this.userRepository.findOne({
         where: { phone: registerUserDto.phone },
@@ -70,7 +74,6 @@ export class UsersService {
 
       // Hash the password
       const hashedPassword = CryptoUtil.hashPassword(registerUserDto.password);
-
 
       // Create new user
       const user = this.userRepository.create({
@@ -100,6 +103,19 @@ export class UsersService {
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
 
+      // email service 
+      const emailDispatcherPayload: MailDispatcherDto = {
+        to: user.email,
+        from: 'onboarding@resend.dev',
+        subject: 'Welcome message',
+        html: signup(user.firstName),
+      };
+
+  
+      // send mail to user
+      this.emailService.emailDispatcher(emailDispatcherPayload);
+
+
       // Return user information with token
       return {
         message: 'User registered successfully',
@@ -116,13 +132,14 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-      console.log("error:", error);
+    
       if (error instanceof ConflictException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to register user');
     }
   }
+
 
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
