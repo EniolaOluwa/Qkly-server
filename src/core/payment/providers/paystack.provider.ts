@@ -47,7 +47,7 @@ export class PaystackProvider extends IPaymentProvider {
     this.secretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
     this.preferredBank = this.configService.get<string>(
       'PAYSTACK_PREFERRED_BANK',
-      'wema-bank',
+      'test-bank',
     );
 
     if (!this.secretKey) {
@@ -81,6 +81,10 @@ export class PaystackProvider extends IPaymentProvider {
         preferred_bank: this.preferredBank,
         country: 'NG',
       };
+
+
+      console.log({ payload })
+
 
       this.logger.log(`Creating Paystack DVA for ${dto.customerEmail}`);
 

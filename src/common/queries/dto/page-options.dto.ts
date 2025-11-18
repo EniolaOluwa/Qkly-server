@@ -8,9 +8,6 @@ export enum PaginationOrder {
   DESC = 'DESC',
 }
 
-
-
-
 export class PaginationDto {
   @ApiPropertyOptional({
     enum: PaginationOrder,

@@ -9,7 +9,9 @@ import {
   IsOptional,
   IsArray,
   IsUrl,
-  IsBoolean
+  IsBoolean,
+  IsEmail,
+  MaxLength
 } from 'class-validator';
 
 export class CreateReviewDto {
@@ -51,6 +53,7 @@ export class CreateReviewDto {
   })
   @IsNotEmpty()
   @IsString()
+  @MaxLength(2000)
   review: string;
 
   @ApiProperty({
@@ -83,6 +86,20 @@ export class CreateReviewDto {
   @IsOptional()
   @IsBoolean()
   isVisible?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  guestName?: string;
+
+  @IsOptional()
+  @IsEmail()
+  guestEmail?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  guestPhone?: string;
 }
 
 export class ReviewResponseDto {
@@ -188,4 +205,15 @@ export class UpdateReviewDto {
   @IsOptional()
   @IsBoolean()
   isVisible?: boolean;
+}
+
+
+export class GuestReviewVerificationDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @IsString()
+  @IsNotEmpty()
+  orderReference: string;
 }

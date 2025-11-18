@@ -38,12 +38,12 @@ export class Order {
   @Column({ unique: true, nullable: false })
   orderReference: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: true })
   @Index()
   userId: number;
 
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
 

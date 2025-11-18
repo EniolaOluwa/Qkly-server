@@ -551,8 +551,6 @@ export class LeadResponseDto {
 }
 
 
-
-
 export class LeadFilterDto {
   @ApiPropertyOptional({
     example: 'new',
@@ -602,37 +600,4 @@ export class LeadFilterDto {
   @IsOptional()
   @IsEmail()
   email?: string;
-}
-
-export class PaginationDto {
-  @ApiPropertyOptional({ example: 1, default: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({ example: 10, default: 10 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 10;
-
-  @ApiPropertyOptional({
-    example: 'createdAt',
-    enum: ['createdAt', 'email', 'name', 'status']
-  })
-  @IsOptional()
-  @IsString()
-  sortBy?: string = 'createdAt';
-
-  @ApiPropertyOptional({
-    example: 'DESC',
-    enum: ['ASC', 'DESC']
-  })
-  @IsOptional()
-  @IsEnum(['ASC', 'DESC'])
-  sortOrder?: 'ASC' | 'DESC' = 'DESC';
 }

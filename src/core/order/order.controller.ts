@@ -63,7 +63,7 @@ export class OrdersController {
     'Retrieves all orders with optional filters and pagination',
   )
   async findAllOrders(
-    @Query() query: FindAllOrdersDto & PaginationDto,
+    @Query() query: FindAllOrdersDto,
   ): Promise<PaginationResultDto<Order>> {
     return await this.orderService.findAllOrders(query);
   }

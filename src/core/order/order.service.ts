@@ -345,7 +345,7 @@ export class OrderService {
   }
 
   async findAllOrders(
-    query: FindAllOrdersDto & PaginationDto,
+    query: FindAllOrdersDto
   ): Promise<PaginationResultDto<Order>> {
     try {
       const {

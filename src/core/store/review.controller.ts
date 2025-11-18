@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -17,17 +18,21 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/queries/dto';
-import { CreateReviewDto, ReviewResponseDto, UpdateReviewDto } from './dto/create-review.dto';
+import {
+  CreateReviewDto,
+  GuestReviewVerificationDto,
+  ReviewResponseDto,
+  UpdateReviewDto
+} from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
 import { ReviewService } from './review.service';
-
-
 
 @ApiTags('reviews')
 @Controller('reviews')
@@ -36,11 +41,17 @@ import { ReviewService } from './review.service';
 export class ReviewController {
   constructor(private readonly reviewService: ReviewService) { }
 
+  @Public()
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a product review',
-    description: 'Create a review for a product. The order must be delivered to allow review creation. Only one review per order item is allowed.',
+    description: `Create a review for a product. Supports both authenticated and guest users.
+    
+    **Authenticated Users**: Provide JWT token, no guest fields needed.
+    **Guest Users**: No JWT token required, must provide guestName and guestEmail that matches the order email.
+    
+    The order must be delivered to allow review creation. Only one review per order item is allowed.`,
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -49,7 +60,7 @@ export class ReviewController {
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Bad request - Order not delivered, review already exists for this order, or validation errors',
+    description: 'Bad request - Order not delivered, review already exists, guest fields missing, or email mismatch',
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -59,13 +70,19 @@ export class ReviewController {
     @Request() req,
     @Body() reviewData: CreateReviewDto
   ): Promise<Review> {
-    return await this.reviewService.createReview(req.user.userId, reviewData);
+    // req.user will be undefined for guest users (due to @Public decorator)
+    const userId = req.user?.userId || null;
+    return await this.reviewService.createReview(userId, reviewData);
   }
 
+  @Public()
   @Patch(':id')
   @ApiOperation({
     summary: 'Update a product review',
-    description: 'Update a review that the authenticated user created.',
+    description: `Update a review. Supports both authenticated and guest users.
+    
+    **Authenticated Users**: Provide JWT token. Review must belong to the authenticated user.
+    **Guest Users**: Must provide email and orderReference in the request body for verification.`,
   })
   @ApiParam({
     name: 'id',
@@ -78,22 +95,44 @@ export class ReviewController {
     type: ReviewResponseDto,
   })
   @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Bad request - Missing guest verification or order reference mismatch',
+  })
+  @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Review not found or does not belong to user',
+    description: 'Review not found or does not belong to user/email',
   })
   async updateReview(
     @Request() req,
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateData: UpdateReviewDto
+    @Body() body: UpdateReviewDto & Partial<GuestReviewVerificationDto>
   ): Promise<Review> {
-    return await this.reviewService.updateReview(req.user.userId, id, updateData);
+    const userId = req.user?.userId || null;
+
+    // Extract update data and guest verification separately
+    const { email, orderReference, ...updateData } = body;
+
+    const guestVerification = email && orderReference
+      ? { email, orderReference }
+      : undefined;
+
+    return await this.reviewService.updateReview(
+      userId,
+      id,
+      updateData,
+      guestVerification
+    );
   }
 
+  @Public()
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete a product review',
-    description: 'Delete a review that the authenticated user created.',
+    description: `Delete a review. Supports both authenticated and guest users.
+    
+    **Authenticated Users**: Provide JWT token. Review must belong to the authenticated user.
+    **Guest Users**: Must provide email and orderReference in the request body for verification.`,
   })
   @ApiParam({
     name: 'id',
@@ -105,21 +144,27 @@ export class ReviewController {
     description: 'Review deleted successfully',
   })
   @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Bad request - Missing guest verification or order reference mismatch',
+  })
+  @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Review not found or does not belong to user',
+    description: 'Review not found or does not belong to user/email',
   })
   async deleteReview(
     @Request() req,
-    @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number,
+    @Body() guestVerification?: GuestReviewVerificationDto
   ): Promise<void> {
-    return await this.reviewService.deleteReview(req.user.userId, id);
+    const userId = req.user?.userId || null;
+    return await this.reviewService.deleteReview(userId, id, guestVerification);
   }
 
   @Public()
   @Get('product/:productId')
   @ApiOperation({
     summary: 'Get reviews for a product',
-    description: 'Retrieve all reviews for a specific product with pagination.',
+    description: 'Retrieve all visible reviews for a specific product with pagination. Public endpoint.',
   })
   @ApiParam({
     name: 'productId',
@@ -142,7 +187,7 @@ export class ReviewController {
   @Get('business/:businessId')
   @ApiOperation({
     summary: 'Get reviews for a business',
-    description: 'Retrieve all reviews for a specific business with pagination.',
+    description: 'Retrieve all visible reviews for a specific business with pagination. Public endpoint.',
   })
   @ApiParam({
     name: 'businessId',
@@ -165,7 +210,7 @@ export class ReviewController {
   @Get('product/:productId/stats')
   @ApiOperation({
     summary: 'Get review statistics for a product',
-    description: 'Retrieve review statistics including average rating and rating distribution.',
+    description: 'Retrieve review statistics including total reviews, average rating, rating distribution, and authenticated vs guest review counts. Public endpoint.',
   })
   @ApiParam({
     name: 'productId',
@@ -175,6 +220,28 @@ export class ReviewController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Review statistics retrieved successfully',
+    schema: {
+      example: {
+        totalReviews: 150,
+        averageRating: 4.5,
+        authenticatedReviews: 100,
+        guestReviews: 50,
+        ratingCounts: {
+          rating1: 5,
+          rating2: 10,
+          rating3: 15,
+          rating4: 40,
+          rating5: 80
+        },
+        ratingDistribution: [
+          { rating: 1, count: 5 },
+          { rating: 2, count: 10 },
+          { rating: 3, count: 15 },
+          { rating: 4, count: 40 },
+          { rating: 5, count: 80 }
+        ]
+      }
+    }
   })
   async getProductReviewStats(
     @Param('productId', ParseIntPipe) productId: number,
@@ -182,15 +249,50 @@ export class ReviewController {
     return await this.reviewService.getProductReviewStats(productId);
   }
 
+  @Public()
+  @Get('guest')
+  @ApiOperation({
+    summary: 'Get reviews by guest email',
+    description: 'Retrieve all reviews created by a guest user using their email address. Public endpoint.',
+  })
+  @ApiQuery({
+    name: 'email',
+    required: true,
+    description: 'Guest email address to search for',
+    example: 'john@example.com'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Guest reviews retrieved successfully',
+    type: [ReviewResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Email query parameter is required',
+  })
+  async getReviewsByGuestEmail(
+    @Query('email') email: string,
+    @Query() paginationDto: PaginationDto,
+  ) {
+    if (!email) {
+      throw new BadRequestException('Email query parameter is required');
+    }
+    return await this.reviewService.findReviewsByGuestEmail(email, paginationDto);
+  }
+
   @Get('user')
   @ApiOperation({
     summary: 'Get reviews by authenticated user',
-    description: 'Retrieve all reviews created by the authenticated user with pagination.',
+    description: 'Retrieve all reviews created by the authenticated user with pagination. Requires authentication.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Reviews retrieved successfully',
     type: [ReviewResponseDto],
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Unauthorized - JWT token required',
   })
   async getUserReviews(
     @Request() req,
@@ -203,7 +305,7 @@ export class ReviewController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get a specific review by ID',
-    description: 'Retrieve a specific review by its ID.',
+    description: 'Retrieve a specific review by its ID with all related information. Public endpoint.',
   })
   @ApiParam({
     name: 'id',
