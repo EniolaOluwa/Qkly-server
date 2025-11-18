@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, OneToMany, JoinColumn, BeforeInsert } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entity/user.entity';
 import { Leads } from './leads.entity';
 import { shortUUID } from '../../../common/utils/uuid.utils';
 

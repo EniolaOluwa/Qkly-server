@@ -13,9 +13,9 @@ import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { User } from './user.entity';
-import { Otp, OtpType, OtpPurpose } from './otp.entity';
-import { OnboardingStep } from './onboarding-step.enum';
+import { User } from './entity/user.entity';
+import { Otp, OtpType, OtpPurpose } from './entity/otp.entity';
+import { OnboardingStep } from './dto/onboarding-step.enum';
 import {
   RegisterUserDto,
   RegisterUserResponseDto,
@@ -23,12 +23,20 @@ import {
   LoginResponseDto,
   KycVerificationResponseDto,
   CreatePinResponseDto,
+  UpdateBusinessDto,
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { EmailService } from '../email/email.service';
 import { MailDispatcherDto } from '../email/dto/sendMail.dto';
 import { signup } from '../email/templates/register.template';
+import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
+import { Business } from '../businesses/business.entity';
+import { StoreFrontService } from '../store-front/store-front.service';
+import { UpdateStoreFrontDto } from '../store-front/dto/update-store-front.dto';
+import { InsightsService } from '../insights/insights.service';
+import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
+import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -43,11 +51,15 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
+    @InjectRepository(Business)
+    private businessRepository: Repository<Business>,
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
     private readonly emailService: EmailService,
+    private readonly storeFrontService: StoreFrontService,
+    private readonly insightsService: InsightsService,
   ) { }
 
 
@@ -59,6 +71,7 @@ export class UsersService {
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
+
       if (existingUserByEmail) {
         throw new ConflictException('User with this email already exists');
       }
@@ -140,7 +153,6 @@ export class UsersService {
     }
   }
 
-
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
   }
@@ -218,6 +230,7 @@ export class UsersService {
     }
   }
 
+  // Termii sms otp
   async generatePhoneOtp(
     userId: number,
     phone: string,
@@ -335,6 +348,7 @@ export class UsersService {
     }
   }
 
+  // KYC - dojah
   async verifyBvnWithSelfie(
     userId: number,
     bvn: string,
@@ -502,6 +516,7 @@ export class UsersService {
   }
 
 
+  // Pin creation
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
       // Validate PIN format (4 digits only)
@@ -727,6 +742,7 @@ export class UsersService {
     }
   }
 
+  // Password api
   async forgotPassword(email: string): Promise<{
     message: string;
     maskedPhone: string;
@@ -787,6 +803,217 @@ export class UsersService {
     }
   }
 
+  async resetPassword(
+    newPassword: string,
+    resetToken: string,
+  ): Promise<{ message: string; success: boolean }> {
+    try {
+      // Find the reset token in the database
+      const tokenRecord = await this.otpRepository.findOne({
+        where: {
+          otp: resetToken, // Full UUID stored in OTP field
+          otpType: OtpType.EMAIL,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!tokenRecord) {
+        throw new UnauthorizedException('Invalid or expired reset token');
+      }
+
+      // Check if token has expired
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Reset token has expired');
+      }
+
+      // Find user by ID from token record
+      const user = await this.userRepository.findOne({
+        where: { id: tokenRecord.userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Mark the reset token as used
+      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
+
+      // Hash the new password
+      const hashedPassword = CryptoUtil.hashPassword(newPassword);
+
+      // Update user's password
+      await this.userRepository.update(user.id, {
+        password: hashedPassword,
+      });
+
+      // Invalidate any remaining unused password reset OTPs for this user for security
+      await this.otpRepository.update(
+        {
+          userId: user.id,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        { isUsed: true },
+      );
+
+      return {
+        message: 'Password reset successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to reset password');
+    }
+  }
+
+  async verifyPasswordResetOtp(
+    email: string,
+    otpCode: string,
+  ): Promise<{ message: string; verified: boolean; resetToken?: string }> {
+    try {
+      // Find user by email
+      const user = await this.userRepository.findOne({ where: { email } });
+
+      if (!user) {
+        throw new NotFoundException('User with this email not found');
+      }
+
+      // Find the most recent unused password reset OTP for this user
+      const otp = await this.otpRepository.findOne({
+        where: {
+          userId: user.id,
+          otp: otpCode,
+          otpType: OtpType.PHONE,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!otp) {
+        throw new BadRequestException(
+          'Invalid OTP or OTP not found. Please request a new password reset.',
+        );
+      }
+
+      // Check if OTP has expired
+      if (otp.expiresAt < new Date()) {
+        throw new BadRequestException(
+          'OTP has expired. Please request a new password reset.',
+        );
+      }
+
+      // Mark OTP as used
+      await this.otpRepository.update(otp.id, { isUsed: true });
+
+      // Generate a UUID reset token (valid for 15 minutes)
+      const resetToken = require('crypto').randomUUID();
+
+      // Store the reset token in the OTP table for 15 minutes validity
+      const resetTokenOtp = this.otpRepository.create({
+        userId: user.id,
+        otp: resetToken, // Store the full UUID
+        otpType: OtpType.EMAIL, // Use EMAIL type for reset tokens
+        purpose: OtpPurpose.PASSWORD_RESET,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes validity
+        isUsed: false,
+      });
+
+      await this.otpRepository.save(resetTokenOtp);
+
+      return {
+        message: 'OTP verified successfully. You can now reset your password.',
+        verified: true,
+        resetToken,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Failed to verify password reset OTP',
+      );
+    }
+  }
+
+  // settings - change password
+  async changePassword(
+ changePassword: ChangePasswordDto
+  ): Promise<{ message: string; success: boolean }> {
+    try {
+      // Validate inputs
+      if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
+        throw new BadRequestException('User ID, old password, and new password are required');
+      }
+
+      if (changePassword.oldPassword === changePassword.newPassword) {
+        throw new BadRequestException('New password must be different from old password');
+      }
+
+      if(changePassword.newPassword !== changePassword.confirmPassword){
+        throw new BadRequestException('password must match')
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: Number(changePassword.userId) } });
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Verify old password matches
+      if (!CryptoUtil.verifyPassword(changePassword.oldPassword, user.password)) {
+        throw new UnauthorizedException('Invalid current password');
+      }
+
+      // Hash new password
+      const hashedPassword = CryptoUtil.hashPassword(changePassword.newPassword);
+
+      // Update user password
+      await this.userRepository.update(changePassword.userId, { password: hashedPassword });
+
+      this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
+
+      return {
+        message: 'Password changed successfully',
+        success: true,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
+      throw new InternalServerErrorException('Failed to change password');
+    }
+  }
+
+  async updateBusinessDetails(
+    updateBusiness: UpdateBusinessDto,
+    userId: number,
+  ) {
+    try {
+      const business = await this.businessRepository.findOne({
+        where: { userId },
+      });
+
+      if (!business) {
+        throw new NotFoundException('Business record not found');
+      }
+
+      Object.assign(business, updateBusiness);
+
+      return await this.businessRepository.save(business);
+    } catch (error) {
+      throw new InternalServerErrorException('failed to update business');
+    }
+  }
+  
   private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
     try {
       const termiiBaseUrl = this.configService.get<string>(
@@ -865,147 +1092,233 @@ export class UsersService {
     return `${firstPart}${maskedMiddle}${lastPart}`;
   }
 
-  async verifyPasswordResetOtp(
-    email: string,
-    otpCode: string,
-  ): Promise<{ message: string; verified: boolean; resetToken?: string }> {
+  async checkUser(
+    identifier: string | number,
+    identifierType: 'id' | 'email' | 'phone' = 'id',
+  ): Promise<User> {
     try {
-      // Find user by email
-      const user = await this.userRepository.findOne({ where: { email } });
+      // Build where clause based on identifier type
+      let whereClause: any;
+
+      if (identifierType === 'id') {
+        whereClause = { id: Number(identifier) };
+      } else if (identifierType === 'email') {
+        whereClause = { email: identifier };
+      } else if (identifierType === 'phone') {
+        whereClause = { phone: identifier };
+      } else {
+        throw new BadRequestException(`Invalid identifier type: ${identifierType}`);
+      }
+
+      // Find user
+      const user = await this.userRepository.findOne({ where: whereClause });
 
       if (!user) {
-        throw new NotFoundException('User with this email not found');
-      }
-
-      // Find the most recent unused password reset OTP for this user
-      const otp = await this.otpRepository.findOne({
-        where: {
-          userId: user.id,
-          otp: otpCode,
-          otpType: OtpType.PHONE,
-          purpose: OtpPurpose.PASSWORD_RESET,
-          isUsed: false,
-        },
-        order: { createdAt: 'DESC' },
-      });
-
-      if (!otp) {
-        throw new BadRequestException(
-          'Invalid OTP or OTP not found. Please request a new password reset.',
+        throw new NotFoundException(
+          `User not found with ${identifierType}: ${identifier}`,
         );
       }
 
-      // Check if OTP has expired
-      if (otp.expiresAt < new Date()) {
-        throw new BadRequestException(
-          'OTP has expired. Please request a new password reset.',
-        );
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
       }
+      this.logger.error(
+        `Error checking user with ${identifierType}: ${identifier}`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to check user');
+    }
+  }
 
-      // Mark OTP as used
-      await this.otpRepository.update(otp.id, { isUsed: true });
-
-      // Generate a UUID reset token (valid for 15 minutes)
-      const resetToken = require('crypto').randomUUID();
-
-      // Store the reset token in the OTP table for 15 minutes validity
-      const resetTokenOtp = this.otpRepository.create({
-        userId: user.id,
-        otp: resetToken, // Store the full UUID
-        otpType: OtpType.EMAIL, // Use EMAIL type for reset tokens
-        purpose: OtpPurpose.PASSWORD_RESET,
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes validity
-        isUsed: false,
+  async updateStoreFront(
+    userId: number,
+    updateStoreFrontDto: UpdateStoreFrontDto,
+    coverImage?: Express.Multer.File,
+    categoryImages?: Express.Multer.File[],
+  ) {
+    try {
+      // Get user's business
+      const business = await this.businessRepository.findOne({
+        where: { userId },
       });
 
-      await this.otpRepository.save(resetTokenOtp);
+      if (!business) {
+        throw new NotFoundException('Business not found for this user');
+      }
+
+      // Call store-front service to update
+      return await this.storeFrontService.updateStoreFront(
+        business.id,
+        updateStoreFrontDto,
+        coverImage,
+        categoryImages,
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Failed to update store front for user ${userId}:`, error);
+      throw new InternalServerErrorException('Failed to update store front');
+    }
+  }
+
+  async updateUserProfile(
+    userId: number,
+    updateUserProfileDto: UpdateUserProfileDto,
+  ): Promise<{ message: string; user: Partial<User> }> {
+    try {
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Check if email is being updated and if it's already taken
+      if (updateUserProfileDto.email && updateUserProfileDto.email !== user.email) {
+        const existingUser = await this.userRepository.findOne({
+          where: { email: updateUserProfileDto.email },
+        });
+
+        if (existingUser) {
+          throw new ConflictException('Email already in use by another user');
+        }
+      }
+
+      // Check if phone is being updated and if it's already taken
+      if (updateUserProfileDto.phone && updateUserProfileDto.phone !== user.phone) {
+        const existingUser = await this.userRepository.findOne({
+          where: { phone: updateUserProfileDto.phone },
+        });
+
+        if (existingUser) {
+          throw new ConflictException('Phone number already in use by another user');
+        }
+      }
+
+      // Update user fields
+      if (updateUserProfileDto.firstName !== undefined) {
+        user.firstName = updateUserProfileDto.firstName;
+      }
+      if (updateUserProfileDto.lastName !== undefined) {
+        user.lastName = updateUserProfileDto.lastName;
+      }
+      if (updateUserProfileDto.email !== undefined) {
+        user.email = updateUserProfileDto.email;
+        // Reset email verification if email is changed
+        user.isEmailVerified = false;
+      }
+      if (updateUserProfileDto.phone !== undefined) {
+        user.phone = updateUserProfileDto.phone;
+        // Reset phone verification if phone is changed
+        user.isPhoneVerified = false;
+      }
+
+      const updatedUser = await this.userRepository.save(user);
+
+      // Return user without sensitive data
+      const { password, pin, ...userWithoutSensitiveData } = updatedUser;
+
+      this.logger.log(`User profile updated successfully for user ${userId}`);
 
       return {
-        message: 'OTP verified successfully. You can now reset your password.',
-        verified: true,
-        resetToken,
+        message: 'User profile updated successfully',
+        user: userWithoutSensitiveData,
       };
     } catch (error) {
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof ConflictException
       ) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        'Failed to verify password reset OTP',
-      );
+      this.logger.error(`Failed to update user profile for user ${userId}:`, error);
+      throw new InternalServerErrorException('Failed to update user profile');
     }
   }
 
-
-  async resetPassword(
-    newPassword: string,
-    resetToken: string,
+  async changePin(
+    changePinDto: ChangePinDto,
   ): Promise<{ message: string; success: boolean }> {
     try {
-      // Find the reset token in the database
-      const tokenRecord = await this.otpRepository.findOne({
-        where: {
-          otp: resetToken, // Full UUID stored in OTP field
-          otpType: OtpType.EMAIL,
-          purpose: OtpPurpose.PASSWORD_RESET,
-          isUsed: false,
-        },
-        order: { createdAt: 'DESC' },
-      });
-
-      if (!tokenRecord) {
-        throw new UnauthorizedException('Invalid or expired reset token');
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(changePinDto.newPin)) {
+        throw new BadRequestException('New PIN must be exactly 4 digits');
       }
 
-      // Check if token has expired
-      if (tokenRecord.expiresAt < new Date()) {
-        throw new UnauthorizedException('Reset token has expired');
+      if (changePinDto.newPin !== changePinDto.confirmPin) {
+        throw new BadRequestException('New PIN and confirm PIN do not match');
       }
 
-      // Find user by ID from token record
+      if (changePinDto.oldPin === changePinDto.newPin) {
+        throw new BadRequestException('New PIN must be different from old PIN');
+      }
+
+      // Find user by ID
       const user = await this.userRepository.findOne({
-        where: { id: tokenRecord.userId },
+        where: { id: changePinDto.userId },
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
-      // Mark the reset token as used
-      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
+      if (!user.pin) {
+        throw new BadRequestException('User does not have a PIN set. Please create a PIN first.');
+      }
 
-      // Hash the new password
-      const hashedPassword = CryptoUtil.hashPassword(newPassword);
+      // Verify old PIN
+      const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
+      if (!isOldPinValid) {
+        throw new UnauthorizedException('Invalid current PIN');
+      }
 
-      // Update user's password
-      await this.userRepository.update(user.id, {
-        password: hashedPassword,
+      // Encrypt the new PIN
+      const encryptedPin = CryptoUtil.encryptPin(changePinDto.newPin);
+
+      // Update user with new encrypted PIN
+      await this.userRepository.update(changePinDto.userId, {
+        pin: encryptedPin,
       });
 
-      // Invalidate any remaining unused password reset OTPs for this user for security
-      await this.otpRepository.update(
-        {
-          userId: user.id,
-          purpose: OtpPurpose.PASSWORD_RESET,
-          isUsed: false,
-        },
-        { isUsed: true },
-      );
+      this.logger.log(`PIN changed successfully for user ${changePinDto.userId}`);
 
       return {
-        message: 'Password reset successfully',
+        message: 'PIN changed successfully',
         success: true,
       };
     } catch (error) {
       if (
-        error instanceof UnauthorizedException ||
-        error instanceof NotFoundException
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to reset password');
+      this.logger.error(
+        `Failed to change PIN for user ${changePinDto.userId}:`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to change PIN');
     }
   }
+
+  async getInsights(
+    userId: number,
+    query: InsightsQueryDto,
+  ): Promise<InsightsResponseDto> {
+    try {
+      return await this.insightsService.getInsights(userId, query);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(`Failed to get insights for user ${userId}:`, error);
+      throw new InternalServerErrorException('Failed to get insights');
+    }
+  }
+
+  
 }

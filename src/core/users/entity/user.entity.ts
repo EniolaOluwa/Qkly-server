@@ -7,9 +7,9 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { Business } from '../businesses/business.entity';
-import { UserRole } from '../../common/auth/user-role.enum';
-import { OnboardingStep } from './onboarding-step.enum';
+import { Business } from '../../businesses/business.entity';
+import { UserRole } from '../../../common/auth/user-role.enum';
+import { OnboardingStep } from '../dto/onboarding-step.enum';
 
 @Entity('users')
 export class User {

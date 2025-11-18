@@ -4,7 +4,7 @@ import { ReviewService } from './review.service';
 import { Product } from '../product/entity/product.entity';
 import { Review } from './entity/review.entity';
 import { Business } from '../businesses/business.entity';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import { ReviewController } from './review.controller';
 import { OrderItem } from '../order/entity/order-items.entity';
 import { Order } from '../order/entity/order.entity';

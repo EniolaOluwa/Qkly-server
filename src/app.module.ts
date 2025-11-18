@@ -7,7 +7,7 @@ import { AppService } from './app.service';
 import { UsersModule } from './core/users/users.module';
 import { BusinessesModule } from './core/businesses/businesses.module';
 import { WalletsModule } from './core/wallets/wallets.module';
-import { ReviewModule } from './core/store/review.module';
+import { ReviewModule } from './core/review/review.module';
 import { ProductModule } from './core/product/product.module';
 import { OrderModule } from './core/order/order.module';
 import { dataSource } from './database';
@@ -18,6 +18,8 @@ import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
 import { LeadModule } from './core/lead/lead.module';
 import { EmailModule } from './core/email/email.module';
+import { StoreFrontModule } from './core/store-front/store-front.module';
+import { InsightsModule } from './core/insights/insights.module';
 
 
 @Module({
@@ -37,6 +39,8 @@ import { EmailModule } from './core/email/email.module';
     ReviewModule,
     LeadModule,
     CategoryModule,
+    StoreFrontModule,
+    InsightsModule,
   ],
   controllers: [AppController, AdminController],
   providers: [

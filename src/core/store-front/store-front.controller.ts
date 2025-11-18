@@ -1,26 +1,43 @@
 import {
   Controller,
   Get,
+  Post,
+  Patch,
   Param,
   Query,
+  Body,
+  Request,
   ParseIntPipe,
-  HttpStatus
+  HttpStatus,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
+  ValidationPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiParam,
   ApiQuery,
-  ApiResponse
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor, FilesInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { StoreFrontService } from './store-front.service';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
+import { CreateStoreFrontDto } from './dto/create-store-front.dto';
+import { UpdateStoreFrontDto } from './dto/update-store-front.dto';
 import {
   PublicBusinessInfoDto,
   PublicProductDetailDto,
   StoreFrontCategoryDto,
-  PaginatedProductsDto
+  PaginatedProductsDto,
+  StoreFrontResponseDto,
 } from './dto/store-front-response.dto';
 
 @ApiTags('store-front')
@@ -337,6 +354,150 @@ export class StoreFrontController {
       businessId,
       categoryId,
       query
+    );
+  }
+
+  @Post('customize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit per file
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
+        }
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Create store front customization',
+    description: 'Creates a customized store front for the authenticated user\'s business. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Store front created successfully',
+    type: StoreFrontResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Bad request - Invalid input data or missing required fields',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Business not found',
+  })
+  @ApiResponse({
+    status: HttpStatus.CONFLICT,
+    description: 'Store front already exists for this business',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async createStoreFront(
+    @Body(ValidationPipe) createStoreFrontDto: CreateStoreFrontDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req,
+  ): Promise<StoreFrontResponseDto> {
+    // Get business ID from user's business
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException('User ID not found in token');
+    }
+
+    // Find user's business
+    const business = await this.storeFrontService.getBusinessByUserId(userId);
+
+    // Separate files by field name
+    const coverImage = files?.find(file => file.fieldname === 'coverImage');
+    const categoryImages = files?.filter(file => file.fieldname === 'categoryImages') || [];
+
+    if (!coverImage) {
+      throw new BadRequestException('Cover image is required');
+    }
+
+    return this.storeFrontService.createStoreFront(
+      business.id,
+      createStoreFrontDto,
+      coverImage,
+      categoryImages,
+    );
+  }
+
+  @Patch('customize')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(
+    AnyFilesInterceptor({
+      limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB limit per file
+      },
+      fileFilter: (req, file, cb) => {
+        if (!file) {
+          cb(null, true); // Allow no file for updates
+          return;
+        }
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
+        }
+      },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Update store front customization',
+    description: 'Updates the store front customization for the authenticated user\'s business. Requires JWT authentication.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Store front updated successfully',
+    type: StoreFrontResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Bad request - Invalid input data',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Store front not found for this business',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async updateStoreFront(
+    @Body(ValidationPipe) updateStoreFrontDto: UpdateStoreFrontDto,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Request() req,
+  ): Promise<StoreFrontResponseDto> {
+    // Get business ID from user's business
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new BadRequestException('User ID not found in token');
+    }
+
+    // Find user's business
+    const business = await this.storeFrontService.getBusinessByUserId(userId);
+
+    // Separate files by field name
+    const coverImage = files?.find(file => file.fieldname === 'coverImage');
+    const categoryImages = files?.filter(file => file.fieldname === 'categoryImages') || [];
+
+    return this.storeFrontService.updateStoreFront(
+      business.id,
+      updateStoreFrontDto,
+      coverImage,
+      categoryImages,
     );
   }
 }

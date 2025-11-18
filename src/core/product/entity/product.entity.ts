@@ -10,7 +10,7 @@ import {
   Index,
   DeleteDateColumn,
 } from 'typeorm';
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { ProductSize } from './productSize.entity';
 import { Category } from '../../category/entity/category.entity';

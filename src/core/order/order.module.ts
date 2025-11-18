@@ -5,7 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Business } from '../businesses/business.entity';
 import { CategoryModule } from '../category/category.module';
 import { Product } from '../product/entity/product.entity';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';

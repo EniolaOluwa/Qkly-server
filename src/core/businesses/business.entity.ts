@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { BusinessType } from './business-type.entity';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 
 @Entity('businesses')
 export class Business {

@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { catchError, firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,

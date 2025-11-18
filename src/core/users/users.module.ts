@@ -7,19 +7,26 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtStrategy } from '../../common/auth/jwt.strategy';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
-import { Otp } from './otp.entity';
-import { User } from './user.entity';
+import { Otp } from './entity/otp.entity';
+import { User } from './entity/user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { WalletsModule } from '../wallets/wallets.module';
 import { EmailModule } from '../email/email.module';
+import { BusinessesModule } from '../businesses/businesses.module';
+import { Business } from '../businesses/business.entity';
+import { StoreFrontModule } from '../store-front/store-front.module';
+import { InsightsModule } from '../insights/insights.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp]),
+    TypeOrmModule.forFeature([User, Otp, Business]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     EmailModule,
+    BusinessesModule,
+    StoreFrontModule,
+    InsightsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

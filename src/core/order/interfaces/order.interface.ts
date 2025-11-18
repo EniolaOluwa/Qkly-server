@@ -9,6 +9,8 @@ export enum OrderStatus {
   CANCELLED = 'CANCELLED',
   RETURNED = 'RETURNED',
   REFUNDED = 'REFUNDED',
+  COMPLETED = 'COMPLETED'
+
 }
 
 export enum OrderItemStatus {

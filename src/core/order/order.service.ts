@@ -1495,6 +1495,7 @@ export class OrderService {
         OrderStatus.REFUNDED,
       ],
       [OrderStatus.REFUNDED]: [],
+      [OrderStatus.COMPLETED]:[]
     };
 
     // Allow same status (no change)
