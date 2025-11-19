@@ -1,16 +1,5 @@
 import { PaymentEventCustomer } from "../dto/payment.dto";
 
-export enum OrderStatus {
-  PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
-  CONFIRMED = 'CONFIRMED',
-  SHIPPED = 'SHIPPED',
-  DELIVERED = 'DELIVERED',
-  CANCELLED = 'CANCELLED',
-  RETURNED = 'RETURNED',
-  REFUNDED = 'REFUNDED',
-}
-
 export enum OrderItemStatus {
   PENDING = 'PENDING',
   PROCESSING = 'PROCESSING',
@@ -21,16 +10,7 @@ export enum OrderItemStatus {
   REFUNDED = 'REFUNDED',
 }
 
-export enum PaymentStatus {
-  PENDING = 'PENDING',
-  INITIATED = 'INITIATED',
-  PAID = 'PAID',
-  PARTIALLY_PAID = 'PARTIALLY_PAID',
-  FAILED = 'FAILED',
-  REFUNDED = 'REFUNDED',
-  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
-  EXPIRED = 'EXPIRED',
-}
+
 
 export enum PaymentMethod {
   MONNIFY = 'MONNIFY',
@@ -193,4 +173,47 @@ export interface PaymentDetails {
 
   receiptNumber?: string;
   invoiceReference?: string;
+}
+
+
+
+export interface RefundDetails {
+  amount: number;
+  reason: string;
+  refundType: 'FULL' | 'PARTIAL';
+  refundMethod: 'ORIGINAL_PAYMENT' | 'WALLET';
+  customerNote?: string;
+  merchantNote?: string;
+  refundedBy: number; // userId who initiated refund
+  refundedAt: Date;
+  transactions: Array<{
+    type: 'PLATFORM_REFUND' | 'BUSINESS_REFUND';
+    amount: number;
+    reference: string;
+    status: string;
+  }>;
+}
+
+
+
+export enum OrderStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  PROCESSING = 'PROCESSING',
+  SHIPPED = 'SHIPPED',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+  RETURNED = 'RETURNED',
+  REFUNDED = 'REFUNDED', // Add this
+}
+
+export enum PaymentStatus {
+  PENDING = 'PENDING',
+  INITIATED = 'INITIATED',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  REFUNDED = 'REFUNDED', // Add this
+  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
 }

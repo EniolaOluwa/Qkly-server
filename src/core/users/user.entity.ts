@@ -106,6 +106,24 @@ export class User {
   @Column({ type: 'float', nullable: false })
   latitude: number;
 
+
+  @Column({ nullable: true, comment: 'Paystack customer code' })
+  paystackCustomerCode: string;
+
+  @Column({ nullable: true, comment: 'Paystack dedicated account ID' })
+  paystackDedicatedAccountId: string;
+
+  @Column({ type: 'varchar', default: 'PENDING', comment: 'DVA account status' })
+  paystackAccountStatus: string;
+
+
+  @Column({
+    type: 'varchar',
+    default: 'PAYSTACK',
+    comment: 'Payment provider for this user'
+  })
+  paymentProvider: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

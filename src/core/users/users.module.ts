@@ -28,7 +28,7 @@ import { EmailModule } from '../email/email.module';
         signOptions: { expiresIn: '1h' },
       }),
     }),
-    WalletsModule
+    WalletsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],

@@ -223,7 +223,6 @@ export class UsersService {
     phone: string,
   ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
     try {
-      // Find user by ID and phone number
       const user = await this.userRepository.findOne({
         where: { id: userId, phone },
       });
@@ -234,7 +233,6 @@ export class UsersService {
         );
       }
 
-      // Generate 6-digit OTP
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       // Set OTP expiry to 5 minutes from now
@@ -252,6 +250,7 @@ export class UsersService {
       });
 
       await this.otpRepository.save(otp);
+
 
       // Send OTP via Termii SMS
       await this.sendOtpViaTermii(phone, otpCode);

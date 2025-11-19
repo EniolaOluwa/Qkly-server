@@ -18,6 +18,8 @@ import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
 import { LeadModule } from './core/lead/lead.module';
 import { EmailModule } from './core/email/email.module';
+import { PaymentModule } from './core/payment/payment.module';
+import { TransactionService } from './core/transaction/transaction.service';
 
 
 @Module({
@@ -37,6 +39,7 @@ import { EmailModule } from './core/email/email.module';
     ReviewModule,
     LeadModule,
     CategoryModule,
+    PaymentModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
@@ -46,6 +49,7 @@ import { EmailModule } from './core/email/email.module';
       inject: [Reflector],
     },
     AppService,
+    TransactionService,
   ],
 })
 export class AppModule { }

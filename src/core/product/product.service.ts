@@ -89,7 +89,7 @@ export class ProductService {
   }
 
   async findAllProducts(
-    query: FindAllProductsDto & PaginationDto,
+    query: FindAllProductsDto,
   ): Promise<PaginationResultDto<Product>> {
     try {
       const {
@@ -165,7 +165,6 @@ export class ProductService {
 
       // Colors filter
       if (colors && colors.length > 0) {
-        // This will find products that contain ANY of the specified colors
         qb.andWhere(`product.colors && ARRAY[:...colors]`, { colors });
       }
 

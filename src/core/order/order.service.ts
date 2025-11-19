@@ -1,3 +1,5 @@
+//src/core/order/order.service.ts
+
 
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -7,19 +9,19 @@ import { v4 as uuidv4 } from 'uuid';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
+import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users';
-import { WalletsService } from '../wallets/wallets.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
-import { PaymentDtoAdapter } from './dto/payment-dto-adapter.service';
-import { InitiatePaymentDto, MonnifyWebhookDto, PaymentCallbackDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
+import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { DeliveryMethod, OrderItemStatus, OrderStatus, PaymentDetails, PaymentMethod, PaymentStatus, SettlementDetails } from './interfaces/order.interface';
 
 const SETTLEMENT_PERCENTAGE = 0.00;
 const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
+const PLATFORM_FEE_PERCENTAGE = 0
 
 
 @Injectable()
@@ -39,8 +41,7 @@ export class OrderService {
     private readonly businessRepository: Repository<Business>,
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
-    private readonly walletsService: WalletsService,
-    private readonly paymentDtoAdapter: PaymentDtoAdapter,
+    private readonly paymentService: PaymentService, // CHANGED: Use PaymentService
   ) { }
 
 
@@ -48,6 +49,7 @@ export class OrderService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
     try {
       const { businessId, items, ...orderData } = createOrderDto;
 
@@ -58,7 +60,7 @@ export class OrderService {
 
       // Verify business exists
       const business = await this.businessRepository.findOne({
-        where: { id: businessId }
+        where: { id: businessId },
       });
       if (!business) {
         ErrorHelper.NotFoundException('Business not found');
@@ -68,14 +70,13 @@ export class OrderService {
         ErrorHelper.BadRequestException('You do not have access to this business');
       }
 
-      const productIds = items.map(item => item.productId);
-
+      const productIds = items.map((item) => item.productId);
       const products = await this.productRepository.find({
         where: { id: In(productIds) },
-        relations: ['sizes']
+        relations: ['sizes'],
       });
 
-      const productsMap = new Map(products.map(product => [product.id, product]));
+      const productsMap = new Map(products.map((product) => [product.id, product]));
 
       const orderItems: OrderItem[] = [];
       let subtotal = 0;
@@ -106,10 +107,8 @@ export class OrderService {
           );
         }
 
-
         if (product.hasVariation && size) {
           const validSizes: string[] = [];
-
           for (const productSize of product.sizes) {
             if (typeof productSize.value === 'string') {
               validSizes.push(productSize.value);
@@ -149,7 +148,7 @@ export class OrderService {
       // Calculate order totals
       const shippingFee = this.calculateShippingFee(createOrderDto.deliveryMethod);
       const tax = this.calculateTax(subtotal);
-      const discount = 0; // No discount for now, could be calculated based on promo codes
+      const discount = 0;
       const total = subtotal + shippingFee + tax - discount;
 
       // Generate order reference
@@ -195,20 +194,15 @@ export class OrderService {
 
       return completeOrder;
     } catch (error) {
-      // Rollback transaction on error
       await queryRunner.rollbackTransaction();
-
       this.logger.error(`Failed to create order: ${error.message}`, error.stack);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
 
-      ErrorHelper.InternalServerErrorException(
-        `Failed to create order: ${error.message}`,
-      );
+      ErrorHelper.InternalServerErrorException(`Failed to create order: ${error.message}`);
     } finally {
-      // Release query runner
       await queryRunner.release();
     }
   }
@@ -221,64 +215,66 @@ export class OrderService {
     select?: string[];
   }): Promise<Order> {
     try {
-      const { id, orderReference, transactionReference, relations = ['items', 'user', 'business'], select } = options;
+      const {
+        id,
+        orderReference,
+        transactionReference,
+        relations = ['items', 'user', 'business'],
+        select,
+      } = options;
 
-      // Build the base query
       let qb = this.orderRepository.createQueryBuilder('order');
 
-      // Add join conditions
       if (relations.includes('items')) {
         qb = qb.leftJoinAndSelect('order.items', 'items');
       }
-
       if (relations.includes('user')) {
         qb = qb.leftJoinAndSelect('order.user', 'user');
       }
-
       if (relations.includes('business')) {
         qb = qb.leftJoinAndSelect('order.business', 'business');
       }
 
-      // Add where condition based on identifier
       if (id) {
         qb = qb.where('order.id = :id', { id });
       } else if (orderReference) {
         qb = qb.where('order.orderReference = :orderReference', { orderReference });
       } else if (transactionReference) {
-        qb = qb.where('order.transactionReference = :transactionReference', { transactionReference });
+        qb = qb.where('order.transactionReference = :transactionReference', {
+          transactionReference,
+        });
       } else {
         ErrorHelper.BadRequestException('At least one identifier must be provided');
       }
 
-      // Add select fields if provided
       if (select) {
         const selectFields = ['order'];
-
-        if (relations.includes('user') && select.some(field => field.startsWith('user.'))) {
-          selectFields.push(...select.filter(field => field.startsWith('user.')));
+        if (relations.includes('user') && select.some((field) => field.startsWith('user.'))) {
+          selectFields.push(...select.filter((field) => field.startsWith('user.')));
         }
-
-        if (relations.includes('business') && select.some(field => field.startsWith('business.'))) {
-          selectFields.push(...select.filter(field => field.startsWith('business.')));
+        if (
+          relations.includes('business') &&
+          select.some((field) => field.startsWith('business.'))
+        ) {
+          selectFields.push(...select.filter((field) => field.startsWith('business.')));
         }
-
         if (relations.includes('items')) {
           selectFields.push('items');
         }
-
         qb = qb.select(selectFields);
       }
 
       const order = await qb.getOne();
 
-      // This addresses the Type 'Order | null' is not assignable to type 'Order' error
       if (!order) {
         if (id) {
           ErrorHelper.NotFoundException(`Order with ID ${id} not found`);
         } else if (orderReference) {
           ErrorHelper.NotFoundException(`Order with reference ${orderReference} not found`);
         } else if (transactionReference) {
-          ErrorHelper.NotFoundException(`Order with transaction reference ${transactionReference} not found`);
+          ErrorHelper.NotFoundException(
+            `Order with transaction reference ${transactionReference} not found`,
+          );
         } else {
           ErrorHelper.NotFoundException(`Order not found`);
         }
@@ -289,7 +285,6 @@ export class OrderService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-
       this.logger.error(`Failed to find order: ${error.message}`, error.stack);
       ErrorHelper.InternalServerErrorException(`Failed to find order: ${error.message}`);
     }
@@ -300,10 +295,16 @@ export class OrderService {
       id,
       select: [
         'order',
-        'user.id', 'user.firstName', 'user.lastName', 'user.email',
-        'business.id', 'business.businessName', 'business.location', 'business.logo',
-        'items'
-      ]
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.email',
+        'business.id',
+        'business.businessName',
+        'business.location',
+        'business.logo',
+        'items',
+      ],
     });
   }
 
@@ -312,10 +313,16 @@ export class OrderService {
       orderReference,
       select: [
         'order',
-        'user.id', 'user.firstName', 'user.lastName', 'user.email',
-        'business.id', 'business.businessName', 'business.location', 'business.logo',
-        'items'
-      ]
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.email',
+        'business.id',
+        'business.businessName',
+        'business.location',
+        'business.logo',
+        'items',
+      ],
     });
   }
 
@@ -324,15 +331,21 @@ export class OrderService {
       transactionReference,
       select: [
         'order',
-        'user.id', 'user.firstName', 'user.lastName', 'user.email',
-        'business.id', 'business.businessName', 'business.location', 'business.logo',
-        'items'
-      ]
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.email',
+        'business.id',
+        'business.businessName',
+        'business.location',
+        'business.logo',
+        'items',
+      ],
     });
   }
 
   async findAllOrders(
-    query: FindAllOrdersDto & PaginationDto,
+    query: FindAllOrdersDto
   ): Promise<PaginationResultDto<Order>> {
     try {
       const {
@@ -353,7 +366,6 @@ export class OrderService {
         limit,
       } = query;
 
-      // Create QueryBuilder for flexible filtering
       const qb = this.orderRepository
         .createQueryBuilder('order')
         .leftJoinAndSelect('order.user', 'user')
@@ -361,87 +373,63 @@ export class OrderService {
         .leftJoinAndSelect('order.items', 'items')
         .select([
           'order',
-          'user.id', 'user.firstName', 'user.lastName', 'user.email',
-          'business.id', 'business.businessName', 'business.logo',
-          'items'
+          'user.id',
+          'user.firstName',
+          'user.lastName',
+          'user.email',
+          'business.id',
+          'business.businessName',
+          'business.logo',
+          'items',
         ]);
 
-      // Apply filters
-      if (userId) {
-        qb.andWhere('order.userId = :userId', { userId });
-      }
-
-      if (businessId) {
-        qb.andWhere('order.businessId = :businessId', { businessId });
-      }
-
-      if (status) {
-        qb.andWhere('order.status = :status', { status });
-      }
-
-      if (paymentStatus) {
+      if (userId) qb.andWhere('order.userId = :userId', { userId });
+      if (businessId) qb.andWhere('order.businessId = :businessId', { businessId });
+      if (status) qb.andWhere('order.status = :status', { status });
+      if (paymentStatus)
         qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
-      }
-
-      if (paymentMethod) {
+      if (paymentMethod)
         qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
-      }
-
-      if (deliveryMethod) {
+      if (deliveryMethod)
         qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
-      }
+      if (minTotal !== undefined) qb.andWhere('order.total >= :minTotal', { minTotal });
+      if (maxTotal !== undefined) qb.andWhere('order.total <= :maxTotal', { maxTotal });
 
-      if (minTotal !== undefined) {
-        qb.andWhere('order.total >= :minTotal', { minTotal });
-      }
-
-      if (maxTotal !== undefined) {
-        qb.andWhere('order.total <= :maxTotal', { maxTotal });
-      }
-
-      // Full-text search on multiple fields
       if (search) {
         qb.andWhere(
           '(order.orderReference LIKE :search OR ' +
           'order.customerName LIKE :search OR ' +
           'order.customerEmail LIKE :search OR ' +
           'order.customerPhoneNumber LIKE :search)',
-          { search: `%${search}%` }
+          { search: `%${search}%` },
         );
       }
 
       if (startDate) {
-        qb.andWhere('order.createdAt >= :startDate', {
-          startDate: new Date(startDate)
-        });
+        qb.andWhere('order.createdAt >= :startDate', { startDate: new Date(startDate) });
       }
-
       if (endDate) {
-        qb.andWhere('order.createdAt <= :endDate', {
-          endDate: new Date(endDate)
-        });
+        qb.andWhere('order.createdAt <= :endDate', { endDate: new Date(endDate) });
       }
 
-      // Count total results
       const itemCount = await qb.getCount();
 
-      // Apply sorting
       const allowedSortFields = [
-        'id', 'status', 'paymentStatus', 'total', 'createdAt', 'updatedAt'
+        'id',
+        'status',
+        'paymentStatus',
+        'total',
+        'createdAt',
+        'updatedAt',
       ];
-
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
       const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
       qb.orderBy(`order.${validSortBy}`, validSortOrder);
-
-      // Apply pagination
       qb.skip(skip).take(limit);
 
-      // Execute query
       const data = await qb.getMany();
 
-      // Create a proper pagination object with all required fields
       const paginationDto: PaginationDto = {
         skip,
         limit,
@@ -465,7 +453,6 @@ export class OrderService {
   ): Promise<PaginationResultDto<Order>> {
     try {
       const user = await this.userRepository.findOne({ where: { id: userId } });
-
       if (!user) {
         ErrorHelper.NotFoundException(`User with ID ${userId} not found`);
       }
@@ -477,20 +464,16 @@ export class OrderService {
         .where('order.userId = :userId', { userId })
         .select([
           'order',
-          'business.id', 'business.businessName', 'business.logo',
-          'items'
+          'business.id',
+          'business.businessName',
+          'business.logo',
+          'items',
         ]);
 
       const itemCount = await qb.getCount();
-
-      // Get pagination options or set defaults
       const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
 
-      const data = await qb
-        .skip(skip)
-        .take(limit)
-        .orderBy('order.createdAt', order)
-        .getMany();
+      const data = await qb.skip(skip).take(limit).orderBy('order.createdAt', order).getMany();
 
       const paginationDto: PaginationDto = query || {
         skip,
@@ -507,7 +490,6 @@ export class OrderService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-
       this.logger.error(`Failed to find orders by user id: ${error.message}`, error.stack);
       ErrorHelper.InternalServerErrorException(`Failed to find orders: ${error.message}`);
     }
@@ -518,10 +500,7 @@ export class OrderService {
     query?: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
     try {
-      const business = await this.businessRepository.findOne({
-        where: { id: businessId },
-      });
-
+      const business = await this.businessRepository.findOne({ where: { id: businessId } });
       if (!business) {
         ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
       }
@@ -531,24 +510,13 @@ export class OrderService {
         .leftJoinAndSelect('order.items', 'items')
         .leftJoinAndSelect('order.user', 'user')
         .where('order.businessId = :businessId', { businessId })
-        .select([
-          'order',
-          'user.id', 'user.firstName', 'user.lastName', 'user.email',
-          'items'
-        ]);
+        .select(['order', 'user.id', 'user.firstName', 'user.lastName', 'user.email', 'items']);
 
       const itemCount = await qb.getCount();
-
-      // Get pagination options or set defaults
       const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
 
-      const data = await qb
-        .skip(skip)
-        .take(limit)
-        .orderBy('order.createdAt', order)
-        .getMany();
+      const data = await qb.skip(skip).take(limit).orderBy('order.createdAt', order).getMany();
 
-      // Create a proper pagination object
       const paginationDto: PaginationDto = query || {
         skip,
         limit,
@@ -564,199 +532,144 @@ export class OrderService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-
       this.logger.error(`Failed to find orders by business id: ${error.message}`, error.stack);
       ErrorHelper.InternalServerErrorException(`Failed to find orders: ${error.message}`);
     }
   }
 
 
-  private normalizeTransactionReference(reference: string, paymentReference?: string): string {
-    // Handle Monnify prefixed references (MNFY|XX|DATE|NUMBER)
-    if (reference && reference.includes('|')) {
-      // Use payment reference if available or extract from the reference
-      return paymentReference || reference.split('|').pop() || reference;
-    }
-    return reference;
-  }
 
-
-  private mapPaymentProviderStatus(providerStatus: string): {
-    paymentStatus: PaymentStatus,
-    orderStatus: OrderStatus
-  } {
-    const statusUpper = providerStatus.toUpperCase();
-
-    switch (statusUpper) {
-      case 'PAID':
-      case 'SUCCESSFUL':
-        return {
-          paymentStatus: PaymentStatus.PAID,
-          orderStatus: OrderStatus.PROCESSING
-        };
-      case 'PENDING':
-        return {
-          paymentStatus: PaymentStatus.PENDING,
-          orderStatus: OrderStatus.PENDING
-        };
-      case 'FAILED':
-      case 'DECLINED':
-      case 'REVERSED':
-        return {
-          paymentStatus: PaymentStatus.FAILED,
-          orderStatus: OrderStatus.PENDING
-        };
-      case 'EXPIRED':
-      case 'ABANDONED':
-        return {
-          paymentStatus: PaymentStatus.EXPIRED,
-          orderStatus: OrderStatus.PENDING
-        };
-      default:
-        return {
-          paymentStatus: PaymentStatus.PENDING,
-          orderStatus: OrderStatus.PENDING
-        };
-    }
-  }
-
-  private async processOrderPayment(
-    order: Order,
-    paymentData: {
-      paymentMethod: PaymentMethod;
-      paymentStatus: PaymentStatus;
-      orderStatus: OrderStatus;
-      amount?: number;
-      paymentReference?: string;
-      transactionReference?: string;
-      paymentDate?: Date;
-      meta?: any;
-      provider?: string;
-      providerResponse?: any;
-    },
-    entityManager: EntityManager
-  ): Promise<Order> {
+  async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
     try {
-      // Skip processing if payment is already marked as PAID
+      const { orderId } = initiatePaymentDto;
+      const order = await this.findOrderById(orderId);
+
       if (order.paymentStatus === PaymentStatus.PAID) {
-        this.logger.log(`Order ${order.id} is already paid, skipping processing`);
-        return order;
+        throw new ConflictException('Payment already processed');
       }
 
-      // Construct payment details
-      const paymentDetails: PaymentDetails = {
-        paymentMethod: paymentData.paymentMethod,
-        paymentReference: paymentData.paymentReference || order.transactionReference,
-        transactionReference: paymentData.transactionReference || order.transactionReference,
-        paymentDate: paymentData.paymentDate || new Date(),
-        amount: paymentData.amount || order.total,
-        currency: 'NGN',
-        meta: paymentData.meta || {},
-        provider: paymentData.provider,
-        providerResponse: paymentData.providerResponse
-      };
+      const business = await this.businessRepository.findOne({
+        where: { id: order.businessId },
+      });
 
-      // Update order with payment information
-      order.paymentStatus = paymentData.paymentStatus;
-      order.status = paymentData.orderStatus;
-      order.paymentMethod = paymentData.paymentMethod;
-      order.paymentDate = paymentData.paymentDate || new Date();
-      order.paymentDetails = paymentDetails;
-
-      // If payment is successful, update order items status
-      if (paymentData.paymentStatus === PaymentStatus.PAID) {
-        this.logger.log(`Processing successful payment for order ${order.id}`);
-
-        // Update order items status
-        for (const item of order.items) {
-          item.status = OrderItemStatus.PROCESSING;
-          await entityManager.save(OrderItem, item);
-        }
-
-        // Handle business settlement for paid orders
-        await this.handleBusinessSettlement(order.id, entityManager);
+      if (!business) {
+        throw new ConflictException('Business not found');
       }
 
-      // Save the updated order
-      await entityManager.save(Order, order);
+      if (!business.paystackSubaccountCode) {
+        throw new BadRequestException(
+          'Business subaccount not configured. Please contact support.',
+        );
+      }
 
-      return order;
+      // Calculate platform fee
+      const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
+      const platformFee = order.total * (platformFeePercentage / 100);
+
+      // Initialize payment WITH SPLIT
+      const paymentResponse = await this.paymentService.initializePayment({
+        amount: Number(order.total),
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        paymentReference: order.transactionReference,
+        description: `Payment for Order ${order.orderReference}`,
+        currencyCode: 'NGN',
+        redirectUrl: initiatePaymentDto.redirectUrl ?? '',
+        paymentMethods: ['card', 'bank_transfer'],
+        metadata: {
+          orderId: order.id,
+          orderReference: order.orderReference,
+          businessId: business.id,
+          split: {
+            type: 'percentage',
+            platformFee: platformFeePercentage,
+            businessShare: 100 - platformFeePercentage,
+          },
+        },
+        // ADD SPLIT CONFIGURATION
+        subaccount: business.paystackSubaccountCode, // Auto-settle to business
+        transaction_charge: platformFee * 100,
+        bearer: 'account',
+      });
+
+      // Update order
+      await this.orderRepository.update(order.id, {
+        paymentStatus: PaymentStatus.INITIATED,
+      });
+
+      this.logger.log(`Payment with split initialized for order ${order.id}`);
+
+      return paymentResponse;
     } catch (error) {
-      this.logger.error(`Failed to process payment: ${error.message}`, error.stack);
+      this.logger.error('Payment initialization failed:', error);
       throw error;
     }
   }
 
 
-  async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
+  /**
+   * Verify payment using configured payment provider
+   */
+  async verifyPayment(verifyPaymentDto: VerifyPaymentDto): Promise<any> {
     try {
-      const { orderId, paymentMethod, redirectUrl, metadata } = initiatePaymentDto;
+      const { transactionReference } = verifyPaymentDto;
 
-      // Find the order
-      const order = await this.findOrderById(orderId);
-
-      if (order.paymentStatus === PaymentStatus.PAID) {
-        ErrorHelper.ConflictException('Payment has already been processed for this order');
+      let order: Order;
+      try {
+        order = await this.findOrderByTransactionReference(transactionReference);
+      } catch (error) {
+        ErrorHelper.NotFoundException(
+          `Order with transaction reference ${transactionReference} not found`,
+        );
       }
 
-      const monnifyContractCode = this.configService.get<string>('MONNIFY_CONTRACT_CODE');
-      const appUrl = this.configService.get<string>('APP_URL');
-      const actualRedirectUrl = redirectUrl || `${appUrl}/orders/payment-callback`;
+      // Use PaymentService to verify payment
+      const transaction = await this.paymentService.verifyPayment(transactionReference);
 
-      if (!monnifyContractCode) {
-        ErrorHelper.InternalServerErrorException('Monnify contract code not configured');
+      this.logger.log(
+        `Payment verification for order ${order.id}: ${transaction.paymentStatus}`,
+      );
+
+      // If payment is successful and order hasn't been marked as paid, process it
+      if (transaction.paymentStatus === 'SUCCESS' && order.paymentStatus !== PaymentStatus.PAID) {
+        // Process the payment by updating order status
+        await this.processVerifiedPayment(order, transaction);
       }
 
-      const payload = {
-        amount: Number(order.total),
-        customerName: order.customerName,
-        customerEmail: order.customerEmail,
-        paymentReference: order.transactionReference,
-        paymentDescription: `Payment for Order ${order.orderReference}`,
-        currencyCode: 'NGN',
-        contractCode: monnifyContractCode,
-        redirectUrl: actualRedirectUrl,
-        paymentMethods: this.walletsService.getPaymentMethodsForMonnify(paymentMethod),
-        metadata: {
-          orderId: order.id,
-          orderReference: order.orderReference,
-          ...metadata,
-        },
-      };
-
-      const paymentResponse = await this.walletsService.initializeMonnifyPayment(payload);
-
-      await this.orderRepository.update(order.id, {
-        paymentStatus: PaymentStatus.INITIATED,
-        paymentMethod,
-      });
+      // Get updated order
+      const updatedOrder = await this.findOrderById(order.id);
 
       return {
         success: true,
-        message: 'Payment initialized successfully',
+        message: 'Payment verification completed',
         data: {
-          ...paymentResponse.responseBody,
-          orderId: order.id,
-          orderReference: order.orderReference,
-          transactionReference: order.transactionReference,
-          checkoutUrl: paymentResponse.responseBody.checkoutUrl,
-          paymentMethod: paymentMethod,
-          expiresAt: paymentResponse.responseBody.expiresAt,
-        }
+          orderId: updatedOrder.id,
+          orderReference: updatedOrder.orderReference,
+          transactionReference: updatedOrder.transactionReference,
+          paymentStatus: updatedOrder.paymentStatus,
+          orderStatus: updatedOrder.status,
+          provider: transaction.provider,
+          verificationResult: {
+            paymentReference: transaction.paymentReference,
+            amountPaid: transaction.amountPaid,
+            paymentStatus: transaction.paymentStatus,
+            paymentMethod: transaction.paymentMethod,
+            paidOn: transaction.paidOn,
+          },
+        },
       };
     } catch (error) {
-      this.logger.error(`Payment initialization failed: ${error.message}`, error.stack);
-      if (error instanceof NotFoundException ||
-        error instanceof ConflictException ||
-        error instanceof InternalServerErrorException) {
+      this.logger.error(`Payment verification failed: ${error.message}`, error.stack);
+      if (error instanceof NotFoundException) {
         throw error;
       }
-
-      ErrorHelper.InternalServerErrorException(`Failed to initialize payment: ${error.message}`);
+      ErrorHelper.InternalServerErrorException(`Failed to verify payment: ${error.message}`);
     }
   }
 
-
+  /**
+   * Process payment manually (admin/internal use)
+   */
   async processPayment(processPaymentDto: ProcessPaymentDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -772,12 +685,13 @@ export class OrderService {
       }
 
       if (amount < order.total) {
-        ErrorHelper.BadRequestException(`Payment amount (${amount}) is less than order total (${order.total})`);
+        ErrorHelper.BadRequestException(
+          `Payment amount (${amount}) is less than order total (${order.total})`,
+        );
       }
 
-      const transaction = await this.walletsService.verifyMonnifyPayment(order.transactionReference);
-
-      // We need to verify from monfy that it has been paid
+      // Verify payment with provider
+      const transaction = await this.paymentService.verifyPayment(order.transactionReference);
 
       const paymentData = {
         paymentMethod,
@@ -786,7 +700,8 @@ export class OrderService {
         amount,
         paymentReference,
         paymentDate: new Date(),
-        meta: metadata
+        meta: metadata,
+        provider: transaction.provider,
       };
 
       await this.processOrderPayment(order, paymentData, queryRunner.manager);
@@ -797,9 +712,11 @@ export class OrderService {
     } catch (error) {
       await queryRunner.rollbackTransaction();
 
-      if (error instanceof NotFoundException ||
+      if (
+        error instanceof NotFoundException ||
         error instanceof BadRequestException ||
-        error instanceof ConflictException) {
+        error instanceof ConflictException
+      ) {
         throw error;
       }
 
@@ -810,99 +727,27 @@ export class OrderService {
     }
   }
 
-
-  async verifyPayment(verifyPaymentDto: VerifyPaymentDto): Promise<any> {
-    try {
-      const { transactionReference } = verifyPaymentDto;
-
-      let order: Order;
-      try {
-        order = await this.findOrderByTransactionReference(transactionReference);
-      } catch (error) {
-        ErrorHelper.NotFoundException(`Order with transaction reference ${transactionReference} not found`);
-      }
-
-      const transaction = await this.walletsService.verifyMonnifyPayment(transactionReference);
-
-      if (
-        transaction.paymentStatus === 'PAID' &&
-        order.paymentStatus !== PaymentStatus.PAID
-      ) {
-        // Create payment callback data for processing
-        const paymentCallbackDto: PaymentCallbackDto = {
-          eventType: 'SUCCESSFUL_TRANSACTION',
-          eventData: {
-            productType: 'COLLECTION',
-            transactionReference: transaction.transactionReference,
-            paymentReference: transaction.paymentReference,
-            amountPaid: transaction.amount,
-            totalPayment: transaction.amount,
-            settlementAmount: transaction.amount * SETTLEMENT_PERCENTAGE_ORDER,
-            paymentStatus: transaction.paymentStatus,
-            paymentMethod: transaction.paymentMethod,
-            paidOn: transaction.createdOn,
-            customer: {
-              name: transaction.customerName,
-              email: transaction.customerEmail,
-            },
-            metaData: transaction.meta,
-          },
-        };
-
-        // Process the payment
-        await this.processWebhookEvent(paymentCallbackDto);
-      }
-
-      // Get updated order
-      const updatedOrder = await this.findOrderById(order.id);
-
-      return {
-        success: true,
-        message: 'Payment verification completed',
-        data: {
-          orderId: updatedOrder.id,
-          orderReference: updatedOrder.orderReference,
-          transactionReference: updatedOrder.transactionReference,
-          paymentStatus: updatedOrder.paymentStatus,
-          orderStatus: updatedOrder.status,
-          verificationResult: {
-            paymentReference: transaction.paymentReference,
-            amountPaid: transaction.amount,
-            paymentStatus: transaction.paymentStatus,
-            paymentMethod: transaction.paymentMethod,
-            paidOn: transaction.createdOn,
-          }
-        }
-      };
-    } catch (error) {
-      this.logger.error(`Payment verification failed: ${error.message}`, error.stack);
-
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-
-      ErrorHelper.InternalServerErrorException(`Failed to verify payment: ${error.message}`);
-    }
-  }
-
-  // ============================================================
-  // Webhook and Payment Callback Processing
-  // ============================================================
-
-  async processWebhookEvent(webhookData: MonnifyWebhookDto | PaymentCallbackDto): Promise<any> {
+  /**
+   * Process webhook from payment provider
+   * Works with both Monnify and Paystack webhooks
+   */
+  async processPaymentWebhook(webhookData: any): Promise<any> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Convert webhook data to standardized format using adapter
-      const standardizedData = this.paymentDtoAdapter.processWebhookData(webhookData);
-      const { eventType, eventData } = standardizedData;
+      this.logger.log(`Processing payment webhook from provider`);
 
-      this.logger.log(`Processing webhook event: ${eventType}`);
+      // Use PaymentService to process and standardize webhook
+      const standardizedWebhook = await this.paymentService.processWebhook(webhookData);
 
-      // Skip processing if event type is not related to transactions
-      if (!eventType.includes('TRANSACTION')) {
+      const { eventType, eventData, provider } = standardizedWebhook;
+
+      this.logger.log(`Webhook event: ${eventType} from ${provider}`);
+
+      // Skip processing if event type is not transaction-related
+      if (!eventType.includes('TRANSACTION') && !eventType.includes('TRANSFER')) {
         this.logger.warn(`Skipping unsupported event type: ${eventType}`);
         return { processed: false, reason: 'Unsupported event type' };
       }
@@ -914,31 +759,26 @@ export class OrderService {
         paymentStatus,
         paymentMethod,
         paidOn,
-        customer,
-        metaData
+        customerName,
+        customerEmail,
+        metadata,
       } = eventData;
 
-      // Extract the normalized transaction reference
-      const orderTransactionReference = this.normalizeTransactionReference(
-        transactionReference,
-        paymentReference
-      );
-
-      this.logger.log(`Looking for order with transaction reference: ${orderTransactionReference}`);
-
-      // Find order by transaction reference
+      // Find order by transaction reference or payment reference
       let order: Order;
       try {
-        order = await this.orderRepository.findOne({
+        order = (await this.orderRepository.findOne({
           where: [
-            { transactionReference: orderTransactionReference },
-            { orderReference: paymentReference?.replace('TXN-', 'ORD-') }
+            { transactionReference: transactionReference || paymentReference },
+            { transactionReference: paymentReference },
           ],
           relations: ['items', 'business'],
-        }) as Order;
+        })) as Order;
 
         if (!order) {
-          this.logger.error(`Order not found for transaction: ${orderTransactionReference}`);
+          this.logger.error(
+            `Order not found for transaction: ${transactionReference || paymentReference}`,
+          );
           return { processed: false, reason: 'Order not found' };
         }
       } catch (error) {
@@ -970,16 +810,19 @@ export class OrderService {
         paymentReference,
         transactionReference,
         paymentDate: new Date(paidOn || new Date()),
-        meta: metaData || {},
-        provider: 'Monnify',
+        meta: metadata || {},
+        provider: provider,
         providerResponse: {
           status: paymentStatus,
           reference: paymentReference,
           transactionId: transactionReference,
-          customer,
+          customer: {
+            name: customerName,
+            email: customerEmail,
+          },
           amount: amountPaid,
-          paymentMethod
-        }
+          paymentMethod,
+        },
       };
 
       // Process the payment
@@ -988,19 +831,21 @@ export class OrderService {
       // Commit the transaction
       await queryRunner.commitTransaction();
 
-      // Send notifications asynchronously (doesn't affect the transaction)
+      // Send notifications asynchronously
       if (mappedPaymentStatus === PaymentStatus.PAID) {
-        this.sendPaymentNotifications(order.id).catch(err => {
+        this.sendPaymentNotifications(order.id).catch((err) => {
           this.logger.error(`Error sending notifications: ${err.message}`);
         });
       }
 
       this.logger.log(`Successfully processed webhook for order ${order.id}`);
+
       return {
         processed: true,
         orderId: order.id,
         status: mappedOrderStatus,
-        paymentStatus: mappedPaymentStatus
+        paymentStatus: mappedPaymentStatus,
+        provider: provider,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -1008,42 +853,27 @@ export class OrderService {
 
       return {
         processed: false,
-        error: error.message
+        error: error.message,
       };
     } finally {
       await queryRunner.release();
     }
   }
 
-
-  async processPaymentWebhook(webhookData: MonnifyWebhookDto): Promise<any> {
-    this.logger.log(`Received payment webhook: ${webhookData.eventType}`);
-
-    try {
-      return await this.processWebhookEvent(webhookData);
-    } catch (error) {
-      this.logger.error(`Error processing webhook: ${error.message}`, error.stack);
-
-      return {
-        processed: false,
-        error: error.message
-      };
-    }
-  }
-
+  // ============================================================
+  // ORDER STATUS MANAGEMENT
+  // ============================================================
 
   async updateOrderStatus(
     orderId: number,
     updateStatusDto: UpdateOrderStatusDto,
   ): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
-
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const { status, notes, metadata } = updateStatusDto;
-
+      const { status, notes } = updateStatusDto;
       const order = await this.findOrderById(orderId);
 
       // Validate status transition
@@ -1051,7 +881,6 @@ export class OrderService {
 
       // Update order status
       order.status = status;
-
       if (notes) {
         order.notes = notes;
       }
@@ -1061,8 +890,6 @@ export class OrderService {
 
       switch (status) {
         case OrderStatus.PROCESSING:
-          itemStatus = OrderItemStatus.PROCESSING;
-          break;
         case OrderStatus.CONFIRMED:
           itemStatus = OrderItemStatus.PROCESSING;
           break;
@@ -1074,17 +901,14 @@ export class OrderService {
           break;
         case OrderStatus.CANCELLED:
           itemStatus = OrderItemStatus.CANCELLED;
-          // Return inventory for cancelled orders
           await this.returnInventoryForOrder(order, queryRunner.manager);
           break;
         case OrderStatus.RETURNED:
           itemStatus = OrderItemStatus.RETURNED;
-          // Return inventory for returned orders
           await this.returnInventoryForOrder(order, queryRunner.manager);
           break;
         case OrderStatus.REFUNDED:
           itemStatus = OrderItemStatus.REFUNDED;
-          // No inventory change for refunded orders if already returned
           break;
         default:
           itemStatus = order.items[0]?.status || OrderItemStatus.PENDING;
@@ -1096,17 +920,12 @@ export class OrderService {
         await queryRunner.manager.save(OrderItem, item);
       }
 
-      // Save updated order
       await queryRunner.manager.save(Order, order);
-
-      // Commit transaction
       await queryRunner.commitTransaction();
 
       return await this.findOrderById(orderId);
     } catch (error) {
-      // Rollback transaction on error
       await queryRunner.rollbackTransaction();
-
       this.logger.error(`Failed to update order status: ${error.message}`, error.stack);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -1115,7 +934,6 @@ export class OrderService {
 
       ErrorHelper.InternalServerErrorException(`Failed to update order status: ${error.message}`);
     } finally {
-      // Release query runner
       await queryRunner.release();
     }
   }
@@ -1126,72 +944,55 @@ export class OrderService {
     updateStatusDto: UpdateOrderItemStatusDto,
   ): Promise<OrderItem> {
     const queryRunner = this.dataSource.createQueryRunner();
-
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       const { status, notes } = updateStatusDto;
-
-      // Find the order
       const order = await this.findOrderById(orderId);
-
-      // Find the order item
-      const item = order.items.find(item => item.id === itemId);
+      const item = order.items.find((item) => item.id === itemId);
 
       if (!item) {
-        ErrorHelper.NotFoundException(`Order item with ID ${itemId} not found in order ${orderId}`);
+        ErrorHelper.NotFoundException(
+          `Order item with ID ${itemId} not found in order ${orderId}`,
+        );
       }
 
-      // Update the item status
       item.status = status;
-
       if (notes) {
         item.notes = notes;
       }
 
-      // If cancelling or returning, return inventory for this item
-      if (
-        status === OrderItemStatus.CANCELLED ||
-        status === OrderItemStatus.RETURNED
-      ) {
+      if (status === OrderItemStatus.CANCELLED || status === OrderItemStatus.RETURNED) {
         await this.returnInventoryForOrderItem(item, queryRunner.manager);
       }
 
-      // Save the updated item
       await queryRunner.manager.save(OrderItem, item);
 
       // Check if all items have the same status and update order status accordingly
-      const allItemsHaveStatus = order.items.every(i => i.status === status);
-
+      const allItemsHaveStatus = order.items.every((i) => i.status === status);
       if (allItemsHaveStatus) {
-        // Map item status to order status
         const orderStatus = this.mapOrderItemStatusToOrderStatus(status);
-
-        // Only update if valid status mapping exists
         if (orderStatus) {
           order.status = orderStatus;
           await queryRunner.manager.save(Order, order);
         }
       }
 
-      // Commit transaction
       await queryRunner.commitTransaction();
-
       return item;
     } catch (error) {
-      // Rollback transaction on error
       await queryRunner.rollbackTransaction();
-
       this.logger.error(`Failed to update order item status: ${error.message}`, error.stack);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
 
-      ErrorHelper.InternalServerErrorException(`Failed to update order item status: ${error.message}`);
+      ErrorHelper.InternalServerErrorException(
+        `Failed to update order item status: ${error.message}`,
+      );
     } finally {
-      // Release query runner
       await queryRunner.release();
     }
   }
@@ -1200,7 +1001,6 @@ export class OrderService {
     try {
       const order = await this.findOrderById(id);
 
-      // Return inventory if the order is in a state that reserved inventory
       const inventoryReservingStatuses = [
         OrderStatus.PENDING,
         OrderStatus.PROCESSING,
@@ -1208,16 +1008,10 @@ export class OrderService {
       ];
 
       if (inventoryReservingStatuses.includes(order.status)) {
-        await this.returnInventoryForOrder(
-          order,
-          this.dataSource.manager
-        );
+        await this.returnInventoryForOrder(order, this.dataSource.manager);
       }
 
-      // Soft delete the order items
       await this.orderItemRepository.softDelete({ orderId: id });
-
-      // Soft delete the order
       await this.orderRepository.softDelete(id);
 
       this.logger.log(`Order with ID ${id} has been soft-deleted`);
@@ -1225,16 +1019,123 @@ export class OrderService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-
       this.logger.error(`Failed to delete order: ${error.message}`, error.stack);
       ErrorHelper.InternalServerErrorException(`Failed to delete order: ${error.message}`);
     }
   }
 
+  // ============================================================
+  // PRIVATE HELPER METHODS
+  // ============================================================
 
+  /**
+   * Process verified payment and update order
+   */
+  private async processVerifiedPayment(order: Order, transaction: any): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const paymentData = {
+        paymentMethod: this.mapPaymentMethod(transaction.paymentMethod),
+        paymentStatus: PaymentStatus.PAID,
+        orderStatus: OrderStatus.PROCESSING,
+        amount: transaction.amountPaid,
+        paymentReference: transaction.paymentReference,
+        transactionReference: transaction.transactionReference,
+        paymentDate: new Date(transaction.paidOn),
+        meta: transaction.metadata || {},
+        provider: transaction.provider,
+        providerResponse: transaction,
+      };
+
+      await this.processOrderPayment(order, paymentData, queryRunner.manager);
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Processed verified payment for order ${order.id}`);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to process verified payment: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Process order payment and handle settlement
+   */
+  private async processOrderPayment(
+    order: Order,
+    paymentData: {
+      paymentMethod: PaymentMethod;
+      paymentStatus: PaymentStatus;
+      orderStatus: OrderStatus;
+      amount?: number;
+      paymentReference?: string;
+      transactionReference?: string;
+      paymentDate?: Date;
+      meta?: any;
+      provider?: string;
+      providerResponse?: any;
+    },
+    entityManager: EntityManager,
+  ): Promise<Order> {
+    try {
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        this.logger.log(`Order ${order.id} is already paid, skipping processing`);
+        return order;
+      }
+
+      // Construct payment details
+      const paymentDetails: PaymentDetails = {
+        paymentMethod: paymentData.paymentMethod,
+        paymentReference: paymentData.paymentReference || order.transactionReference,
+        transactionReference: paymentData.transactionReference || order.transactionReference,
+        paymentDate: paymentData.paymentDate || new Date(),
+        amount: paymentData.amount || order.total,
+        currency: 'NGN',
+        meta: paymentData.meta || {},
+        provider: paymentData.provider,
+        providerResponse: paymentData.providerResponse,
+      };
+
+      // Update order with payment information
+      order.paymentStatus = paymentData.paymentStatus;
+      order.status = paymentData.orderStatus;
+      order.paymentMethod = paymentData.paymentMethod;
+      order.paymentDate = paymentData.paymentDate || new Date();
+      order.paymentDetails = paymentDetails;
+
+      // If payment is successful, update order items and handle settlement
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        this.logger.log(`Processing successful payment for order ${order.id}`);
+
+        // Update order items status
+        for (const item of order.items) {
+          item.status = OrderItemStatus.PROCESSING;
+          await entityManager.save(OrderItem, item);
+        }
+
+        // Handle business settlement for paid orders
+        await this.handleBusinessSettlement(order.id, entityManager);
+      }
+
+      await entityManager.save(Order, order);
+      return order;
+    } catch (error) {
+      this.logger.error(`Failed to process payment: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle business settlement using PaymentService
+   */
   private async handleBusinessSettlement(
     orderId: number,
-    entityManager: EntityManager
+    entityManager: EntityManager,
   ): Promise<void> {
     try {
       const order = await entityManager.findOne(Order, {
@@ -1251,7 +1152,6 @@ export class OrderService {
       }
 
       const business = order.business;
-
       const platformFeePercentage = SETTLEMENT_PERCENTAGE;
       const platformFee = order.total * platformFeePercentage;
       const payoutAmount = order.total - platformFee;
@@ -1281,17 +1181,23 @@ export class OrderService {
         `Business settlement initiated for order ${orderId}, business ${business.id}, amount ${payoutAmount}`,
       );
 
-      // --- Perform the transfer asynchronously ---
-      this.walletsService.transferToWalletOrBank({
-        amount: payoutAmount,
-        reference: settlementReference,
-        narration: `Settlement for order ${order.id}`,
-        destinationAccountNumber: business.user.walletAccountNumber,
-        destinationBankCode: business.user.walletBankCode,
-        sourceAccountNumber: process.env.MONNIFY_WALLET_ACCOUNT,
-        async: false,
-      })
-        .then(async transferResponse => {
+      // Use PaymentService to transfer to business account
+      this.paymentService
+        .transferToBank({
+          amount: payoutAmount,
+          reference: settlementReference,
+          narration: `Settlement for order ${order.orderReference}`,
+          destinationAccountNumber:
+            business.user.personalAccountNumber || business.user.walletAccountNumber,
+          destinationBankCode: business.user.personalBankCode || business.user.walletBankCode,
+          destinationAccountName:
+            business.user.personalAccountName || business.user.walletAccountName,
+          sourceWalletReference:
+            this.configService.get<string>('PLATFORM_WALLET_REFERENCE') ||
+            process.env.PLATFORM_WALLET_REFERENCE,
+          currency: 'NGN',
+        })
+        .then(async (transferResponse) => {
           if (transferResponse.status === 'SUCCESS') {
             order.settlementDetails.status = 'COMPLETED';
             this.logger.log(
@@ -1300,24 +1206,24 @@ export class OrderService {
           } else {
             order.settlementDetails.status = 'FAILED';
             this.logger.error(
-              `Business settlement failed for order ${orderId}: ${JSON.stringify(transferResponse.responseBody)}`,
+              `Business settlement failed for order ${orderId}: ${JSON.stringify(transferResponse)}`,
             );
           }
-
           await entityManager.save(Order, order);
         })
-        .catch(async err => {
+        .catch(async (err) => {
           order.settlementDetails.status = 'FAILED';
           await entityManager.save(Order, order);
-          this.logger.error(`Settlement transfer error for order ${orderId}: ${err.message}`, err.stack);
+          this.logger.error(
+            `Settlement transfer error for order ${orderId}: ${err.message}`,
+            err.stack,
+          );
         });
-
     } catch (error) {
       this.logger.error(`Failed to process business settlement: ${error.message}`, error.stack);
       throw error;
     }
   }
-
 
   private async returnInventoryForOrder(
     order: Order,
@@ -1377,7 +1283,6 @@ export class OrderService {
     }
   }
 
-
   private async sendPaymentNotifications(orderId: number): Promise<void> {
     try {
       const order = await this.findOrderById(orderId);
@@ -1386,30 +1291,9 @@ export class OrderService {
         return;
       }
 
-      // Send customer confirmation
-      // You could implement an email service or use a third-party service
-      // this.emailService.sendPaymentConfirmation({
-      //   to: order.customerEmail,
-      //   name: order.customerName,
-      //   orderReference: order.orderReference,
-      //   amount: order.total,
-      //   items: order.items.length,
-      //   date: order.paymentDate
-      // });
-
-      // Notify business owner
-      if (order.business) {
-        // this.notificationService.notifyBusiness({
-        //   businessId: order.business.id,
-        //   type: 'NEW_PAID_ORDER',
-        //   message: `New paid order #${order.orderReference} for ${order.total} NGN`,
-        //   data: {
-        //     orderId: order.id,
-        //     amount: order.total,
-        //     customerName: order.customerName
-        //   }
-        // });
-      }
+      // TODO: Implement email/notification service
+      // this.emailService.sendPaymentConfirmation(...)
+      // this.notificationService.notifyBusiness(...)
 
       this.logger.log(`Notifications sent for order ${orderId}`);
     } catch (error) {
@@ -1432,19 +1316,63 @@ export class OrderService {
   }
 
   private calculateTax(subtotal: number): number {
-    return subtotal * 0;
+    return subtotal * 0; // 0% tax
   }
 
   private mapPaymentMethod(paymentMethodStr: string): PaymentMethod {
     const methodMap: Record<string, PaymentMethod> = {
-      'CARD': PaymentMethod.CARD,
-      'ACCOUNT_TRANSFER': PaymentMethod.BANK_TRANSFER,
-      'BANK_TRANSFER': PaymentMethod.BANK_TRANSFER,
-      'WALLET': PaymentMethod.WALLET,
-      'USSD': PaymentMethod.USSD,
+      CARD: PaymentMethod.CARD,
+      ACCOUNT_TRANSFER: PaymentMethod.BANK_TRANSFER,
+      BANK_TRANSFER: PaymentMethod.BANK_TRANSFER,
+      WALLET: PaymentMethod.WALLET,
+      USSD: PaymentMethod.USSD,
+      BANK: PaymentMethod.BANK_TRANSFER,
     };
 
-    return methodMap[paymentMethodStr.toUpperCase()] || PaymentMethod.MONNIFY;
+    return (
+      methodMap[paymentMethodStr.toUpperCase()] ||
+      PaymentMethod[this.paymentService.getActiveProvider()]
+    );
+  }
+
+  private mapPaymentProviderStatus(providerStatus: string): {
+    paymentStatus: PaymentStatus;
+    orderStatus: OrderStatus;
+  } {
+    const statusUpper = providerStatus.toUpperCase();
+
+    switch (statusUpper) {
+      case 'PAID':
+      case 'SUCCESSFUL':
+      case 'SUCCESS':
+        return {
+          paymentStatus: PaymentStatus.PAID,
+          orderStatus: OrderStatus.PROCESSING,
+        };
+      case 'PENDING':
+        return {
+          paymentStatus: PaymentStatus.PENDING,
+          orderStatus: OrderStatus.PENDING,
+        };
+      case 'FAILED':
+      case 'DECLINED':
+      case 'REVERSED':
+        return {
+          paymentStatus: PaymentStatus.FAILED,
+          orderStatus: OrderStatus.PENDING,
+        };
+      case 'EXPIRED':
+      case 'ABANDONED':
+        return {
+          paymentStatus: PaymentStatus.EXPIRED,
+          orderStatus: OrderStatus.PENDING,
+        };
+      default:
+        return {
+          paymentStatus: PaymentStatus.PENDING,
+          orderStatus: OrderStatus.PENDING,
+        };
+    }
   }
 
   private mapOrderItemStatusToOrderStatus(itemStatus: OrderItemStatus): OrderStatus | null {
@@ -1461,43 +1389,22 @@ export class OrderService {
     return statusMap[itemStatus] || null;
   }
 
-  private validateStatusTransition(
-    currentStatus: OrderStatus,
-    newStatus: OrderStatus,
-  ): void {
+  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.PENDING]: [
         OrderStatus.PROCESSING,
         OrderStatus.CONFIRMED,
         OrderStatus.CANCELLED,
       ],
-      [OrderStatus.PROCESSING]: [
-        OrderStatus.CONFIRMED,
-        OrderStatus.SHIPPED,
-        OrderStatus.CANCELLED,
-      ],
-      [OrderStatus.CONFIRMED]: [
-        OrderStatus.SHIPPED,
-        OrderStatus.CANCELLED,
-      ],
-      [OrderStatus.SHIPPED]: [
-        OrderStatus.DELIVERED,
-        OrderStatus.RETURNED,
-      ],
-      [OrderStatus.DELIVERED]: [
-        OrderStatus.RETURNED,
-        OrderStatus.REFUNDED,
-      ],
-      [OrderStatus.CANCELLED]: [
-        OrderStatus.REFUNDED,
-      ],
-      [OrderStatus.RETURNED]: [
-        OrderStatus.REFUNDED,
-      ],
+      [OrderStatus.PROCESSING]: [OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+      [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.RETURNED],
+      [OrderStatus.DELIVERED]: [OrderStatus.RETURNED, OrderStatus.REFUNDED],
+      [OrderStatus.CANCELLED]: [OrderStatus.REFUNDED],
+      [OrderStatus.RETURNED]: [OrderStatus.REFUNDED],
       [OrderStatus.REFUNDED]: [],
     };
 
-    // Allow same status (no change)
     if (currentStatus === newStatus) {
       return;
     }
@@ -1508,21 +1415,4 @@ export class OrderService {
       );
     }
   }
-
-  async generateInvoice(orderId: number): Promise<Buffer> {
-    try {
-      // This is a placeholder for invoice generation
-      // In a real implementation, you would use a library like PDFKit to generate a PDF
-
-      const order = await this.findOrderById(orderId);
-
-      // Here would be the PDF generation logic
-
-      return Buffer.from('PDF content would be generated here');
-    } catch (error) {
-      this.logger.error(`Failed to generate invoice: ${error.message}`, error.stack);
-      ErrorHelper.InternalServerErrorException(`Failed to generate invoice: ${error.message}`);
-    }
-  }
 }
-
