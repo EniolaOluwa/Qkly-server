@@ -7,12 +7,11 @@ import { Product } from '../product/entity/product.entity';
 import { Business } from '../businesses/business.entity';
 import { Category } from '../category/entity/category.entity';
 import { BusinessType } from '../businesses/business-type.entity';
-import { StoreFront } from './entities/store-front.entity';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product, Business, Category, BusinessType, StoreFront]),
+    TypeOrmModule.forFeature([Product, Business, Category, BusinessType]),
     ConfigModule,
   ],
   controllers: [StoreFrontController],

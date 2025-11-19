@@ -33,7 +33,7 @@ import { signup } from '../email/templates/register.template';
 import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
 import { Business } from '../businesses/business.entity';
 import { StoreFrontService } from '../store-front/store-front.service';
-import { UpdateStoreFrontDto } from '../store-front/dto/update-store-front.dto';
+
 import { InsightsService } from '../insights/insights.service';
 import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
 import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
@@ -1132,37 +1132,7 @@ export class UsersService {
     }
   }
 
-  async updateStoreFront(
-    userId: number,
-    updateStoreFrontDto: UpdateStoreFrontDto,
-    coverImage?: Express.Multer.File,
-    categoryImages?: Express.Multer.File[],
-  ) {
-    try {
-      // Get user's business
-      const business = await this.businessRepository.findOne({
-        where: { userId },
-      });
-
-      if (!business) {
-        throw new NotFoundException('Business not found for this user');
-      }
-
-      // Call store-front service to update
-      return await this.storeFrontService.updateStoreFront(
-        business.id,
-        updateStoreFrontDto,
-        coverImage,
-        categoryImages,
-      );
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to update store front for user ${userId}:`, error);
-      throw new InternalServerErrorException('Failed to update store front');
-    }
-  }
+ 
 
   async updateUserProfile(
     userId: number,

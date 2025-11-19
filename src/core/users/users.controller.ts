@@ -54,7 +54,6 @@ import {
 import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { UsersService } from './users.service';
-import { UpdateStoreFrontDto } from '../store-front/dto/update-store-front.dto';
 import { StoreFrontResponseDto } from '../store-front/dto/store-front-response.dto';
 import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
 import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
@@ -585,76 +584,8 @@ export class UsersController {
     return this.usersService.updateBusinessDetails(updateBusinessDto, authUserId);
   }
 
-  // settings - update store front
-  @Patch('settings/store-front')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @UseInterceptors(
-    AnyFilesInterceptor({
-      limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit per file
-      },
-      fileFilter: (req, file, cb) => {
-        if (!file) {
-          cb(null, true); // Allow no file for updates
-          return;
-        }
-        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
-        if (allowedMimeTypes.includes(file.mimetype)) {
-          cb(null, true);
-        } else {
-          cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
-        }
-      },
-    }),
-  )
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({
-    summary: 'Update store front customization',
-    description: 'Updates the store front customization for the authenticated user\'s business. Requires JWT authentication.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Store front updated successfully',
-    type: StoreFrontResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Invalid input data',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Store front or business not found',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Internal server error',
-  })
-  async updateStoreFront(
-    @Body(ValidationPipe) updateStoreFrontDto: UpdateStoreFrontDto,
-    @UploadedFiles() files: Express.Multer.File[],
-    @Request() req,
-  ): Promise<StoreFrontResponseDto> {
-    const authUserId = req.user?.userId;
-    if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
-    }
+ 
 
-    // Separate files by field name
-    const coverImage = files?.find(file => file.fieldname === 'coverImage');
-    const categoryImages = files?.filter(file => file.fieldname === 'categoryImages') || [];
-
-    return this.usersService.updateStoreFront(
-      authUserId,
-      updateStoreFrontDto,
-      coverImage,
-      categoryImages,
-    );
-  }
 
   // settings - update user profile
   @Patch('settings/profile')

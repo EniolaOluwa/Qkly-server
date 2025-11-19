@@ -4,12 +4,37 @@ export class LeadsTracking1763228514217 implements MigrationInterface {
     name = 'LeadsTracking1763228514217'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "slug" character varying NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD CONSTRAINT "UQ_5185f5a19d5159aca97cb080915" UNIQUE ("slug")`);
+        // Add slug and publicId as nullable first
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "slug" character varying`);
         await queryRunner.query(`COMMENT ON COLUMN "lead-forms"."slug" IS 'Unique slug for public URL access'`);
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "publicId" character varying NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD CONSTRAINT "UQ_08be2ee9a486a9b9e0e5667844b" UNIQUE ("publicId")`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "publicId" character varying`);
         await queryRunner.query(`COMMENT ON COLUMN "lead-forms"."publicId" IS 'Random public ID for sharing'`);
+        
+        // Generate slug and publicId for existing rows
+        // Slug: lowercase title, replace non-alphanumeric with hyphens, add short UUID
+        await queryRunner.query(`
+            UPDATE "lead-forms" 
+            SET 
+                "slug" = LOWER(REGEXP_REPLACE(REGEXP_REPLACE("title", '[^a-z0-9]+', '-', 'gi'), '^-|-$', '', 'g')) || '-' || SUBSTRING(MD5(RANDOM()::text || id::text), 1, 6),
+                "publicId" = SUBSTRING(MD5(RANDOM()::text || id::text || NOW()::text), 1, 12)
+            WHERE "slug" IS NULL OR "publicId" IS NULL
+        `);
+        
+        // Ensure uniqueness by appending id if needed
+        await queryRunner.query(`
+            UPDATE "lead-forms" lf1
+            SET "slug" = "slug" || '-' || id::text
+            WHERE EXISTS (
+                SELECT 1 FROM "lead-forms" lf2 
+                WHERE lf2.id != lf1.id AND lf2."slug" = lf1."slug"
+            )
+        `);
+        
+        // Now make them NOT NULL and add unique constraints
+        await queryRunner.query(`ALTER TABLE "lead-forms" ALTER COLUMN "slug" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD CONSTRAINT "UQ_5185f5a19d5159aca97cb080915" UNIQUE ("slug")`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ALTER COLUMN "publicId" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD CONSTRAINT "UQ_08be2ee9a486a9b9e0e5667844b" UNIQUE ("publicId")`);
         await queryRunner.query(`ALTER TABLE "lead-forms" ADD "requireEmailVerification" boolean NOT NULL DEFAULT false`);
         await queryRunner.query(`COMMENT ON COLUMN "lead-forms"."requireEmailVerification" IS 'Require email verification before accepting lead'`);
         await queryRunner.query(`ALTER TABLE "lead-forms" ADD "enableCaptcha" boolean NOT NULL DEFAULT false`);
@@ -28,9 +53,43 @@ export class LeadsTracking1763228514217 implements MigrationInterface {
         await queryRunner.query(`COMMENT ON COLUMN "lead-forms"."allowedDomains" IS 'Allowed domains for CORS (for embedded forms)'`);
         await queryRunner.query(`ALTER TABLE "lead-forms" ADD "customStyling" jsonb`);
         await queryRunner.query(`COMMENT ON COLUMN "lead-forms"."customStyling" IS 'Custom styling for embedded form'`);
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "businessId" integer NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "createdBy" integer NOT NULL`);
-        await queryRunner.query(`ALTER TABLE "leads" ADD "businessId" integer NOT NULL`);
+        
+        // Add businessId and createdBy as nullable first (existing rows won't have these values)
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "businessId" integer`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ADD "createdBy" integer`);
+        
+        // Delete leads associated with lead-forms that will be deleted (due to missing businessId/createdBy)
+        // Then delete existing lead-forms that can't have businessId/createdBy populated
+        // These are incomplete records that can't function without these required fields
+        await queryRunner.query(`
+            DELETE FROM "leads" 
+            WHERE "formId" IN (
+                SELECT id FROM "lead-forms" 
+                WHERE "businessId" IS NULL OR "createdBy" IS NULL
+            )
+        `);
+        await queryRunner.query(`DELETE FROM "lead-forms" WHERE "businessId" IS NULL OR "createdBy" IS NULL`);
+        
+        // Now make them NOT NULL
+        await queryRunner.query(`ALTER TABLE "lead-forms" ALTER COLUMN "businessId" SET NOT NULL`);
+        await queryRunner.query(`ALTER TABLE "lead-forms" ALTER COLUMN "createdBy" SET NOT NULL`);
+        
+        // For leads, get businessId from the associated form
+        await queryRunner.query(`ALTER TABLE "leads" ADD "businessId" integer`);
+        await queryRunner.query(`
+            UPDATE "leads" l
+            SET "businessId" = (
+                SELECT lf."businessId" 
+                FROM "lead-forms" lf 
+                WHERE lf.id = l."formId"
+            )
+        `);
+        
+        // Delete leads that don't have a valid businessId (orphaned leads)
+        await queryRunner.query(`DELETE FROM "leads" WHERE "businessId" IS NULL`);
+        
+        // Now make businessId NOT NULL for leads
+        await queryRunner.query(`ALTER TABLE "leads" ALTER COLUMN "businessId" SET NOT NULL`);
         await queryRunner.query(`ALTER TABLE "leads" ADD "formResponses" jsonb`);
         await queryRunner.query(`ALTER TABLE "leads" ADD "ipAddress" character varying`);
         await queryRunner.query(`COMMENT ON COLUMN "leads"."ipAddress" IS 'IP address of the submitter'`);

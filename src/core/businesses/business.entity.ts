@@ -42,6 +42,18 @@ export class Business {
   @JoinColumn({ name: 'userId' })
   user: User;
 
+  @Column({ nullable: true })
+  coverImage: string;
+
+  @Column({ nullable: true }) // I'm guessing storename is the same as business name
+  storeName: string;
+
+  @Column({ nullable: true })
+  heroText: string;
+
+  @Column({ nullable: true })
+  storeColor: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

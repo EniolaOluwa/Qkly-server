@@ -5,7 +5,6 @@ import { Repository } from 'typeorm';
 import { Product } from '../product/entity/product.entity';
 import { Business } from '../businesses/business.entity';
 import { Category } from '../category/entity/category.entity';
-import { StoreFront } from './entities/store-front.entity';
 import {
   PublicBusinessInfoDto,
   PublicProductDto,
@@ -15,10 +14,9 @@ import {
   StoreFrontResponseDto
 } from './dto/store-front-response.dto';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
-import { CreateStoreFrontDto } from './dto/create-store-front.dto';
-import { UpdateStoreFrontDto } from './dto/update-store-front.dto';
 import { ErrorHelper } from '../../common/utils';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
+
 
 @Injectable()
 export class StoreFrontService {
@@ -29,8 +27,6 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-    @InjectRepository(StoreFront)
-    private readonly storeFrontRepository: Repository<StoreFront>,
     private readonly cloudinaryUtil: CloudinaryUtil,
   ) { }
 
@@ -250,173 +246,5 @@ export class StoreFrontService {
     return this.getStoreProducts(businessId, { ...query, categoryId });
   }
 
-  async createStoreFront(
-    businessId: number,
-    createStoreFrontDto: CreateStoreFrontDto,
-    coverImage?: Express.Multer.File,
-    categoryImages?: Express.Multer.File[],
-  ): Promise<StoreFrontResponseDto> {
-    // Verify business exists
-    const business = await this.businessRepository.findOne({
-      where: { id: businessId },
-    });
 
-    if (!business) {
-      throw new NotFoundException(`Business with ID ${businessId} not found`);
-    }
-
-    // Check if store-front already exists for this business
-    const existingStoreFront = await this.storeFrontRepository.findOne({
-      where: { businessId },
-    });
-
-    if (existingStoreFront) {
-      throw new ConflictException('Store front already exists for this business');
-    }
-
-    // Upload cover image
-    if (!coverImage && !createStoreFrontDto.coverImage) {
-      throw new BadRequestException('Cover image is required');
-    }
-
-    const coverImageFile = coverImage || createStoreFrontDto.coverImage;
-    if (!coverImageFile) {
-      throw new BadRequestException('Cover image is required');
-    }
-
-    const coverImageUpload = await this.cloudinaryUtil.uploadImage(
-      coverImageFile.buffer,
-      'Qkly/store-fronts/cover',
-    );
-    const coverImageUrl = coverImageUpload.secure_url;
-
-    // Upload category images if provided
-    let categoryImageUrls: string[] = [];
-    const categoryImageFiles = categoryImages || createStoreFrontDto.categoryImages || [];
-
-    if (categoryImageFiles.length > 0) {
-      // Ensure category names and images arrays match in length
-      if (createStoreFrontDto.categoryName && 
-          createStoreFrontDto.categoryName.length !== categoryImageFiles.length) {
-        throw new BadRequestException(
-          'Number of category names must match number of category images',
-        );
-      }
-
-      // Upload all category images
-      const uploadPromises = categoryImageFiles.map((file) =>
-        this.cloudinaryUtil.uploadImage(
-          file.buffer,
-          'Qkly/store-fronts/categories',
-        ),
-      );
-      const uploadResults = await Promise.all(uploadPromises);
-      categoryImageUrls = uploadResults.map((result) => result.secure_url);
-    }
-
-    // Create store-front
-    const storeFront = this.storeFrontRepository.create({
-      businessId,
-      coverImage: coverImageUrl,
-      storeName: createStoreFrontDto.storeName,
-      heroText: createStoreFrontDto.heroText,
-      storeColor: createStoreFrontDto.storeColor,
-      categoryName: createStoreFrontDto.categoryName || [],
-      categoryImage: categoryImageUrls,
-    });
-
-    const savedStoreFront = await this.storeFrontRepository.save(storeFront);
-
-    return {
-      id: savedStoreFront.id,
-      businessId: savedStoreFront.businessId,
-      coverImage: savedStoreFront.coverImage,
-      storeName: savedStoreFront.storeName,
-      heroText: savedStoreFront.heroText,
-      storeColor: savedStoreFront.storeColor,
-      categoryName: savedStoreFront.categoryName,
-      categoryImage: savedStoreFront.categoryImage,
-      createdAt: savedStoreFront.createdAt,
-      updatedAt: savedStoreFront.updatedAt,
-    };
-  }
-
-  async updateStoreFront(
-    businessId: number,
-    updateStoreFrontDto: UpdateStoreFrontDto,
-    coverImage?: Express.Multer.File,
-    categoryImages?: Express.Multer.File[],
-  ): Promise<StoreFrontResponseDto> {
-    // Find existing store-front
-    const storeFront = await this.storeFrontRepository.findOne({
-      where: { businessId },
-    });
-
-    if (!storeFront) {
-      throw new NotFoundException('Store front not found for this business');
-    }
-
-    // Update cover image if provided
-    if (coverImage || updateStoreFrontDto.coverImage) {
-      const coverImageFile = coverImage || updateStoreFrontDto.coverImage;
-      if (coverImageFile) {
-        const coverImageUpload = await this.cloudinaryUtil.uploadImage(
-          coverImageFile.buffer,
-          'Qkly/store-fronts/cover',
-        );
-        storeFront.coverImage = coverImageUpload.secure_url;
-      }
-    }
-
-    // Update category images if provided
-    const categoryImageFiles = categoryImages || updateStoreFrontDto.categoryImages || [];
-    if (categoryImageFiles.length > 0) {
-      // Ensure category names and images arrays match in length if both are provided
-      if (updateStoreFrontDto.categoryName && 
-          updateStoreFrontDto.categoryName.length !== categoryImageFiles.length) {
-        throw new BadRequestException(
-          'Number of category names must match number of category images',
-        );
-      }
-
-      // Upload all category images
-      const uploadPromises = categoryImageFiles.map((file) =>
-        this.cloudinaryUtil.uploadImage(
-          file.buffer,
-          'Qkly/store-fronts/categories',
-        ),
-      );
-      const uploadResults = await Promise.all(uploadPromises);
-      storeFront.categoryImage = uploadResults.map((result) => result.secure_url);
-    }
-
-    // Update other fields
-    if (updateStoreFrontDto.storeName !== undefined) {
-      storeFront.storeName = updateStoreFrontDto.storeName;
-    }
-    if (updateStoreFrontDto.heroText !== undefined) {
-      storeFront.heroText = updateStoreFrontDto.heroText;
-    }
-    if (updateStoreFrontDto.storeColor !== undefined) {
-      storeFront.storeColor = updateStoreFrontDto.storeColor;
-    }
-    if (updateStoreFrontDto.categoryName !== undefined) {
-      storeFront.categoryName = updateStoreFrontDto.categoryName;
-    }
-
-    const updatedStoreFront = await this.storeFrontRepository.save(storeFront);
-
-    return {
-      id: updatedStoreFront.id,
-      businessId: updatedStoreFront.businessId,
-      coverImage: updatedStoreFront.coverImage,
-      storeName: updatedStoreFront.storeName,
-      heroText: updatedStoreFront.heroText,
-      storeColor: updatedStoreFront.storeColor,
-      categoryName: updatedStoreFront.categoryName,
-      categoryImage: updatedStoreFront.categoryImage,
-      createdAt: updatedStoreFront.createdAt,
-      updatedAt: updatedStoreFront.updatedAt,
-    };
-  }
 }
