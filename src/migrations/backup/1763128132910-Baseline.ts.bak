@@ -4,7 +4,6 @@ export class Baseline1763128132910 implements MigrationInterface {
     name = 'Baseline1763128132910'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`CREATE TABLE "business_types" ("id" SERIAL NOT NULL, "name" character varying NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_3894005288e759379ee7b56622a" UNIQUE ("name"), CONSTRAINT "PK_3c34c2b0b96fd7d13d7b4750b27" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TABLE "businesses" ("id" SERIAL NOT NULL, "businessName" character varying NOT NULL, "businessTypeId" integer NOT NULL, "businessDescription" character varying, "location" character varying NOT NULL, "logo" character varying, "userId" integer NOT NULL, "createdAt" TIMESTAMP NOT NULL DEFAULT now(), "updatedAt" TIMESTAMP NOT NULL DEFAULT now(), CONSTRAINT "UQ_5ba6375fdc72387a2d2d0bb7720" UNIQUE ("userId"), CONSTRAINT "REL_5ba6375fdc72387a2d2d0bb772" UNIQUE ("userId"), CONSTRAINT "PK_bc1bf63498dd2368ce3dc8686e8" PRIMARY KEY ("id"))`);
         await queryRunner.query(`CREATE TYPE "public"."users_role_enum" AS ENUM('merchant', 'admin')`);
         await queryRunner.query(`CREATE TYPE "public"."users_onboardingstep_enum" AS ENUM('0', '1', '2', '3', '4')`);
@@ -128,7 +127,6 @@ export class Baseline1763128132910 implements MigrationInterface {
         await queryRunner.query(`DROP TYPE "public"."users_onboardingstep_enum"`);
         await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
         await queryRunner.query(`DROP TABLE "businesses"`);
-        await queryRunner.query(`DROP TABLE "business_types"`);
     }
 
 }

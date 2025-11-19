@@ -22,17 +22,28 @@ export class Review {
 
   @Column({ nullable: false })
   @Index()
-  userId: number;
+  userId?: number;
 
-  @ManyToOne(() => User, { nullable: false })
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+
+  @Column({ nullable: true, comment: 'Guest reviewer name (when userId is null)' })
+  guestName: string;
+
+  @Column({ nullable: true, comment: 'Guest reviewer email (when userId is null)' })
+  @Index()
+  guestEmail: string;
+
+  @Column({ nullable: true, comment: 'Guest reviewer phone (when userId is null)' })
+  guestPhone: string;
 
   @Column({ nullable: false })
   @Index()
   businessId: number;
 
-  @ManyToOne(() => Business, { nullable: false })
+  @ManyToOne(() => Business, { nullable: true })
   @JoinColumn({ name: 'businessId' })
   business: Business;
 

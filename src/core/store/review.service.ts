@@ -1,3 +1,4 @@
+import { OrderItemStatus } from './../order/interfaces/order.interface';
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -5,10 +6,10 @@ import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../commo
 import { Business } from '../businesses/business.entity';
 import { OrderItem } from '../order/entity/order-items.entity';
 import { Order } from '../order/entity/order.entity';
-import { OrderItemStatus, OrderStatus } from '../order/interfaces/order.interface';
+import { OrderStatus } from '../order/interfaces/order.interface';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users';
-import { CreateReviewDto, UpdateReviewDto } from './dto/create-review.dto';
+import { CreateReviewDto, GuestReviewVerificationDto, UpdateReviewDto } from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
 
 
@@ -32,83 +33,57 @@ export class ReviewService {
     private readonly userRepository: Repository<User>,
   ) { }
 
-  /**
-   * Create a new product review
-   * @param userId - The user ID creating the review
-   * @param reviewData - Review data including order and product info
-   * @returns Promise<Review> - The created review
-   */
-  async createReview(userId: number, reviewData: CreateReviewDto): Promise<Review> {
+  async createReview(userId: number | null, reviewData: CreateReviewDto): Promise<Review> {
     try {
-      // First, validate that the order exists and belongs to the user
-      const order = await this.orderRepository.findOne({
-        where: { id: reviewData.orderId, userId },
-        relations: ['items', 'business'],
-      });
+      // Determine if this is a guest review
+      const isGuestReview = !userId;
 
-      if (!order) {
-        throw new NotFoundException(
-          `Order with ID ${reviewData.orderId} not found or does not belong to you`,
-        );
-      }
-
-      // Check if the order is delivered
-      if (order.status !== OrderStatus.DELIVERED) {
+      // Validate guest review requirements
+      if (isGuestReview && (!reviewData.guestEmail || !reviewData.guestName)) {
         throw new BadRequestException(
-          'Cannot review a product from an order that is not delivered',
+          'Guest reviews require guestEmail and guestName',
         );
       }
 
-      // Find the specific order item
-      const orderItem = order.items.find(item => item.id === reviewData.orderItemId);
-      if (!orderItem) {
-        throw new NotFoundException(
-          `Order item with ID ${reviewData.orderItemId} not found in this order`,
-        );
+      // Find the order with appropriate conditions
+      const orderQuery: any = { id: reviewData.orderId };
+
+      if (isGuestReview) {
+        // For guest reviews, verify using email
+        const order = await this.orderRepository.findOne({
+          where: orderQuery,
+          relations: ['items', 'business'],
+        });
+
+        if (!order) {
+          throw new NotFoundException(`Order with ID ${reviewData.orderId} not found`);
+        }
+
+        // Verify guest email matches order
+        if (order.customerEmail.toLowerCase() !== (reviewData?.guestEmail ?? '').toLowerCase()) {
+          throw new BadRequestException(
+            'Email does not match the order email',
+          );
+        }
+
+        return await this.processReviewCreation(order, reviewData, null, true);
+      } else {
+        // For authenticated users
+        orderQuery.userId = userId;
+
+        const order = await this.orderRepository.findOne({
+          where: orderQuery,
+          relations: ['items', 'business'],
+        });
+
+        if (!order) {
+          throw new NotFoundException(
+            `Order with ID ${reviewData.orderId} not found or does not belong to you`,
+          );
+        }
+
+        return await this.processReviewCreation(order, reviewData, userId, false);
       }
-
-      // Validate that the product ID matches the order item
-      if (orderItem.productId !== reviewData.productId) {
-        throw new BadRequestException(
-          `Product ID ${reviewData.productId} does not match the product in the order item`,
-        );
-      }
-
-      // Validate that the business ID matches the order
-      if (order.businessId !== reviewData.businessId) {
-        throw new BadRequestException('Business ID does not match the order');
-      }
-
-      // Check if order item status is delivered
-      if (orderItem.status !== OrderItemStatus.DELIVERED) {
-        throw new BadRequestException(
-          'Cannot review a product that has not been delivered',
-        );
-      }
-
-      // Check if review already exists for this order item
-      const existingReview = await this.reviewRepository.findOne({
-        where: {
-          orderItemId: reviewData.orderItemId,
-          userId,
-        },
-      });
-
-      if (existingReview) {
-        throw new BadRequestException(
-          'You have already reviewed this product from this order',
-        );
-      }
-
-      // Create the review
-      const review = this.reviewRepository.create({
-        ...reviewData,
-        userId,
-        isVerifiedPurchase: true,
-      });
-
-      // Save and return the review
-      return await this.reviewRepository.save(review);
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
@@ -121,30 +96,144 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Update an existing review
-   * @param userId - The user ID updating the review
-   * @param reviewId - The review ID to update
-   * @param updateData - The data to update
-   * @returns Promise<Review> - The updated review
-   */
-  async updateReview(userId: number, reviewId: number, updateData: UpdateReviewDto): Promise<Review> {
-    try {
-      const review = await this.reviewRepository.findOne({
-        where: { id: reviewId, userId },
-      });
 
-      if (!review) {
-        throw new NotFoundException(
-          `Review with ID ${reviewId} not found or does not belong to you`,
-        );
+  private async processReviewCreation(
+    order: Order,
+    reviewData: CreateReviewDto,
+    userId: number | null,
+    isGuest: boolean,
+  ): Promise<Review> {
+    // Check if the order is delivered
+    if (order.status !== OrderStatus.DELIVERED) {
+      throw new BadRequestException(
+        'Cannot review a product from an order that is not delivered',
+      );
+    }
+
+    // Find the specific order item
+    const orderItem = order.items.find(item => item.id === reviewData.orderItemId);
+    if (!orderItem) {
+      throw new NotFoundException(
+        `Order item with ID ${reviewData.orderItemId} not found in this order`,
+      );
+    }
+
+    // Validate that the product ID matches the order item
+    if (orderItem.productId !== reviewData.productId) {
+      throw new BadRequestException(
+        `Product ID ${reviewData.productId} does not match the product in the order item`,
+      );
+    }
+
+    // Validate that the business ID matches the order
+    if (order.businessId !== reviewData.businessId) {
+      throw new BadRequestException('Business ID does not match the order');
+    }
+
+    // Check if order item status is delivered
+    if (orderItem.status !== OrderItemStatus.DELIVERED) {
+      throw new BadRequestException(
+        'Cannot review a product that has not been delivered',
+      );
+    }
+
+    // Check if review already exists for this order item
+    const existingReviewQuery: any = { orderItemId: reviewData.orderItemId };
+
+    if (isGuest) {
+      existingReviewQuery.guestEmail = reviewData.guestEmail;
+    } else {
+      existingReviewQuery.userId = userId;
+    }
+
+    const existingReview = await this.reviewRepository.findOne({
+      where: existingReviewQuery,
+    });
+
+    if (existingReview) {
+      throw new BadRequestException(
+        'You have already reviewed this product from this order',
+      );
+    }
+
+    // Create the review
+    const reviewEntity: Partial<Review> = {
+      orderId: reviewData.orderId,
+      orderItemId: reviewData.orderItemId,
+      productId: reviewData.productId,
+      businessId: reviewData.businessId,
+      review: reviewData.review,
+      ratings: reviewData.ratings,
+      imageUrls: reviewData.imageUrls || [],
+      isVerifiedPurchase: true,
+    };
+
+    if (isGuest) {
+      reviewEntity.userId = undefined;
+      reviewEntity.guestName = reviewData.guestName;
+      reviewEntity.guestEmail = reviewData.guestEmail;
+      reviewEntity.guestPhone = reviewData.guestPhone || '';
+    } else {
+      reviewEntity.userId = Number(userId);
+    }
+
+    const review = this.reviewRepository.create(reviewEntity);
+
+    // Save and return the review
+    return await this.reviewRepository.save(review);
+  }
+
+
+  async updateReview(
+    userId: number | null,
+    reviewId: number,
+    updateData: UpdateReviewDto,
+    guestVerification?: GuestReviewVerificationDto,
+  ): Promise<Review> {
+    try {
+      const isGuest = !userId;
+
+      let review: Review;
+
+      if (isGuest) {
+        if (!guestVerification || !guestVerification.email || !guestVerification.orderReference) {
+          throw new BadRequestException(
+            'Guest review updates require email and order reference for verification',
+          );
+        }
+
+        // Find review with guest email
+        review = await this.reviewRepository.findOne({
+          where: { id: reviewId, guestEmail: guestVerification.email },
+          relations: ['order'],
+        }) as Review;
+
+        if (!review) {
+          throw new NotFoundException(
+            `Review with ID ${reviewId} not found or email does not match`,
+          );
+        }
+
+        // Verify order reference
+        if (review.order.orderReference !== guestVerification.orderReference) {
+          throw new BadRequestException('Order reference does not match');
+        }
+      } else {
+        review = await this.reviewRepository.findOne({
+          where: { id: reviewId, userId },
+        }) as Review;
+
+        if (!review) {
+          throw new NotFoundException(
+            `Review with ID ${reviewId} not found or does not belong to you`,
+          );
+        }
       }
 
-      // Update the review
       Object.assign(review, updateData);
       return await this.reviewRepository.save(review);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
 
@@ -155,26 +244,52 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Delete a review
-   * @param userId - The user ID deleting the review
-   * @param reviewId - The review ID to delete
-   */
-  async deleteReview(userId: number, reviewId: number): Promise<void> {
+  async deleteReview(
+    userId: number | null,
+    reviewId: number,
+    guestVerification?: GuestReviewVerificationDto,
+  ): Promise<void> {
     try {
-      const review = await this.reviewRepository.findOne({
-        where: { id: reviewId, userId },
-      });
+      const isGuest = !userId;
 
-      if (!review) {
-        throw new NotFoundException(
-          `Review with ID ${reviewId} not found or does not belong to you`,
-        );
+      let review: Review;
+
+      if (isGuest) {
+        if (!guestVerification || !guestVerification.email || !guestVerification.orderReference) {
+          throw new BadRequestException(
+            'Guest review deletion requires email and order reference for verification',
+          );
+        }
+
+        review = await this.reviewRepository.findOne({
+          where: { id: reviewId, guestEmail: guestVerification.email },
+          relations: ['order'],
+        }) as Review;
+
+        if (!review) {
+          throw new NotFoundException(
+            `Review with ID ${reviewId} not found or email does not match`,
+          );
+        }
+
+        if (review.order.orderReference !== guestVerification.orderReference) {
+          throw new BadRequestException('Order reference does not match');
+        }
+      } else {
+        review = await this.reviewRepository.findOne({
+          where: { id: reviewId, userId },
+        }) as Review;
+
+        if (!review) {
+          throw new NotFoundException(
+            `Review with ID ${reviewId} not found or does not belong to you`,
+          );
+        }
       }
 
       await this.reviewRepository.softDelete(reviewId);
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
 
@@ -185,12 +300,8 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Get reviews by product ID with pagination
-   * @param productId - The product ID
-   * @param paginationDto - Pagination options
-   * @returns Promise<PaginationResultDto<Review>> - Paginated reviews
-   */
+
+
   async findReviewsByProductId(
     productId: number,
     paginationDto?: PaginationDto,
@@ -214,7 +325,6 @@ export class ReviewService {
 
       const itemCount = await queryBuilder.getCount();
 
-      // Get pagination options or set defaults
       const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
         skip: 0,
         limit: 10,
@@ -244,12 +354,7 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Get reviews by business ID with pagination
-   * @param businessId - The business ID
-   * @param paginationDto - Pagination options
-   * @returns Promise<PaginationResultDto<Review>> - Paginated reviews
-   */
+
   async findReviewsByBusinessId(
     businessId: number,
     paginationDto?: PaginationDto,
@@ -303,12 +408,6 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Get reviews by user ID with pagination
-   * @param userId - The user ID
-   * @param paginationDto - Pagination options
-   * @returns Promise<PaginationResultDto<Review>> - Paginated reviews
-   */
   async findReviewsByUserId(
     userId: number,
     paginationDto?: PaginationDto,
@@ -360,11 +459,48 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Find a review by its ID
-   * @param id - The review ID
-   * @returns Promise<Review> - The review
-   */
+
+  async findReviewsByGuestEmail(
+    email: string,
+    paginationDto?: PaginationDto,
+  ): Promise<PaginationResultDto<Review>> {
+    try {
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.product', 'product')
+        .leftJoinAndSelect('review.business', 'business')
+        .where('review.guestEmail = :email', { email: email.toLowerCase() })
+        .andWhere('review.userId IS NULL');
+
+      const itemCount = await queryBuilder.getCount();
+
+      const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
+        skip: 0,
+        limit: 10,
+        order: PaginationOrder.DESC,
+        page: 1
+      };
+
+      const data = await queryBuilder
+        .skip(skip)
+        .take(limit)
+        .orderBy('review.createdAt', order)
+        .getMany();
+
+      return new PaginationResultDto(data, {
+        itemCount,
+        pageOptionsDto: paginationDto || { skip, limit, order, page },
+      });
+    } catch (error) {
+      this.logger.error(`Failed to find reviews by guest email: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(
+        `Failed to find reviews: ${error.message}`,
+      );
+    }
+  }
+
+
+
   async findReviewById(id: number): Promise<Review> {
     try {
       const review = await this.reviewRepository.findOne({
@@ -389,11 +525,6 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Get the average rating for a product
-   * @param productId - The product ID
-   * @returns Promise<number> - The average rating
-   */
   async getProductAverageRating(productId: number): Promise<number> {
     try {
       const product = await this.productRepository.findOne({
@@ -424,11 +555,7 @@ export class ReviewService {
     }
   }
 
-  /**
-   * Get review statistics for a product
-   * @param productId - The product ID
-   * @returns Promise<object> - The review statistics
-   */
+
   async getProductReviewStats(productId: number): Promise<any> {
     try {
       const product = await this.productRepository.findOne({
@@ -463,9 +590,26 @@ export class ReviewService {
       // Calculate average rating
       const averageRating = await this.getProductAverageRating(productId);
 
+      // Get counts for authenticated vs guest reviews
+      const authenticatedReviewsCount = await this.reviewRepository
+        .createQueryBuilder('review')
+        .where('review.productId = :productId', { productId })
+        .andWhere('review.isVisible = :isVisible', { isVisible: true })
+        .andWhere('review.userId IS NOT NULL')
+        .getCount();
+
+      const guestReviewsCount = await this.reviewRepository
+        .createQueryBuilder('review')
+        .where('review.productId = :productId', { productId })
+        .andWhere('review.isVisible = :isVisible', { isVisible: true })
+        .andWhere('review.userId IS NULL')
+        .getCount();
+
       return {
         totalReviews,
         averageRating,
+        authenticatedReviews: authenticatedReviewsCount,
+        guestReviews: guestReviewsCount,
         ratingCounts: Object.fromEntries(
           ratingCounts.map(({ rating, count }) => [`rating${rating}`, count])
         ),

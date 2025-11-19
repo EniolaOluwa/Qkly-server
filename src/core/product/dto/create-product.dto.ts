@@ -12,6 +12,7 @@ import {
   IsBoolean,
   Max,
 } from 'class-validator';
+import { PaginationDto } from '../../../common/queries/dto';
 
 
 export enum MeasurementType {
@@ -151,34 +152,7 @@ export class CreateProductDto {
 }
 
 
-
-
-
-
-export class FindAllProductsDto {
-  @ApiPropertyOptional({
-    description: 'Page number',
-    type: Number,
-    default: 1
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Type(() => Number)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    description: 'Number of items per page',
-    type: Number,
-    default: 10
-  })
-  @IsOptional()
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  @Type(() => Number)
-  limit?: number = 10;
-
+export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter by user ID',
     type: Number

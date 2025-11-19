@@ -16,8 +16,10 @@ import { JwtStrategy } from './common/auth/jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
-import { AdminModule } from './core/admin/admin.module';
-import { StoreFrontModule } from './core/store-front/store-front.module';
+import { LeadModule } from './core/lead/lead.module';
+import { EmailModule } from './core/email/email.module';
+import { PaymentModule } from './core/payment/payment.module';
+import { TransactionService } from './core/transaction/transaction.service';
 
 
 @Module({
@@ -31,12 +33,13 @@ import { StoreFrontModule } from './core/store-front/store-front.module';
     UsersModule,
     ProductModule,
     OrderModule,
+    EmailModule,
     BusinessesModule,
     WalletsModule,
     ReviewModule,
+    LeadModule,
     CategoryModule,
-    AdminModule,
-    StoreFrontModule
+    PaymentModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
@@ -46,6 +49,7 @@ import { StoreFrontModule } from './core/store-front/store-front.module';
       inject: [Reflector],
     },
     AppService,
+    TransactionService,
   ],
 })
 export class AppModule { }

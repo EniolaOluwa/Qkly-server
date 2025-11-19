@@ -98,7 +98,7 @@ export class DateHelper {
       ErrorHelper.BadRequestException('End date/time cannot be less than start date/time');
     }
 
-    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').toObject().minutes;
+    const minutesDifference = endDateTime.diff(startDateTime, 'minutes').toObject().minutes ?? 0;
 
     return minutesDifference;
   }
@@ -160,7 +160,7 @@ export class DateHelper {
     const dt1 = DateTime.fromJSDate(date1);
     const dt2 = DateTime.fromJSDate(date2);
 
-    return dt2.diff(dt1, 'minutes').toObject().minutes;
+    return dt2.diff(dt1, 'minutes').toObject().minutes ?? 0;
   }
 
   static millisecondsBetweenDates(date1: Date | string, date2: Date | string): number {
