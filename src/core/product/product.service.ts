@@ -233,6 +233,7 @@ export class ProductService {
         pageOptionsDto: query,
       });
     } catch (error) {
+      console.log(error)
       ErrorHelper.InternalServerErrorException(`Error finding products: ${error.message}`, error);
     }
   }

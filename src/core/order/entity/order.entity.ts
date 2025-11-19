@@ -1,10 +1,29 @@
-import { Entity, Index, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn, BeforeInsert } from "typeorm";
-import { Business } from "../../businesses/business.entity";
-import { User } from "../../users";
-import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, PaymentDetails, DeliveryDetails, SettlementDetails } from "../interfaces/order.interface";
-import { OrderItem } from "./order-items.entity";
+import {
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  BeforeInsert,
+} from 'typeorm';
+import { Business } from '../../businesses/business.entity';
+import { User } from '../../users';
+import {
+  OrderStatus,
+  PaymentStatus,
+  PaymentMethod,
+  DeliveryMethod,
+  PaymentDetails,
+  DeliveryDetails,
+  SettlementDetails,
+} from '../interfaces/order.interface';
+import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
-
 
 @Entity('orders')
 @Index(['userId', 'businessId'])
@@ -60,7 +79,6 @@ export class Order {
     enum: OrderStatus,
     default: OrderStatus.PENDING,
   })
-  @Index()
   status: OrderStatus;
 
   @Column({
@@ -68,7 +86,6 @@ export class Order {
     enum: PaymentStatus,
     default: PaymentStatus.PENDING,
   })
-  @Index()
   paymentStatus: PaymentStatus;
 
   @Column({
@@ -94,7 +111,13 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   tax: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false, default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: false,
+    default: 0,
+  })
   discount: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
@@ -118,7 +141,10 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
-  @OneToMany(() => OrderItem, orderItem => orderItem.order, { cascade: true, eager: true })
+  @OneToMany(() => OrderItem, (orderItem) => orderItem.order, {
+    cascade: true,
+    eager: true,
+  })
   items: OrderItem[];
 
   @Column({ type: 'boolean', default: false })
