@@ -18,8 +18,8 @@ import { CategoryModule } from './core/category/category.module';
 import { AdminController } from './core/admin/admin.controller';
 import { LeadModule } from './core/lead/lead.module';
 import { EmailModule } from './core/email/email.module';
-import { StoreFrontModule } from './core/store-front/store-front.module';
-import { InsightsModule } from './core/insights/insights.module';
+import { PaymentModule } from './core/payment/payment.module';
+import { TransactionService } from './core/transaction/transaction.service';
 
 
 @Module({
@@ -39,8 +39,7 @@ import { InsightsModule } from './core/insights/insights.module';
     ReviewModule,
     LeadModule,
     CategoryModule,
-    StoreFrontModule,
-    InsightsModule,
+    PaymentModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
@@ -50,6 +49,7 @@ import { InsightsModule } from './core/insights/insights.module';
       inject: [Reflector],
     },
     AppService,
+    TransactionService,
   ],
 })
 export class AppModule { }

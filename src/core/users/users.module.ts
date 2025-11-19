@@ -35,7 +35,7 @@ import { InsightsModule } from '../insights/insights.module';
         signOptions: { expiresIn: '1h' },
       }),
     }),
-    WalletsModule
+    WalletsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],

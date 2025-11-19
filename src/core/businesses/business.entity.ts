@@ -42,17 +42,18 @@ export class Business {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column({ nullable: true })
-  coverImage: string;
 
-  @Column({ nullable: true }) // I'm guessing storename is the same as business name
-  storeName: string;
+  @Column({ nullable: true, comment: 'Paystack subaccount code for split payments' })
+  paystackSubaccountCode: string;
 
-  @Column({ nullable: true })
-  heroText: string;
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 95.00, comment: 'Percentage business receives from sales (100 - platform fee)' })
+  revenueSharePercentage: number;
 
-  @Column({ nullable: true })
-  storeColor: string;
+  @Column({ type: 'boolean', default: false, comment: 'Whether subaccount is verified and active' })
+  isSubaccountActive: boolean;
+
+  @Column({ nullable: true, comment: 'Settlement schedule for this business' })
+  settlementSchedule: string;
 
   @CreateDateColumn()
   createdAt: Date;

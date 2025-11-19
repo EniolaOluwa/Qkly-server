@@ -11,8 +11,9 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, OrderItemStatus } from '../interfaces/order.interface';
+import { PaginationDto } from '../../../common/queries/dto';
 
-export class FindAllOrdersDto {
+export class FindAllOrdersDto extends PaginationDto {
   @ApiProperty({
     description: 'Filter by user ID',
     required: false,

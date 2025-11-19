@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { StoreVisit } from './entities/store-visit.entity';
 import { Order } from '../order/entity/order.entity';
 import { OrderStatus, PaymentStatus } from '../order/interfaces/order.interface';
@@ -8,6 +8,7 @@ import { OrderItem } from '../order/entity/order-items.entity';
 import { Business } from '../businesses/business.entity';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto, InsightsKPIDto, TrafficSourceDto } from './dto/insights-response.dto';
+
 
 @Injectable()
 export class InsightsService {
@@ -278,4 +279,3 @@ export class InsightsService {
     return 'others';
   }
 }
-

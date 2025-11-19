@@ -25,6 +25,7 @@ import { InsightsService } from './insights.service';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto } from './dto/insights-response.dto';
 
+
 @ApiTags('insights')
 @Controller('insights')
 export class InsightsController {

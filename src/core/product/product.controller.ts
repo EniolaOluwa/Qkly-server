@@ -200,39 +200,6 @@ export class ProductsController {
     });
   }
 
-  @Get('search')
-  @Public()
-  @ApiOperation({
-    summary: 'Advanced product search',
-    description: 'Search and filter products using multiple criteria. This endpoint supports all the same filters as GET /products. Public endpoint with no sensitive data.'
-  })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page', example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search term', example: 'laptop' })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number, description: 'Minimum price', example: 100 })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number, description: 'Maximum price', example: 2000 })
-  @ApiQuery({ name: 'categoryId', required: false, type: Number, description: 'Category ID', example: 1 })
-  @ApiQuery({ name: 'inStock', required: false, type: Boolean, description: 'In stock filter', example: true })
-  @ApiQuery({ name: 'sortBy', required: false, enum: ['price', 'createdAt', 'name'], description: 'Sort field', example: 'price' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['ASC', 'DESC'], description: 'Sort order', example: 'ASC' })
-  @ApiResponse({
-    status: 200,
-    description: 'Search results retrieved successfully'
-  })
-  async searchProducts(@Query() query: FindAllProductsDto & PaginationDto) {
-    const products = await this.productService.findAllProducts(query);
-
-    // Sanitize product data for public endpoint
-    const sanitizedData = {
-      ...products,
-      data: products.data.map(product => this.sanitizeProductData(product))
-    };
-
-    return HttpResponse.success({
-      data: sanitizedData,
-      message: 'Products search results retrieved successfully'
-    });
-  }
 
   @Get('user')
   @ApiBearerAuth()
