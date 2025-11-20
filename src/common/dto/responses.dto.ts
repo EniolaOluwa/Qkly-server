@@ -95,12 +95,6 @@ export class RegisterUserDto {
 
 export class RegisterUserResponseDto {
   @ApiProperty({
-    description: 'Registration success message',
-    example: 'User registered successfully',
-  })
-  message: string;
-
-  @ApiProperty({
     description: 'JWT access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
@@ -643,12 +637,6 @@ export class CreatePinDto {
 
 export class CreatePinResponseDto {
   @ApiProperty({
-    description: 'PIN creation success message',
-    example: 'PIN created successfully',
-  })
-  message: string;
-
-  @ApiProperty({
     description: 'Success status',
     example: true,
   })
@@ -656,12 +644,6 @@ export class CreatePinResponseDto {
 }
 
 export class GenerateCreatePinOtpResponseDto {
-  @ApiProperty({
-    description: 'OTP generation success message',
-    example: 'OTP sent successfully to your phone number',
-  })
-  message: string;
-
   @ApiProperty({
     description: 'Masked phone number',
     example: '0813*****06',
@@ -691,12 +673,6 @@ export class VerifyCreatePinOtpDto {
 }
 
 export class VerifyCreatePinOtpResponseDto {
-  @ApiProperty({
-    description: 'OTP verification success message',
-    example: 'OTP verified successfully. You can now create your PIN.',
-  })
-  message: string;
-
   @ApiProperty({
     description: 'Verification status',
     example: true,
@@ -748,12 +724,6 @@ export class ForgotPasswordDto {
 
 export class ForgotPasswordResponseDto {
   @ApiProperty({
-    description: 'Forgot password success message',
-    example: 'OTP sent successfully to your phone number',
-  })
-  message: string;
-
-  @ApiProperty({
     description: 'Masked phone number',
     example: '0813*****06',
   })
@@ -788,12 +758,6 @@ export class VerifyPasswordResetOtpDto {
 }
 
 export class VerifyPasswordResetOtpResponseDto {
-  @ApiProperty({
-    description: 'OTP verification result message',
-    example: 'OTP verified successfully. You can now reset your password.',
-  })
-  message: string;
-
   @ApiProperty({
     description: 'Verification status',
     example: true,

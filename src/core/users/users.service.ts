@@ -17,9 +17,8 @@ import {
   CreatePinResponseDto,
   KycVerificationResponseDto,
   LoginDto,
-  LoginResponseDto,
   RegisterUserDto,
-  RegisterUserResponseDto,
+  RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
@@ -117,7 +116,6 @@ export class UsersService {
 
       // Return user information with token
       return {
-        message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
         expiresIn: EXPIRATION_TIME_SECONDS,
@@ -148,7 +146,7 @@ export class UsersService {
     return this.userRepository.findOne({ where: { id } });
   }
 
-  async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
+  async loginUser(loginDto: LoginDto) {
     try {
       // Find user by email
       const user = await this.userRepository.findOne({
@@ -196,10 +194,9 @@ export class UsersService {
 
       // Return user information with token
       return {
-        message: 'User logged in successfully',
         accessToken,
         tokenType: 'Bearer',
-        expiresIn: 3600, // 1 hour in seconds
+        expiresIn: 3600,
         userId: user.id,
         email: user.email,
         firstName: user.firstName,
@@ -452,7 +449,7 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            this.logger.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
           } else {
             console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
           }
@@ -523,7 +520,6 @@ export class UsersService {
       });
 
       return {
-        message: 'PIN created successfully',
         success: true,
       };
     } catch (error) {
@@ -819,7 +815,6 @@ export class UsersService {
         api_key: termiiApiKey,
       };
 
-      console.log(`Sending OTP via Termii SMS to ${phoneNumber}: ${otp}`); // For development/testing
 
       const response = await firstValueFrom(
         this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
