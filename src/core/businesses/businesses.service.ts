@@ -28,7 +28,7 @@ export class BusinessesService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private cloudinaryUtil: CloudinaryUtil,
-  ) {}
+  ) { }
 
   // Business Type methods
   async createBusinessType(
@@ -62,7 +62,8 @@ export class BusinessesService {
   }
 
   async findAllBusinessTypes(): Promise<BusinessType[]> {
-    return await this.businessTypeRepository.find({
+    return this.businessTypeRepository.find({
+      select: ['id', 'name'],
       order: { name: 'ASC' },
     });
   }
@@ -158,7 +159,7 @@ export class BusinessesService {
       if (!createBusinessDto.logo) {
         throw new Error('Logo is required for business creation');
       }
-      
+
       const uploadResult = await this.cloudinaryUtil.uploadImage(
         createBusinessDto.logo.buffer,
       );
