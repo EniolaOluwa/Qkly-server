@@ -449,7 +449,7 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            this.logger.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
           } else {
             console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
           }
@@ -815,7 +815,6 @@ export class UsersService {
         api_key: termiiApiKey,
       };
 
-      console.log(`Sending OTP via Termii SMS to ${phoneNumber}: ${otp}`); // For development/testing
 
       const response = await firstValueFrom(
         this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
