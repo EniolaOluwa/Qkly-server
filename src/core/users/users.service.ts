@@ -1,42 +1,32 @@
-import {
-  Injectable,
-  ConflictException,
-  InternalServerErrorException,
-  NotFoundException,
-  BadRequestException,
-  UnauthorizedException,
-  Logger,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
-import { User } from './entity/user.entity';
-import { Otp, OtpType, OtpPurpose } from './entity/otp.entity';
-import { OnboardingStep } from './dto/onboarding-step.enum';
 import {
-  RegisterUserDto,
-  RegisterUserResponseDto,
-  LoginDto,
-  LoginResponseDto,
-  KycVerificationResponseDto,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+import {
   CreatePinResponseDto,
-  UpdateBusinessDto,
+  KycVerificationResponseDto,
+  LoginDto,
+  RegisterUserDto,
+  RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
-import { EmailService } from '../email/email.service';
 import { MailDispatcherDto } from '../email/dto/sendMail.dto';
 import { signup } from '../email/templates/register.template';
-import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
-import { Business } from '../businesses/business.entity';
-import { StoreFrontService } from '../store-front/store-front.service';
-
-import { InsightsService } from '../insights/insights.service';
-import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
-import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
+import { OnboardingStep } from './dto/onboarding-step.enum';
+import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
+import { User } from './entity/user.entity';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -51,15 +41,11 @@ export class UsersService {
     private userRepository: Repository<User>,
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
-    @InjectRepository(Business)
-    private businessRepository: Repository<Business>,
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
-    private readonly emailService: EmailService,
-    private readonly storeFrontService: StoreFrontService,
-    private readonly insightsService: InsightsService,
+    // private readonly emailService: EmailService,
   ) { }
 
 
@@ -71,7 +57,6 @@ export class UsersService {
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
-
       if (existingUserByEmail) {
         throw new ConflictException('User with this email already exists');
       }
@@ -124,14 +109,13 @@ export class UsersService {
         html: signup(user.firstName),
       };
 
-  
+
       // send mail to user
-      this.emailService.emailDispatcher(emailDispatcherPayload);
+      // this.emailService.emailDispatcher(emailDispatcherPayload);
 
 
       // Return user information with token
       return {
-        message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
         expiresIn: EXPIRATION_TIME_SECONDS,
@@ -145,13 +129,14 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-    
+
       if (error instanceof ConflictException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to register user');
     }
   }
+
 
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
@@ -161,7 +146,7 @@ export class UsersService {
     return this.userRepository.findOne({ where: { id } });
   }
 
-  async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
+  async loginUser(loginDto: LoginDto) {
     try {
       // Find user by email
       const user = await this.userRepository.findOne({
@@ -209,10 +194,9 @@ export class UsersService {
 
       // Return user information with token
       return {
-        message: 'User logged in successfully',
         accessToken,
         tokenType: 'Bearer',
-        expiresIn: 3600, // 1 hour in seconds
+        expiresIn: 3600,
         userId: user.id,
         email: user.email,
         firstName: user.firstName,
@@ -230,7 +214,6 @@ export class UsersService {
     }
   }
 
-  // Termii sms otp
   async generatePhoneOtp(
     userId: number,
     phone: string,
@@ -347,7 +330,6 @@ export class UsersService {
     }
   }
 
-  // KYC - dojah
   async verifyBvnWithSelfie(
     userId: number,
     bvn: string,
@@ -467,7 +449,7 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            this.logger.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
           } else {
             console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
           }
@@ -515,7 +497,6 @@ export class UsersService {
   }
 
 
-  // Pin creation
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
       // Validate PIN format (4 digits only)
@@ -539,7 +520,6 @@ export class UsersService {
       });
 
       return {
-        message: 'PIN created successfully',
         success: true,
       };
     } catch (error) {
@@ -741,7 +721,6 @@ export class UsersService {
     }
   }
 
-  // Password api
   async forgotPassword(email: string): Promise<{
     message: string;
     maskedPhone: string;
@@ -802,74 +781,81 @@ export class UsersService {
     }
   }
 
-  async resetPassword(
-    newPassword: string,
-    resetToken: string,
-  ): Promise<{ message: string; success: boolean }> {
+  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
     try {
-      // Find the reset token in the database
-      const tokenRecord = await this.otpRepository.findOne({
-        where: {
-          otp: resetToken, // Full UUID stored in OTP field
-          otpType: OtpType.EMAIL,
-          purpose: OtpPurpose.PASSWORD_RESET,
-          isUsed: false,
-        },
-        order: { createdAt: 'DESC' },
-      });
-
-      if (!tokenRecord) {
-        throw new UnauthorizedException('Invalid or expired reset token');
-      }
-
-      // Check if token has expired
-      if (tokenRecord.expiresAt < new Date()) {
-        throw new UnauthorizedException('Reset token has expired');
-      }
-
-      // Find user by ID from token record
-      const user = await this.userRepository.findOne({
-        where: { id: tokenRecord.userId },
-      });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-
-      // Mark the reset token as used
-      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
-
-      // Hash the new password
-      const hashedPassword = CryptoUtil.hashPassword(newPassword);
-
-      // Update user's password
-      await this.userRepository.update(user.id, {
-        password: hashedPassword,
-      });
-
-      // Invalidate any remaining unused password reset OTPs for this user for security
-      await this.otpRepository.update(
-        {
-          userId: user.id,
-          purpose: OtpPurpose.PASSWORD_RESET,
-          isUsed: false,
-        },
-        { isUsed: true },
+      const termiiBaseUrl = this.configService.get<string>(
+        'TERMII_BASE_URL',
+        'https://api.ng.termii.com',
+      );
+      const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
+      const senderId = this.configService.get<string>(
+        'TERMII_SENDER_ID',
+        'NQkly',
+      );
+      const channel = this.configService.get<string>(
+        'TERMII_CHANNEL',
+        'generic',
       );
 
-      return {
-        message: 'Password reset successfully',
-        success: true,
-      };
-    } catch (error) {
-      if (
-        error instanceof UnauthorizedException ||
-        error instanceof NotFoundException
-      ) {
-        throw error;
+      if (!termiiApiKey) {
+        throw new InternalServerErrorException(
+          'Termii SMS API key not configured',
+        );
       }
-      throw new InternalServerErrorException('Failed to reset password');
+
+      const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+
+      // Format payload according to Termii SMS API documentation
+      const payload = {
+        to: phoneNumber,
+        from: senderId,
+        sms: message,
+        type: 'plain',
+        channel: channel,
+        api_key: termiiApiKey,
+      };
+
+
+      const response = await firstValueFrom(
+        this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+
+      if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
+        throw new InternalServerErrorException(
+          'Failed to send SMS via Termii API',
+        );
+      }
+    } catch (error) {
+      console.error(
+        'Failed to send SMS via Termii:',
+        error.response?.data || error.message,
+      );
+      // In development, don't fail the request if SMS sending fails
+      if (this.configService.get<string>('NODE_ENV') === 'production') {
+        throw new InternalServerErrorException('Failed to send SMS');
+      }
     }
+  }
+
+  private maskPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    if (cleanPhone.length < 6) {
+      return phone; // Return original if too short to mask
+    }
+
+    // Mask middle digits, showing first 4 and last 2 digits
+    // Example: 08123456789 becomes 0812*****89
+    const firstPart = cleanPhone.substring(0, 4);
+    const lastPart = cleanPhone.substring(cleanPhone.length - 2);
+    const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
+
+    return `${firstPart}${maskedMiddle}${lastPart}`;
   }
 
   async verifyPasswordResetOtp(
@@ -945,349 +931,74 @@ export class UsersService {
     }
   }
 
-  // settings - change password
-  async changePassword(
- changePassword: ChangePasswordDto
+
+  async resetPassword(
+    newPassword: string,
+    resetToken: string,
   ): Promise<{ message: string; success: boolean }> {
     try {
-      // Validate inputs
-      if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
-        throw new BadRequestException('User ID, old password, and new password are required');
-      }
-
-      if (changePassword.oldPassword === changePassword.newPassword) {
-        throw new BadRequestException('New password must be different from old password');
-      }
-
-      if(changePassword.newPassword !== changePassword.confirmPassword){
-        throw new BadRequestException('password must match')
-      }
-
-      // Find user by ID
-      const user = await this.userRepository.findOne({ where: { id: Number(changePassword.userId) } });
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-
-      // Verify old password matches
-      if (!CryptoUtil.verifyPassword(changePassword.oldPassword, user.password)) {
-        throw new UnauthorizedException('Invalid current password');
-      }
-
-      // Hash new password
-      const hashedPassword = CryptoUtil.hashPassword(changePassword.newPassword);
-
-      // Update user password
-      await this.userRepository.update(changePassword.userId, { password: hashedPassword });
-
-      this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
-
-      return {
-        message: 'Password changed successfully',
-        success: true,
-      };
-    } catch (error) {
-      this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
-      throw new InternalServerErrorException('Failed to change password');
-    }
-  }
-
-  async updateBusinessDetails(
-    updateBusiness: UpdateBusinessDto,
-    userId: number,
-  ) {
-    try {
-      const business = await this.businessRepository.findOne({
-        where: { userId },
+      // Find the reset token in the database
+      const tokenRecord = await this.otpRepository.findOne({
+        where: {
+          otp: resetToken, // Full UUID stored in OTP field
+          otpType: OtpType.EMAIL,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        order: { createdAt: 'DESC' },
       });
 
-      if (!business) {
-        throw new NotFoundException('Business record not found');
+      if (!tokenRecord) {
+        throw new UnauthorizedException('Invalid or expired reset token');
       }
 
-      Object.assign(business, updateBusiness);
-
-      return await this.businessRepository.save(business);
-    } catch (error) {
-      throw new InternalServerErrorException('failed to update business');
-    }
-  }
-  
-  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
-    try {
-      const termiiBaseUrl = this.configService.get<string>(
-        'TERMII_BASE_URL',
-        'https://api.ng.termii.com',
-      );
-      const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
-      const senderId = this.configService.get<string>(
-        'TERMII_SENDER_ID',
-        'NQkly',
-      );
-      const channel = this.configService.get<string>(
-        'TERMII_CHANNEL',
-        'generic',
-      );
-
-      if (!termiiApiKey) {
-        throw new InternalServerErrorException(
-          'Termii SMS API key not configured',
-        );
+      // Check if token has expired
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Reset token has expired');
       }
 
-      const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
-
-      // Format payload according to Termii SMS API documentation
-      const payload = {
-        to: phoneNumber,
-        from: senderId,
-        sms: message,
-        type: 'plain',
-        channel: channel,
-        api_key: termiiApiKey,
-      };
-
-      console.log(`Sending OTP via Termii SMS to ${phoneNumber}: ${otp}`); // For development/testing
-
-      const response = await firstValueFrom(
-        this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }),
-      );
-
-      if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
-        throw new InternalServerErrorException(
-          'Failed to send SMS via Termii API',
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Failed to send SMS via Termii:',
-        error.response?.data || error.message,
-      );
-      // In development, don't fail the request if SMS sending fails
-      if (this.configService.get<string>('NODE_ENV') === 'production') {
-        throw new InternalServerErrorException('Failed to send SMS');
-      }
-    }
-  }
-
-  private maskPhoneNumber(phone: string): string {
-    // Remove any non-digit characters
-    const cleanPhone = phone.replace(/\D/g, '');
-
-    if (cleanPhone.length < 6) {
-      return phone; // Return original if too short to mask
-    }
-
-    // Mask middle digits, showing first 4 and last 2 digits
-    // Example: 08123456789 becomes 0812*****89
-    const firstPart = cleanPhone.substring(0, 4);
-    const lastPart = cleanPhone.substring(cleanPhone.length - 2);
-    const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
-
-    return `${firstPart}${maskedMiddle}${lastPart}`;
-  }
-
-  async checkUser(
-    identifier: string | number,
-    identifierType: 'id' | 'email' | 'phone' = 'id',
-  ): Promise<User> {
-    try {
-      // Build where clause based on identifier type
-      let whereClause: any;
-
-      if (identifierType === 'id') {
-        whereClause = { id: Number(identifier) };
-      } else if (identifierType === 'email') {
-        whereClause = { email: identifier };
-      } else if (identifierType === 'phone') {
-        whereClause = { phone: identifier };
-      } else {
-        throw new BadRequestException(`Invalid identifier type: ${identifierType}`);
-      }
-
-      // Find user
-      const user = await this.userRepository.findOne({ where: whereClause });
-
-      if (!user) {
-        throw new NotFoundException(
-          `User not found with ${identifierType}: ${identifier}`,
-        );
-      }
-
-      return user;
-    } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error;
-      }
-      this.logger.error(
-        `Error checking user with ${identifierType}: ${identifier}`,
-        error,
-      );
-      throw new InternalServerErrorException('Failed to check user');
-    }
-  }
-
- 
-
-  async updateUserProfile(
-    userId: number,
-    updateUserProfileDto: UpdateUserProfileDto,
-  ): Promise<{ message: string; user: Partial<User> }> {
-    try {
-      // Find user by ID
-      const user = await this.userRepository.findOne({ where: { id: userId } });
-
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
-
-      // Check if email is being updated and if it's already taken
-      if (updateUserProfileDto.email && updateUserProfileDto.email !== user.email) {
-        const existingUser = await this.userRepository.findOne({
-          where: { email: updateUserProfileDto.email },
-        });
-
-        if (existingUser) {
-          throw new ConflictException('Email already in use by another user');
-        }
-      }
-
-      // Check if phone is being updated and if it's already taken
-      if (updateUserProfileDto.phone && updateUserProfileDto.phone !== user.phone) {
-        const existingUser = await this.userRepository.findOne({
-          where: { phone: updateUserProfileDto.phone },
-        });
-
-        if (existingUser) {
-          throw new ConflictException('Phone number already in use by another user');
-        }
-      }
-
-      // Update user fields
-      if (updateUserProfileDto.firstName !== undefined) {
-        user.firstName = updateUserProfileDto.firstName;
-      }
-      if (updateUserProfileDto.lastName !== undefined) {
-        user.lastName = updateUserProfileDto.lastName;
-      }
-      if (updateUserProfileDto.email !== undefined) {
-        user.email = updateUserProfileDto.email;
-        // Reset email verification if email is changed
-        user.isEmailVerified = false;
-      }
-      if (updateUserProfileDto.phone !== undefined) {
-        user.phone = updateUserProfileDto.phone;
-        // Reset phone verification if phone is changed
-        user.isPhoneVerified = false;
-      }
-
-      const updatedUser = await this.userRepository.save(user);
-
-      // Return user without sensitive data
-      const { password, pin, ...userWithoutSensitiveData } = updatedUser;
-
-      this.logger.log(`User profile updated successfully for user ${userId}`);
-
-      return {
-        message: 'User profile updated successfully',
-        user: userWithoutSensitiveData,
-      };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      this.logger.error(`Failed to update user profile for user ${userId}:`, error);
-      throw new InternalServerErrorException('Failed to update user profile');
-    }
-  }
-
-  async changePin(
-    changePinDto: ChangePinDto,
-  ): Promise<{ message: string; success: boolean }> {
-    try {
-      // Validate PIN format (4 digits only)
-      if (!/^\d{4}$/.test(changePinDto.newPin)) {
-        throw new BadRequestException('New PIN must be exactly 4 digits');
-      }
-
-      if (changePinDto.newPin !== changePinDto.confirmPin) {
-        throw new BadRequestException('New PIN and confirm PIN do not match');
-      }
-
-      if (changePinDto.oldPin === changePinDto.newPin) {
-        throw new BadRequestException('New PIN must be different from old PIN');
-      }
-
-      // Find user by ID
+      // Find user by ID from token record
       const user = await this.userRepository.findOne({
-        where: { id: changePinDto.userId },
+        where: { id: tokenRecord.userId },
       });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
-      if (!user.pin) {
-        throw new BadRequestException('User does not have a PIN set. Please create a PIN first.');
-      }
+      // Mark the reset token as used
+      await this.otpRepository.update(tokenRecord.id, { isUsed: true });
 
-      // Verify old PIN
-      const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
-      if (!isOldPinValid) {
-        throw new UnauthorizedException('Invalid current PIN');
-      }
+      // Hash the new password
+      const hashedPassword = CryptoUtil.hashPassword(newPassword);
 
-      // Encrypt the new PIN
-      const encryptedPin = CryptoUtil.encryptPin(changePinDto.newPin);
-
-      // Update user with new encrypted PIN
-      await this.userRepository.update(changePinDto.userId, {
-        pin: encryptedPin,
+      // Update user's password
+      await this.userRepository.update(user.id, {
+        password: hashedPassword,
       });
 
-      this.logger.log(`PIN changed successfully for user ${changePinDto.userId}`);
+      // Invalidate any remaining unused password reset OTPs for this user for security
+      await this.otpRepository.update(
+        {
+          userId: user.id,
+          purpose: OtpPurpose.PASSWORD_RESET,
+          isUsed: false,
+        },
+        { isUsed: true },
+      );
 
       return {
-        message: 'PIN changed successfully',
+        message: 'Password reset successfully',
         success: true,
       };
     } catch (error) {
       if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException ||
-        error instanceof UnauthorizedException
+        error instanceof UnauthorizedException ||
+        error instanceof NotFoundException
       ) {
         throw error;
       }
-      this.logger.error(
-        `Failed to change PIN for user ${changePinDto.userId}:`,
-        error,
-      );
-      throw new InternalServerErrorException('Failed to change PIN');
+      throw new InternalServerErrorException('Failed to reset password');
     }
   }
-
-  async getInsights(
-    userId: number,
-    query: InsightsQueryDto,
-  ): Promise<InsightsResponseDto> {
-    try {
-      return await this.insightsService.getInsights(userId, query);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to get insights for user ${userId}:`, error);
-      throw new InternalServerErrorException('Failed to get insights');
-    }
-  }
-
-  
 }

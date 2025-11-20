@@ -91,7 +91,7 @@ export class UsersController {
   })
   async registerUser(
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
-  ): Promise<RegisterUserResponseDto> {
+  ) {
     return this.usersService.registerUser(registerUserDto);
   }
 
@@ -117,8 +117,9 @@ export class UsersController {
   })
   async loginUser(
     @Body(ValidationPipe) loginDto: LoginDto,
-  ): Promise<LoginResponseDto> {
-    return this.usersService.loginUser(loginDto);
+  ) {
+    const data = await this.usersService.loginUser(loginDto);
+    return data
   }
 
   @Get('profile')

@@ -37,7 +37,7 @@ import {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class BusinessesController {
-  constructor(private readonly businessesService: BusinessesService) {}
+  constructor(private readonly businessesService: BusinessesService) { }
 
   // Business Type endpoints
   @Post('types')
@@ -87,13 +87,7 @@ export class BusinessesController {
     type: [BusinessTypeResponseDto],
   })
   async getAllBusinessTypes(): Promise<BusinessTypeResponseDto[]> {
-    const businessTypes = await this.businessesService.findAllBusinessTypes();
-    return businessTypes.map((businessType) => ({
-      id: businessType.id,
-      name: businessType.name,
-      createdAt: businessType.createdAt,
-      updatedAt: businessType.updatedAt,
-    }));
+    return await this.businessesService.findAllBusinessTypes();
   }
 
   @Get('types/:id')
@@ -230,10 +224,10 @@ export class BusinessesController {
     if (!logo) {
       throw new BadRequestException('Logo is required for business creation');
     }
-    
+
     // Extract user ID from JWT token
     const userId = req.user.userId;
-    
+
     // Add the uploaded file to the DTO
     const businessDto = { ...createBusinessDto, logo };
     const business = await this.businessesService.createBusiness(businessDto, userId);
@@ -271,11 +265,11 @@ export class BusinessesController {
   async getMyBusiness(@Request() req): Promise<BusinessResponseDto | { message: string }> {
     const userId = req.user.userId;
     const business = await this.businessesService.findBusinessByUserId(userId);
-    
+
     if (!business) {
       return { message: 'User has no business' };
     }
-    
+
     return {
       id: business.id,
       businessName: business.businessName,
