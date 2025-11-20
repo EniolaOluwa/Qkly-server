@@ -1,34 +1,33 @@
-import {
-  Injectable,
-  ConflictException,
-  InternalServerErrorException,
-  NotFoundException,
-  BadRequestException,
-  UnauthorizedException,
-  Logger,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
-import { User } from './user.entity';
-import { Otp, OtpType, OtpPurpose } from './otp.entity';
-import { OnboardingStep } from './onboarding-step.enum';
 import {
-  RegisterUserDto,
-  RegisterUserResponseDto,
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+import {
+  CreatePinResponseDto,
+  KycVerificationResponseDto,
   LoginDto,
   LoginResponseDto,
-  KycVerificationResponseDto,
-  CreatePinResponseDto,
+  RegisterUserDto,
+  RegisterUserResponseDto,
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
-import { EmailService } from '../email/email.service';
 import { MailDispatcherDto } from '../email/dto/sendMail.dto';
 import { signup } from '../email/templates/register.template';
+import { OnboardingStep } from './onboarding-step.enum';
+import { Otp, OtpPurpose, OtpType } from './otp.entity';
+import { User } from './user.entity';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -47,7 +46,7 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
-    private readonly emailService: EmailService,
+    // private readonly emailService: EmailService,
   ) { }
 
 
@@ -111,9 +110,9 @@ export class UsersService {
         html: signup(user.firstName),
       };
 
-  
+
       // send mail to user
-      this.emailService.emailDispatcher(emailDispatcherPayload);
+      // this.emailService.emailDispatcher(emailDispatcherPayload);
 
 
       // Return user information with token
@@ -132,7 +131,7 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-    
+
       if (error instanceof ConflictException) {
         throw error;
       }
