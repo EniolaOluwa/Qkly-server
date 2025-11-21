@@ -7,10 +7,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import { CreateRefundDto, RefundType } from './dto/refund.dto';
 import { Order } from './entity/order.entity';
 import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
+
 
 @Injectable()
 export class RefundService {

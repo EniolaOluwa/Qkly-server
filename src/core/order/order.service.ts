@@ -1403,6 +1403,7 @@ export class OrderService {
       [OrderStatus.CANCELLED]: [OrderStatus.REFUNDED],
       [OrderStatus.RETURNED]: [OrderStatus.REFUNDED],
       [OrderStatus.REFUNDED]: [],
+      [OrderStatus.COMPLETED]: [],
     };
 
     if (currentStatus === newStatus) {

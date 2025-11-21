@@ -25,9 +25,9 @@ import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { MailDispatcherDto } from '../email/dto/sendMail.dto';
 import { signup } from '../email/templates/register.template';
-import { OnboardingStep } from './onboarding-step.enum';
-import { Otp, OtpPurpose, OtpType } from './otp.entity';
-import { User } from './user.entity';
+import { OnboardingStep } from './dto/onboarding-step.enum';
+import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
+import { User } from './entity/user.entity';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour

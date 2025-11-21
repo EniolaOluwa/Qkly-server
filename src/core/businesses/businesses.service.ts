@@ -8,8 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
-import { User } from '../users/user.entity';
-import { OnboardingStep } from '../users/onboarding-step.enum';
+import { User } from '../users/entity/user.entity';
+import { OnboardingStep } from '../users/dto/onboarding-step.enum';
 import {
   CreateBusinessTypeDto,
   UpdateBusinessTypeDto,

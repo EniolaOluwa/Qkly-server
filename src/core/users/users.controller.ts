@@ -4,14 +4,17 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
+  Query,
   Request,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
   ValidationPipe,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -45,10 +48,15 @@ import {
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   VerifyPhoneOtpDto,
-  VerifyPhoneOtpResponseDto
+  VerifyPhoneOtpResponseDto,
+  UpdateBusinessDto,
 } from '../../common/dto/responses.dto';
+import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { UsersService } from './users.service';
+import { StoreFrontResponseDto } from '../store-front/dto/store-front-response.dto';
+import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
+import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
 
 
 @ApiTags('users')
@@ -547,6 +555,200 @@ export class UsersController {
       message: 'Password reset successfully',
       data
     }
+  }
+// settings - change password
+  @Patch('settings/change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change user password',
+    description: 'Allows an authenticated user to change their password by providing the current (old) password and a new password (with confirmation).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - invalid current password or missing token' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
+  async changePassword(
+    @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
+    @Request() req,
+  ) {
+    // Prefer the authenticated user id (from JWT). If admin needs to change another user's password,
+    // that should be a separate admin endpoint.
+    const authUserId = req.user?.userId;
+
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+
+    if (changePasswordDto.newPassword !== changePasswordDto.confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
+
+    return this.usersService.changePassword(
+   changePasswordDto
+    );
+  }
+
+  // settings - update business details 
+  @Patch('settings/business')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update business details',
+    description: 'Allows an authenticated user to update one of their business records.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid payload',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business record not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async updateBusinessDetails(
+    @Body(ValidationPipe) updateBusinessDto: UpdateBusinessDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+
+    return this.usersService.updateBusinessDetails(updateBusinessDto, authUserId);
+  }
+
+ 
+
+
+  // settings - update user profile
+  @Patch('settings/profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update user profile',
+    description: 'Allows an authenticated user to update their profile information (firstName, lastName, email, phone).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User profile updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Validation error',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflict - Email or phone already in use',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async updateUserProfile(
+    @Body(ValidationPipe) updateUserProfileDto: UpdateUserProfileDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+
+    return this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+  }
+
+  // settings - change PIN
+  @Patch('settings/change-pin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change user PIN',
+    description: 'Allows an authenticated user to change their PIN by providing the current (old) PIN and a new PIN (with confirmation).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PIN changed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Validation error or PIN format invalid',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid current PIN or missing token',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async changePin(
+    @Body(ValidationPipe) changePinDto: ChangePinDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+
+    // Override userId from DTO with authenticated user ID for security
+    changePinDto.userId = authUserId;
+
+    return this.usersService.changePin(changePinDto);
+  }
+
+  // settings - get insights
+  @Get('settings/insights')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get store insights and analytics',
+    description:
+      'Retrieves key performance indicators (KPIs) and traffic source breakdown for the authenticated user\'s store. Supports time period filtering (today, this_week, this_month, last_month, this_year, custom).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Insights retrieved successfully',
+    type: InsightsResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found for this user',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing JWT token',
+  })
+  async getInsights(
+    @Query(ValidationPipe) query: InsightsQueryDto,
+    @Request() req,
+  ): Promise<InsightsResponseDto> {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+
+    return this.usersService.getInsights(authUserId, query);
   }
 
   // Example admin-only endpoint demonstrating role-based access control

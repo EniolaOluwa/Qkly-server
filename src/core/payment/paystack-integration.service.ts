@@ -11,7 +11,7 @@ import {
   TransactionStatus,
   TransactionType,
 } from '../transaction/entity/transaction.entity';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import { PaystackProvider } from './providers/paystack.provider';
 
 @Injectable()

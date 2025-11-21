@@ -1,4 +1,4 @@
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entity/user.entity';
 import { Entity, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn, PrimaryGeneratedColumn } from 'typeorm';
 import { LeadForm } from './leadForm.entity';
 import { Business } from '../../businesses/business.entity';

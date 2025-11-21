@@ -8,8 +8,8 @@ import { JwtStrategy } from '../../common/auth/jwt.strategy';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { WalletsModule } from '../wallets/wallets.module';
-import { Otp } from './otp.entity';
-import { User } from './user.entity';
+import { Otp } from './entity/otp.entity';
+import { User } from './entity/user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 

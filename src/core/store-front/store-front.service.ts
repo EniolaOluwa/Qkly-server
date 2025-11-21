@@ -1,5 +1,5 @@
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../product/entity/product.entity';
@@ -10,10 +10,13 @@ import {
   PublicProductDto,
   PublicProductDetailDto,
   StoreFrontCategoryDto,
-  PaginatedProductsDto
+  PaginatedProductsDto,
+  StoreFrontResponseDto
 } from './dto/store-front-response.dto';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
 import { ErrorHelper } from '../../common/utils';
+import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
+
 
 @Injectable()
 export class StoreFrontService {
@@ -24,7 +27,20 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    private readonly cloudinaryUtil: CloudinaryUtil,
   ) { }
+
+  async getBusinessByUserId(userId: number): Promise<Business> {
+    const business = await this.businessRepository.findOne({
+      where: { userId },
+    });
+
+    if (!business) {
+      throw new NotFoundException('Business not found for this user');
+    }
+
+    return business;
+  }
 
   async getStoreInfo(businessId: number): Promise<PublicBusinessInfoDto> {
     const business = await this.businessRepository.findOne({
@@ -49,7 +65,6 @@ export class StoreFrontService {
       createdAt: business.createdAt,
     };
   }
-
 
   async getStoreProducts(
     businessId: number,
@@ -186,7 +201,6 @@ export class StoreFrontService {
     };
   }
 
-
   async getStoreCategories(businessId: number): Promise<StoreFrontCategoryDto[]> {
     const business = await this.businessRepository.findOne({
       where: { id: businessId }
@@ -216,7 +230,6 @@ export class StoreFrontService {
     }));
   }
 
-
   async getProductsByCategory(
     businessId: number,
     categoryId: number,
@@ -232,4 +245,6 @@ export class StoreFrontService {
 
     return this.getStoreProducts(businessId, { ...query, categoryId });
   }
+
+
 }

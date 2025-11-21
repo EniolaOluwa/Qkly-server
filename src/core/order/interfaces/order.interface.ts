@@ -21,6 +21,7 @@ export enum PaymentMethod {
   USSD = 'USSD',
 }
 
+
 export enum DeliveryMethod {
   STANDARD = 'STANDARD',
   EXPRESS = 'EXPRESS',
@@ -205,7 +206,9 @@ export enum OrderStatus {
   CANCELLED = 'CANCELLED',
   RETURNED = 'RETURNED',
   REFUNDED = 'REFUNDED', // Add this
+  COMPLETED = 'COMPLETED',
 }
+
 
 export enum PaymentStatus {
   PENDING = 'PENDING',

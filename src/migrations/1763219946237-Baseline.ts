@@ -366,15 +366,15 @@ export class Baseline1763219946237 implements MigrationInterface {
     `);
 
         await queryRunner.query(`
-      CREATE TABLE IF NOT EXISTS "leads" (
-        "id" SERIAL PRIMARY KEY,
-        "name" character varying,
-        "email" character varying NOT NULL,
-        "phone" character varying,
-        "formId" integer NOT NULL,
-        "createdAt" TIMESTAMP NOT NULL DEFAULT now()
-      );
-    `);
+CREATE TABLE IF NOT EXISTS "leads" (
+    "id" SERIAL PRIMARY KEY,
+    "name" character varying,
+    "email" character varying NOT NULL,
+    "phone" character varying,
+    "formId" integer NOT NULL,
+    "createdAt" TIMESTAMP NOT NULL DEFAULT now()
+);
+`);
 
         // ----- FOREIGN KEYS -----
         const fkQueries = [
@@ -397,24 +397,22 @@ export class Baseline1763219946237 implements MigrationInterface {
             `ALTER TABLE "reviews" ADD CONSTRAINT "FK_53a68dc905777554b7f702791fd" FOREIGN KEY ("orderId") REFERENCES "orders"("id")`,
             `ALTER TABLE "reviews" ADD CONSTRAINT "FK_1e6c554d615dd5a5bf0e11ee0ef" FOREIGN KEY ("orderItemId") REFERENCES "order_items"("id")`,
             `ALTER TABLE "leads" ADD CONSTRAINT "FK_987cb4ff04d8e38b9b6f3bb105a" FOREIGN KEY ("formId") REFERENCES "lead-forms"("id")`,
+            `ALTER TABLE "store-fronts" ADD CONSTRAINT "FK_store_fronts_businessId" FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE`,
         ];
 
         // Add foreign keys only if they don't exist
         for (const fk of fkQueries) {
-            const constraintName = fk.match(/CONSTRAINT "([^"]+)"/)?.[1];
-            if (!constraintName) {
-                console.warn('Could not extract constraint name from:', fk);
-                continue;
-            }
-
-            const result = await queryRunner.query(
-                `SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = $1`,
-                [constraintName]
-            );
-
-            if (result.length === 0) {
-                await queryRunner.query(fk);
-            }
+            await queryRunner.query(`
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = '${fk.split('"')[1]}'
+    ) THEN
+        ${fk};
+    END IF;
+END $$;
+`);
         }
     }
 
@@ -439,8 +437,10 @@ export class Baseline1763219946237 implements MigrationInterface {
         await queryRunner.query(`ALTER TABLE "users" DROP CONSTRAINT IF EXISTS "FK_78725ac7117e7526e028014606"`);
         await queryRunner.query(`ALTER TABLE "businesses" DROP CONSTRAINT IF EXISTS "FK_5ba6375fdc72387a2d2d0bb7720"`);
         await queryRunner.query(`ALTER TABLE "businesses" DROP CONSTRAINT IF EXISTS "FK_01845bacd013698b8bffb920933"`);
+        await queryRunner.query(`ALTER TABLE "store-fronts" DROP CONSTRAINT IF EXISTS "FK_store_fronts_businessId"`);
 
         // Drop tables (reverse dependency order)
+        await queryRunner.query(`DROP TABLE IF EXISTS "store-fronts"`);
         await queryRunner.query(`DROP TABLE IF EXISTS "leads"`);
         await queryRunner.query(`DROP TABLE IF EXISTS "lead-forms"`);
         await queryRunner.query(`DROP TABLE IF EXISTS "reviews"`);

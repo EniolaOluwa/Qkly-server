@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsString,
@@ -259,6 +259,43 @@ export class CreateBusinessDto {
   })
   @IsOptional()
   logo?: Express.Multer.File;
+
+  @ApiPropertyOptional({
+    description: 'Cover image file for store front (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  coverImage?: Express.Multer.File;
+
+  @ApiPropertyOptional({
+    description: 'Store name (if different from business name)',
+    example: "Success's Clothings",
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  storeName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Hero text for the store front',
+    example: 'Welcome to our store!',
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  heroText?: string;
+
+  @ApiPropertyOptional({
+    description: 'Store color in hex format',
+    example: '#FF0000',
+  })
+  @IsString()
+  @IsOptional()
+  @Matches(/^#[0-9A-Fa-f]{6}$/, {
+    message: 'Store color must be a valid hex color code (e.g., #FF0000)',
+  })
+  storeColor?: string;
 }
 
 export class UpdateBusinessDto {
@@ -317,6 +354,43 @@ export class UpdateBusinessDto {
   })
   @IsOptional()
   logo?: Express.Multer.File;
+
+  @ApiPropertyOptional({
+    description: 'Cover image file for store front (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  coverImage?: Express.Multer.File;
+
+  @ApiPropertyOptional({
+    description: 'Store name (if different from business name)',
+    example: "Success's Clothings",
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  storeName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Hero text for the store front',
+    example: 'Welcome to our store!',
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  heroText?: string;
+
+  @ApiPropertyOptional({
+    description: 'Store color in hex format',
+    example: '#FF0000',
+  })
+  @IsString()
+  @IsOptional()
+  @Matches(/^#[0-9A-Fa-f]{6}$/, {
+    message: 'Store color must be a valid hex color code (e.g., #FF0000)',
+  })
+  storeColor?: string;
 }
 
 export class BusinessResponseDto {
@@ -356,6 +430,30 @@ export class BusinessResponseDto {
     required: false,
   })
   logo?: string;
+
+  @ApiPropertyOptional({
+    description: 'Cover image URL for store front',
+    example: 'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/store-fronts/cover.jpg',
+  })
+  coverImage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Store name (if different from business name)',
+    example: "Success's Clothings",
+  })
+  storeName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Hero text for the store front',
+    example: 'Welcome to our store!',
+  })
+  heroText?: string;
+
+  @ApiPropertyOptional({
+    description: 'Store color in hex format',
+    example: '#FF0000',
+  })
+  storeColor?: string;
 
   @ApiProperty({
     description: 'Creation timestamp',

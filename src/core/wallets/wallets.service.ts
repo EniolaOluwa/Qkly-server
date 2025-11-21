@@ -9,7 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateOrReject } from 'class-validator';
-import { User } from '../users/user.entity';
+import { User } from '../users/entity/user.entity';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,

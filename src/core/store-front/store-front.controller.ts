@@ -1,26 +1,42 @@
 import {
   Controller,
   Get,
+  Post,
+  Patch,
   Param,
   Query,
+  Body,
+  Request,
   ParseIntPipe,
-  HttpStatus
+  HttpStatus,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
+  ValidationPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiParam,
   ApiQuery,
-  ApiResponse
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor, FilesInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { StoreFrontService } from './store-front.service';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
+
 import {
   PublicBusinessInfoDto,
   PublicProductDetailDto,
   StoreFrontCategoryDto,
-  PaginatedProductsDto
+  PaginatedProductsDto,
+  StoreFrontResponseDto,
 } from './dto/store-front-response.dto';
 
 @ApiTags('store-front')
@@ -30,6 +46,7 @@ export class StoreFrontController {
   constructor(private readonly storeFrontService: StoreFrontService) { }
 
   @Get(':businessId')
+  @Public()
   @ApiOperation({
     summary: 'Get store information',
     description: 'Retrieves public information about a store/business. This endpoint returns only non-sensitive data suitable for public display.'
@@ -70,6 +87,7 @@ export class StoreFrontController {
   }
 
   @Get(':businessId/products')
+  @Public()
   @ApiOperation({
     summary: 'Get all products for a store',
     description: 'Retrieves a paginated list of in-stock products for a specific store with filtering options. Only returns products that are currently in stock.'
@@ -339,4 +357,9 @@ export class StoreFrontController {
       query
     );
   }
+
+ 
+  
+ 
+  
 }

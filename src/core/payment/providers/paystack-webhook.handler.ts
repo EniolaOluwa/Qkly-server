@@ -11,8 +11,9 @@ import {
   TransactionStatus,
   TransactionType,
 } from '../../transaction/entity/transaction.entity';
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entity/user.entity';
 import { PaystackIntegrationService } from '../paystack-integration.service';
+
 
 @Injectable()
 export class PaystackWebhookHandler {

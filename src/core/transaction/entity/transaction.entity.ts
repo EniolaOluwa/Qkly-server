@@ -8,9 +8,10 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { User } from '../../users/user.entity';
+import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { Order } from '../../order/entity/order.entity';
+
 
 export enum TransactionType {
   ORDER_PAYMENT = 'ORDER_PAYMENT',

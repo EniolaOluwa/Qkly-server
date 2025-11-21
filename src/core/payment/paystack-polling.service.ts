@@ -4,9 +4,11 @@ import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { firstValueFrom } from "rxjs";
 import { Repository } from "typeorm";
-import { User } from "../users";
+import { User } from "../users/entity/user.entity";
 import { PaystackProvider } from "./providers/paystack.provider";
 import { Cron } from '@nestjs/schedule';
+
+
 
 
 @Injectable()

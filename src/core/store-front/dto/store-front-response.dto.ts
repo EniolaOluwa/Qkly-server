@@ -121,3 +121,35 @@ export class PaginatedProductsDto {
     hasPreviousPage: boolean;
   };
 }
+
+export class StoreFrontResponseDto {
+  @ApiProperty({ example: 1 })
+  id: number;
+
+  @ApiProperty({ example: 1 })
+  businessId: number;
+
+  @ApiProperty({ example: 'https://cloudinary.com/cover.jpg' })
+  coverImage: string;
+
+  @ApiProperty({ example: "Success's Clothings" })
+  storeName: string;
+
+  @ApiProperty({ example: 'Welcome to our store!' })
+  heroText: string;
+
+  @ApiProperty({ example: '#FF0000' })
+  storeColor: string;
+
+  @ApiProperty({ example: ['Joggers', 'Dress'], required: false })
+  categoryName?: string[];
+
+  @ApiProperty({ example: ['https://cloudinary.com/cat1.jpg', 'https://cloudinary.com/cat2.jpg'], required: false })
+  categoryImage?: string[];
+
+  @ApiProperty({ example: '2024-01-15T10:30:00Z' })
+  createdAt: Date;
+
+  @ApiProperty({ example: '2024-01-15T10:30:00Z' })
+  updatedAt: Date;
+}
