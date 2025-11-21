@@ -1,3 +1,4 @@
+import { ErrorHelper } from './../../common/utils/error.utils';
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
@@ -141,9 +142,31 @@ export class UsersService {
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
   }
+  async findUserById(id: number) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
+        isEmailVerified: true,
+        isPhoneVerified: true,
+        onboardingStep: true,
+        isOnboardingCompleted: true,
+        deviceId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-  async findUserById(id: number): Promise<User | null> {
-    return this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      ErrorHelper.NotFoundException('User Not Found');
+    }
+
+    return user
   }
 
   async loginUser(loginDto: LoginDto) {
@@ -217,7 +240,7 @@ export class UsersService {
   async generatePhoneOtp(
     userId: number,
     phone: string,
-  ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
+  ) {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId, phone },
@@ -252,7 +275,6 @@ export class UsersService {
       await this.sendOtpViaTermii(phone, otpCode);
 
       return {
-        message: 'OTP sent successfully to your phone number',
         expiryInMinutes: 5,
         expiryTimestamp: expiresAt,
       };
@@ -268,7 +290,7 @@ export class UsersService {
     userId: number,
     phone: string,
     otpCode: string,
-  ): Promise<{ message: string; verified: boolean }> {
+  ) {
     try {
       // Find user by ID and phone number
       const user = await this.userRepository.findOne({
@@ -316,7 +338,6 @@ export class UsersService {
       });
 
       return {
-        message: 'Phone number verified successfully',
         verified: true,
       };
     } catch (error) {
@@ -334,7 +355,7 @@ export class UsersService {
     userId: number,
     bvn: string,
     selfieImageFile: Express.Multer.File,
-  ): Promise<KycVerificationResponseDto> {
+  ) {
     try {
       // Get Dojah API configuration
       const dojahBaseUrl = this.configService.get<string>(
@@ -462,7 +483,6 @@ export class UsersService {
       // Return response based on verification result
       if (isVerified) {
         return {
-          message: 'BVN verification completed successfully',
           first_name: verificationData.first_name,
           middle_name: verificationData.middle_name,
           last_name: verificationData.last_name,
@@ -534,7 +554,6 @@ export class UsersService {
   }
 
   async generateCreatePinOtp(userId: number): Promise<{
-    message: string;
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
@@ -577,7 +596,6 @@ export class UsersService {
       await this.sendOtpViaTermii(user.phone, otpCode);
 
       return {
-        message: 'OTP sent successfully to your phone number',
         maskedPhone: this.maskPhoneNumber(user.phone),
         expiryInMinutes: 5,
       };
@@ -593,7 +611,6 @@ export class UsersService {
   }
 
   async verifyCreatePinOtp(userId: number, otpCode: string): Promise<{
-    message: string;
     verified: boolean;
     reference: string;
   }> {
@@ -638,7 +655,6 @@ export class UsersService {
       await this.otpRepository.save(referenceOtp);
 
       return {
-        message: 'OTP verified successfully. You can now create your PIN.',
         verified: true,
         reference,
       };
@@ -650,10 +666,7 @@ export class UsersService {
     }
   }
 
-  async createPinWithReference(userId: number, pin: string, reference: string): Promise<{
-    message: string;
-    success: boolean;
-  }> {
+  async createPinWithReference(userId: number, pin: string, reference: string) {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(pin)) {
@@ -707,7 +720,6 @@ export class UsersService {
       });
 
       return {
-        message: 'PIN created successfully',
         success: true,
       };
     } catch (error) {
@@ -722,7 +734,6 @@ export class UsersService {
   }
 
   async forgotPassword(email: string): Promise<{
-    message: string;
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
@@ -764,7 +775,6 @@ export class UsersService {
       const maskedPhone = this.maskPhoneNumber(user.phone);
 
       return {
-        message: 'OTP sent successfully to your phone number',
         maskedPhone,
         expiryInMinutes: 5,
       };
@@ -861,7 +871,7 @@ export class UsersService {
   async verifyPasswordResetOtp(
     email: string,
     otpCode: string,
-  ): Promise<{ message: string; verified: boolean; resetToken?: string }> {
+  ): Promise<{ verified: boolean; resetToken?: string }> {
     try {
       // Find user by email
       const user = await this.userRepository.findOne({ where: { email } });
@@ -914,7 +924,6 @@ export class UsersService {
       await this.otpRepository.save(resetTokenOtp);
 
       return {
-        message: 'OTP verified successfully. You can now reset your password.',
         verified: true,
         resetToken,
       };
@@ -935,7 +944,7 @@ export class UsersService {
   async resetPassword(
     newPassword: string,
     resetToken: string,
-  ): Promise<{ message: string; success: boolean }> {
+  ): Promise<{ success: boolean }> {
     try {
       // Find the reset token in the database
       const tokenRecord = await this.otpRepository.findOne({
@@ -988,7 +997,6 @@ export class UsersService {
       );
 
       return {
-        message: 'Password reset successfully',
         success: true,
       };
     } catch (error) {

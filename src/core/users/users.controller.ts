@@ -140,7 +140,9 @@ export class UsersController {
   async getProfile(@Request() req) {
     return {
       message: 'Profile retrieved successfully',
-      user: req.user,
+      data: {
+        user: req.user,
+      }
     };
   }
 
@@ -159,14 +161,10 @@ export class UsersController {
     description: 'User not found',
   })
   async getUserById(@Param('id') id: number) {
-    const user = await this.usersService.findUserById(id);
-    if (!user) {
-      return { message: 'User not found' };
-    }
-
-    // Return user without password
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    const data = await this.usersService.findUserById(id);
+    return {
+      data
+    };
   }
 
 
@@ -198,11 +196,16 @@ export class UsersController {
   async generatePhoneOtp(
     @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
     @Request() req,
-  ): Promise<GeneratePhoneOtpResponseDto> {
-    return this.usersService.generatePhoneOtp(
+  ) {
+    const data = await this.usersService.generatePhoneOtp(
       req.user.userId,
       generatePhoneOtpDto.phone,
     );
+
+    return {
+      message: 'OTP sent successfully to your phone number',
+      data
+    }
   }
 
 
@@ -238,12 +241,17 @@ export class UsersController {
   async verifyPhoneOtp(
     @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
     @Request() req,
-  ): Promise<VerifyPhoneOtpResponseDto> {
-    return this.usersService.verifyPhoneOtp(
+  ) {
+    const data = await this.usersService.verifyPhoneOtp(
       req.user.userId,
       verifyPhoneOtpDto.phone,
       verifyPhoneOtpDto.otp,
     );
+
+    return {
+      message: 'Phone number verified successfully',
+      data
+    }
   }
 
 
@@ -299,16 +307,21 @@ export class UsersController {
     @Body(ValidationPipe) verifyKycDto: VerifyKycDto,
     @UploadedFile() selfieImage: Express.Multer.File,
     @Request() req,
-  ): Promise<KycVerificationResponseDto> {
+  ) {
     if (!selfieImage) {
       throw new BadRequestException('Selfie image is required');
     }
 
-    return this.usersService.verifyBvnWithSelfie(
+    const data = this.usersService.verifyBvnWithSelfie(
       req.user.userId,
       verifyKycDto.bvn,
       selfieImage,
     );
+
+    return {
+      message: 'BVN verification completed successfully',
+      data
+    }
   }
 
 
@@ -344,8 +357,13 @@ export class UsersController {
   async createPin(
     @Body(ValidationPipe) createPinDto: CreatePinWithReferenceDto,
     @Request() req,
-  ): Promise<CreatePinResponseDto> {
-    return this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
+  ) {
+    const data = await this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
+
+    return {
+      message: 'PIN created successfully',
+      data
+    }
   }
 
   @Post('generate-create-pin-otp')
@@ -379,8 +397,13 @@ export class UsersController {
   })
   async generateCreatePinOtp(
     @Request() req,
-  ): Promise<GenerateCreatePinOtpResponseDto> {
-    return this.usersService.generateCreatePinOtp(req.user.userId);
+  ) {
+    const data = await this.usersService.generateCreatePinOtp(req.user.userId);
+
+    return {
+      message: 'OTP sent successfully to your phone number',
+      data
+    }
   }
 
   @Post('verify-create-pin-otp')
@@ -411,8 +434,13 @@ export class UsersController {
   async verifyCreatePinOtp(
     @Body(ValidationPipe) verifyCreatePinOtpDto: VerifyCreatePinOtpDto,
     @Request() req,
-  ): Promise<VerifyCreatePinOtpResponseDto> {
-    return this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
+  ) {
+    const data = await this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
+
+    return {
+      message: 'OTP verified successfully. You can now create your PIN.',
+      data,
+    }
   }
 
   @Post('forgot-password')
@@ -440,8 +468,12 @@ export class UsersController {
   })
   async forgotPassword(
     @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
-  ): Promise<ForgotPasswordResponseDto> {
-    return this.usersService.forgotPassword(forgotPasswordDto.email);
+  ) {
+    const data = await this.usersService.forgotPassword(forgotPasswordDto.email);
+    return {
+      message: 'OTP sent successfully to your phone number',
+      data
+    }
   }
 
   @Public()
@@ -471,11 +503,16 @@ export class UsersController {
   })
   async verifyPasswordResetOtp(
     @Body(ValidationPipe) verifyPasswordResetOtpDto: VerifyPasswordResetOtpDto,
-  ): Promise<VerifyPasswordResetOtpResponseDto> {
-    return this.usersService.verifyPasswordResetOtp(
+  ) {
+    const data = await this.usersService.verifyPasswordResetOtp(
       verifyPasswordResetOtpDto.email,
       verifyPasswordResetOtpDto.otp,
     );
+
+    return {
+      message: 'OTP verified successfully. You can now reset your password.',
+      data
+    }
   }
 
   @Public()
@@ -508,11 +545,16 @@ export class UsersController {
   })
   async resetPassword(
     @Body(ValidationPipe) resetPasswordDto: ResetPasswordDto,
-  ): Promise<ResetPasswordResponseDto> {
-    return this.usersService.resetPassword(
+  ) {
+    const data = await this.usersService.resetPassword(
       resetPasswordDto.newPassword,
       resetPasswordDto.resetToken,
     );
+
+    return {
+      message: 'Password reset successfully',
+      data
+    }
   }
 // settings - change password
   @Patch('settings/change-password')
@@ -730,10 +772,12 @@ export class UsersController {
     status: 403,
     description: 'Forbidden - Admin role required',
   })
-  async getAdminDashboard(@Request() req: any): Promise<{ message: string; userRole: string }> {
+  async getAdminDashboard(@Request() req: any) {
     return {
       message: 'Welcome to the admin dashboard!',
-      userRole: req.user.role,
+      data: {
+        userRole: req.user.role,
+      }
     };
   }
 }
