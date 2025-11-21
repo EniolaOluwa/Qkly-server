@@ -17,6 +17,7 @@ import {
   UpdateBusinessDto,
 } from '../../common/dto/responses.dto';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
+import { ErrorHelper } from '../../common/utils';
 
 @Injectable()
 export class BusinessesService {
@@ -278,5 +279,29 @@ export class BusinessesService {
   async deleteBusiness(id: number): Promise<void> {
     const business = await this.findBusinessById(id);
     await this.businessRepository.remove(business);
+  }
+
+
+
+  async updateBusinessDetails(
+    updateBusiness: UpdateBusinessDto,
+    userId: number,
+    businessId: number
+  ) {
+    try {
+      const business = await this.businessRepository.findOne({
+        where: { userId, id: businessId },
+      });
+
+      if (!business) {
+        ErrorHelper.NotFoundException('Business record not found');
+      }
+
+      Object.assign(business, updateBusiness);
+
+      return await this.businessRepository.save(business);
+    } catch (error) {
+      ErrorHelper.InternalServerErrorException('failed to update business');
+    }
   }
 }

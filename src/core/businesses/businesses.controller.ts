@@ -12,6 +12,7 @@ import {
   UploadedFile,
   BadRequestException,
   Request,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -428,5 +429,41 @@ export class BusinessesController {
   async deleteBusiness(@Param('id') id: number): Promise<{ message: string }> {
     await this.businessesService.deleteBusiness(id);
     return { message: 'Business deleted successfully' };
+  }
+
+  // settings - update business details 
+  @Patch('settings/:id')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update business details',
+    description: 'Allows an authenticated user to update one of their business records.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business updated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid payload',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business record not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+
+  async updateBusinessDetails(
+    @Body(ValidationPipe) updateBusinessDto: UpdateBusinessDto,
+    @Request() req,
+    @Param('id') id: number,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      throw new BadRequestException('Authenticated user id not found');
+    }
+    return this.businessesService.updateBusinessDetails(updateBusinessDto, authUserId, id);
   }
 }

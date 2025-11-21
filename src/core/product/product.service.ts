@@ -9,6 +9,7 @@ import { User } from '../users';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
+import { generateRandomProduct } from '../../common/utils/product-generator';
 
 
 
@@ -53,9 +54,6 @@ export class ProductService {
       if (!businessExists) {
         ErrorHelper.BadRequestException('Business does not exist.');
       }
-
-
-
 
       if (productData.hasVariation) {
         const hasSizes = productData.sizes && productData.sizes.length > 0;

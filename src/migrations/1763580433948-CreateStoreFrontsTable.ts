@@ -21,22 +21,22 @@ CREATE TABLE IF NOT EXISTS "store-fronts" (
 
         // Add foreign key constraint
         await queryRunner.query(`
-DO $$ BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.table_constraints
-        WHERE constraint_name = 'FK_store_fronts_businessId'
-    ) THEN
-        ALTER TABLE "store-fronts" ADD CONSTRAINT "FK_store_fronts_businessId" FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE;
-    END IF;
-END $$;
-`);
+        DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM information_schema.table_constraints
+                WHERE constraint_name = 'FK_store_fronts_businessId'
+            ) THEN
+                ALTER TABLE "store-fronts" ADD CONSTRAINT "FK_store_fronts_businessId" FOREIGN KEY ("businessId") REFERENCES "businesses"("id") ON DELETE CASCADE;
+            END IF;
+        END $$;
+        `);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
         // Drop foreign key constraint
         await queryRunner.query(`ALTER TABLE "store-fronts" DROP CONSTRAINT IF EXISTS "FK_store_fronts_businessId"`);
-        
+
         // Drop table
         await queryRunner.query(`DROP TABLE IF EXISTS "store-fronts"`);
     }

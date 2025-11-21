@@ -43,6 +43,19 @@ export class Business {
   user: User;
 
 
+  @Column({ nullable: true })
+  coverImage: string;
+
+  @Column({ nullable: true })
+  storeName: string;
+
+  @Column({ nullable: true })
+  heroText: string;
+
+  @Column({ nullable: true })
+  storeColor: string;
+
+
   @Column({ nullable: true, comment: 'Paystack subaccount code for split payments' })
   paystackSubaccountCode: string;
 
