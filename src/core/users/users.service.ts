@@ -1,4 +1,3 @@
-import { ErrorHelper } from './../../common/utils/error.utils';
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
@@ -7,7 +6,7 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  UnauthorizedException,
+  UnauthorizedException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -16,7 +15,6 @@ import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import {
   CreatePinResponseDto,
-  KycVerificationResponseDto,
   LoginDto,
   RegisterUserDto,
   RegisterUserResponseDto
@@ -25,7 +23,9 @@ import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { MailDispatcherDto } from '../email/dto/sendMail.dto';
 import { signup } from '../email/templates/register.template';
+import { ErrorHelper } from './../../common/utils/error.utils';
 import { OnboardingStep } from './dto/onboarding-step.enum';
+import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User } from './entity/user.entity';
 
@@ -46,7 +46,6 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
-    // private readonly emailService: EmailService,
   ) { }
 
 
@@ -59,7 +58,7 @@ export class UsersService {
         where: { email: registerUserDto.email },
       });
       if (existingUserByEmail) {
-        throw new ConflictException('User with this email already exists');
+        ErrorHelper.ConflictException('User with this email already exists');
       }
 
       // Check if user with phone already exists
@@ -68,7 +67,7 @@ export class UsersService {
       });
 
       if (existingUserByPhone) {
-        throw new ConflictException('User with this phone number already exists');
+        ErrorHelper.ConflictException('User with this phone number already exists');
       }
 
       // Hash the password
@@ -134,7 +133,7 @@ export class UsersService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to register user');
+      ErrorHelper.InternalServerErrorException('Failed to register user');
     }
   }
 
@@ -177,12 +176,12 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new UnauthorizedException('Invalid email or password');
+        ErrorHelper.UnauthorizedException('Invalid email or password');
       }
 
       // Verify password
       if (!CryptoUtil.verifyPassword(loginDto.password, user.password)) {
-        throw new UnauthorizedException('Invalid email or password');
+        ErrorHelper.UnauthorizedException('Invalid email or password');
       }
 
       // Update user's device ID and location if provided
@@ -233,7 +232,7 @@ export class UsersService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to login user');
+      ErrorHelper.InternalServerErrorException('Failed to login user');
     }
   }
 
@@ -247,7 +246,7 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new NotFoundException(
+        ErrorHelper.NotFoundException(
           'User with this ID and phone number not found',
         );
       }
@@ -282,7 +281,7 @@ export class UsersService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to generate OTP');
+      ErrorHelper.InternalServerErrorException('Failed to generate OTP');
     }
   }
 
@@ -298,7 +297,7 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new NotFoundException(
+        ErrorHelper.NotFoundException(
           'User with this ID and phone number not found',
         );
       }
@@ -316,14 +315,14 @@ export class UsersService {
       });
 
       if (!otp) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Invalid OTP or OTP not found. Please generate a new OTP.',
         );
       }
 
       // Check if OTP has expired
       if (otp.expiresAt < new Date()) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'OTP has expired. Please generate a new OTP.',
         );
       }
@@ -347,7 +346,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to verify OTP');
+      ErrorHelper.InternalServerErrorException('Failed to verify OTP');
     }
   }
 
@@ -366,7 +365,7 @@ export class UsersService {
       const dojahPublicKey = this.configService.get<string>('DOJAH_PUBLIC_KEY');
 
       if (!dojahAppId || !dojahPublicKey) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           'Dojah API credentials not configured',
         );
       }
@@ -374,17 +373,17 @@ export class UsersService {
       // Find user by ID
       const user = await this.userRepository.findOne({ where: { id: userId } });
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       // Validate file type and size
       if (!selfieImageFile) {
-        throw new BadRequestException('Selfie image file is required');
+        ErrorHelper.BadRequestException('Selfie image file is required');
       }
 
       const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedMimeTypes.includes(selfieImageFile.mimetype)) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Invalid file type. Only JPEG and PNG images are supported.',
         );
       }
@@ -392,7 +391,7 @@ export class UsersService {
       // Check file size (max 5MB)
       const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
       if (selfieImageFile.size > maxSizeInBytes) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'File size too large. Maximum size allowed is 5MB.',
         );
       }
@@ -412,7 +411,7 @@ export class UsersService {
 
       // Validate that the base64 string starts with expected JPEG signature
       if (!formattedSelfieImage.startsWith('/9')) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Invalid image format. The image must be a valid JPEG file.',
         );
       }
@@ -438,7 +437,7 @@ export class UsersService {
       const verificationData = response.data?.entity;
 
       if (!verificationData) {
-        throw new InternalServerErrorException('Invalid response from Dojah API');
+        ErrorHelper.InternalServerErrorException('Invalid response from Dojah API');
       }
 
       // Check if verification was successful
@@ -503,14 +502,14 @@ export class UsersService {
       }
 
       if (error.response?.status === 401) {
-        throw new UnauthorizedException('Invalid Dojah API credentials');
+        ErrorHelper.UnauthorizedException('Invalid Dojah API credentials');
       }
 
       if (error.response?.status === 403) {
-        throw new UnauthorizedException('Insufficient permissions for Dojah API');
+        ErrorHelper.UnauthorizedException('Insufficient permissions for Dojah API');
       }
 
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to verify BVN with selfie',
       );
     }
@@ -521,14 +520,14 @@ export class UsersService {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(pin)) {
-        throw new BadRequestException('PIN must be exactly 4 digits');
+        ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
       }
 
       // Find user by ID
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       // Encrypt the PIN
@@ -549,7 +548,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to create PIN');
+      ErrorHelper.InternalServerErrorException('Failed to create PIN');
     }
   }
 
@@ -562,16 +561,16 @@ export class UsersService {
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (!user.phone) {
-        throw new BadRequestException('User has no phone number on file');
+        ErrorHelper.BadRequestException('User has no phone number on file');
       }
 
       // Check if user already has a PIN
       if (user.pin) {
-        throw new BadRequestException('User already has a PIN set');
+        ErrorHelper.BadRequestException('User already has a PIN set');
       }
 
       // Generate 6-digit OTP
@@ -606,7 +605,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to generate PIN creation OTP');
+      ErrorHelper.InternalServerErrorException('Failed to generate PIN creation OTP');
     }
   }
 
@@ -627,12 +626,12 @@ export class UsersService {
       });
 
       if (!otp) {
-        throw new BadRequestException('Invalid OTP code');
+        ErrorHelper.BadRequestException('Invalid OTP code');
       }
 
       // Check if OTP has expired
       if (new Date() > otp.expiresAt) {
-        throw new BadRequestException('OTP has expired. Please request a new one');
+        ErrorHelper.BadRequestException('OTP has expired. Please request a new one');
       }
 
       // Mark OTP as used
@@ -662,7 +661,7 @@ export class UsersService {
       if (error instanceof BadRequestException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to verify PIN creation OTP');
+      ErrorHelper.InternalServerErrorException('Failed to verify PIN creation OTP');
     }
   }
 
@@ -670,19 +669,19 @@ export class UsersService {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(pin)) {
-        throw new BadRequestException('PIN must be exactly 4 digits');
+        ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
       }
 
       // Find user by ID
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       // Check if user already has a PIN
       if (user.pin) {
-        throw new BadRequestException('User already has a PIN set');
+        ErrorHelper.BadRequestException('User already has a PIN set');
       }
 
       // Verify the reference UUID
@@ -697,12 +696,12 @@ export class UsersService {
       });
 
       if (!referenceOtp) {
-        throw new BadRequestException('Invalid or expired reference');
+        ErrorHelper.BadRequestException('Invalid or expired reference');
       }
 
       // Check if reference has expired
       if (new Date() > referenceOtp.expiresAt) {
-        throw new BadRequestException('Reference has expired. Please generate a new OTP');
+        ErrorHelper.BadRequestException('Reference has expired. Please generate a new OTP');
       }
 
       // Mark reference as used
@@ -729,7 +728,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to create PIN');
+      ErrorHelper.InternalServerErrorException('Failed to create PIN');
     }
   }
 
@@ -742,11 +741,11 @@ export class UsersService {
       const user = await this.userRepository.findOne({ where: { email } });
 
       if (!user) {
-        throw new NotFoundException('User with this email not found');
+        ErrorHelper.NotFoundException('User with this email not found');
       }
 
       if (!user.phone) {
-        throw new BadRequestException('User has no phone number on file');
+        ErrorHelper.BadRequestException('User has no phone number on file');
       }
 
       // Generate 6-digit OTP
@@ -785,7 +784,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to send forgot password OTP',
       );
     }
@@ -808,7 +807,7 @@ export class UsersService {
       );
 
       if (!termiiApiKey) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           'Termii SMS API key not configured',
         );
       }
@@ -835,7 +834,7 @@ export class UsersService {
       );
 
       if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           'Failed to send SMS via Termii API',
         );
       }
@@ -846,7 +845,7 @@ export class UsersService {
       );
       // In development, don't fail the request if SMS sending fails
       if (this.configService.get<string>('NODE_ENV') === 'production') {
-        throw new InternalServerErrorException('Failed to send SMS');
+        ErrorHelper.InternalServerErrorException('Failed to send SMS');
       }
     }
   }
@@ -877,7 +876,7 @@ export class UsersService {
       const user = await this.userRepository.findOne({ where: { email } });
 
       if (!user) {
-        throw new NotFoundException('User with this email not found');
+        ErrorHelper.NotFoundException('User with this email not found');
       }
 
       // Find the most recent unused password reset OTP for this user
@@ -893,14 +892,14 @@ export class UsersService {
       });
 
       if (!otp) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Invalid OTP or OTP not found. Please request a new password reset.',
         );
       }
 
       // Check if OTP has expired
       if (otp.expiresAt < new Date()) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'OTP has expired. Please request a new password reset.',
         );
       }
@@ -934,7 +933,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to verify password reset OTP',
       );
     }
@@ -958,12 +957,12 @@ export class UsersService {
       });
 
       if (!tokenRecord) {
-        throw new UnauthorizedException('Invalid or expired reset token');
+        ErrorHelper.UnauthorizedException('Invalid or expired reset token');
       }
 
       // Check if token has expired
       if (tokenRecord.expiresAt < new Date()) {
-        throw new UnauthorizedException('Reset token has expired');
+        ErrorHelper.UnauthorizedException('Reset token has expired');
       }
 
       // Find user by ID from token record
@@ -972,7 +971,7 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       // Mark the reset token as used
@@ -1006,7 +1005,197 @@ export class UsersService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to reset password');
+      ErrorHelper.InternalServerErrorException('Failed to reset password');
+    }
+  }
+
+
+  async changePassword(
+    changePassword: ChangePasswordDto
+  ): Promise<{ message: string; success: boolean }> {
+    try {
+      // Validate inputs
+      if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
+        ErrorHelper.BadRequestException('User ID, old password, and new password are required');
+      }
+
+      if (changePassword.oldPassword === changePassword.newPassword) {
+        ErrorHelper.BadRequestException('New password must be different from old password');
+      }
+
+      if (changePassword.newPassword !== changePassword.confirmPassword) {
+        ErrorHelper.BadRequestException('password must match')
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: Number(changePassword.userId) } });
+      if (!user) {
+        ErrorHelper.NotFoundException('User not found');
+      }
+
+      // Verify old password matches
+      if (!CryptoUtil.verifyPassword(changePassword.oldPassword, user.password)) {
+        ErrorHelper.UnauthorizedException('Invalid current password');
+      }
+
+      // Hash new password
+      const hashedPassword = CryptoUtil.hashPassword(changePassword.newPassword);
+
+      // Update user password
+      await this.userRepository.update(changePassword.userId, { password: hashedPassword });
+
+      this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
+
+      return {
+        message: 'Password changed successfully',
+        success: true,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
+      ErrorHelper.InternalServerErrorException('Failed to change password');
+    }
+  }
+
+
+  async updateUserProfile(
+    userId: number,
+    updateUserProfileDto: UpdateUserProfileDto,
+  ): Promise<{ message: string; user: Partial<User> }> {
+    try {
+      // Find user by ID
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+
+      if (!user) {
+        ErrorHelper.NotFoundException('User not found');
+      }
+
+      // Check if email is being updated and if it's already taken
+      if (updateUserProfileDto.email && updateUserProfileDto.email !== user.email) {
+        const existingUser = await this.userRepository.findOne({
+          where: { email: updateUserProfileDto.email },
+        });
+
+        if (existingUser) {
+          ErrorHelper.ConflictException('Email already in use by another user');
+        }
+      }
+
+      // Check if phone is being updated and if it's already taken
+      if (updateUserProfileDto.phone && updateUserProfileDto.phone !== user.phone) {
+        const existingUser = await this.userRepository.findOne({
+          where: { phone: updateUserProfileDto.phone },
+        });
+
+        if (existingUser) {
+          ErrorHelper.ConflictException('Phone number already in use by another user');
+        }
+      }
+
+      // Update user fields
+      if (updateUserProfileDto.firstName !== undefined) {
+        user.firstName = updateUserProfileDto.firstName;
+      }
+      if (updateUserProfileDto.lastName !== undefined) {
+        user.lastName = updateUserProfileDto.lastName;
+      }
+      if (updateUserProfileDto.email !== undefined) {
+        user.email = updateUserProfileDto.email;
+        // Reset email verification if email is changed
+        user.isEmailVerified = false;
+      }
+      if (updateUserProfileDto.phone !== undefined) {
+        user.phone = updateUserProfileDto.phone;
+        // Reset phone verification if phone is changed
+        user.isPhoneVerified = false;
+      }
+
+      const updatedUser = await this.userRepository.save(user);
+
+      // Return user without sensitive data
+      const { password, pin, ...userWithoutSensitiveData } = updatedUser;
+
+      this.logger.log(`User profile updated successfully for user ${userId}`);
+
+      return {
+        message: 'User profile updated successfully',
+        user: userWithoutSensitiveData,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+      this.logger.error(`Failed to update user profile for user ${userId}:`, error);
+      ErrorHelper.InternalServerErrorException('Failed to update user profile');
+    }
+  }
+
+
+  async changePin(
+    changePinDto: ChangePinDto,
+  ): Promise<{ message: string; success: boolean }> {
+    try {
+      // Validate PIN format (4 digits only)
+      if (!/^\d{4}$/.test(changePinDto.newPin)) {
+        throw new BadRequestException('New PIN must be exactly 4 digits');
+      }
+
+      if (changePinDto.newPin !== changePinDto.confirmPin) {
+        throw new BadRequestException('New PIN and confirm PIN do not match');
+      }
+
+      if (changePinDto.oldPin === changePinDto.newPin) {
+        throw new BadRequestException('New PIN must be different from old PIN');
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({
+        where: { id: changePinDto.userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      if (!user.pin) {
+        throw new BadRequestException('User does not have a PIN set. Please create a PIN first.');
+      }
+
+      // Verify old PIN
+      const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
+      if (!isOldPinValid) {
+        throw new UnauthorizedException('Invalid current PIN');
+      }
+
+      // Encrypt the new PIN
+      const encryptedPin = CryptoUtil.encryptPin(changePinDto.newPin);
+
+      // Update user with new encrypted PIN
+      await this.userRepository.update(changePinDto.userId, {
+        pin: encryptedPin,
+      });
+
+      this.logger.log(`PIN changed successfully for user ${changePinDto.userId}`);
+
+      return {
+        message: 'PIN changed successfully',
+        success: true,
+      };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException ||
+        error instanceof UnauthorizedException
+      ) {
+        throw error;
+      }
+      this.logger.error(
+        `Failed to change PIN for user ${changePinDto.userId}:`,
+        error,
+      );
+      throw new InternalServerErrorException('Failed to change PIN');
     }
   }
 }

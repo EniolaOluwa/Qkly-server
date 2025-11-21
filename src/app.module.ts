@@ -23,7 +23,7 @@ import { LeadModule } from './core/lead/lead.module';
 import { OrderModule } from './core/order/order.module';
 import { PaymentModule } from './core/payment/payment.module';
 import { ProductModule } from './core/product/product.module';
-import { ReviewModule } from './core/store/review.module';
+import { ReviewModule } from './core/review/review.module';
 import { TransactionService } from './core/transaction/transaction.service';
 import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';

@@ -13,7 +13,8 @@ import {
   Request,
   UseGuards,
   ForbiddenException,
-  UnauthorizedException
+  UnauthorizedException,
+  Req
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -122,7 +123,6 @@ export class ProductsController {
       await this.productService.verifyBusinessOwnership(userId, productData.businessId);
     }
     // Admins can create products for any business
-
     const product = await this.productService.createProduct(userId, productData);
 
     // Return sanitized product data (no sensitive user info)
