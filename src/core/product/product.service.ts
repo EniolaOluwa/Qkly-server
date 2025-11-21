@@ -86,6 +86,7 @@ export class ProductService {
     }
   }
 
+
   async findAllProducts(
     query: FindAllProductsDto,
   ): Promise<PaginationResultDto<Product>> {
@@ -112,8 +113,7 @@ export class ProductService {
       // Create a QueryBuilder for more flexibility
       const qb = this.productRepository
         .createQueryBuilder('product')
-        .leftJoinAndSelect('product.sizes', 'sizes')
-
+        .leftJoinAndSelect('product.sizes', 'sizes');
 
       // User filter
       if (userId) {
@@ -142,7 +142,6 @@ export class ProductService {
       if (minPrice !== undefined) {
         qb.andWhere('product.price >= :minPrice', { minPrice });
       }
-
       if (maxPrice !== undefined) {
         qb.andWhere('product.price <= :maxPrice', { maxPrice });
       }
@@ -161,15 +160,14 @@ export class ProductService {
         qb.andWhere('product.hasVariation = :hasVariation', { hasVariation });
       }
 
-      // Colors filter
+      // Colors filter - FIXED
       if (colors && colors.length > 0) {
-        qb.andWhere(`product.colors && ARRAY[:...colors]`, { colors });
+        qb.andWhere('product.colors && ARRAY[:...colors]', { colors });
       }
 
-      // Size filter
+      // Size filter - FIXED
       if (sizes && sizes.length > 0) {
-        // For sizes, we'll need a more complex query since sizes are in a related table
-        qb.andWhere(qb => {
+        qb.andWhere((qb) => {
           const subQuery = qb
             .subQuery()
             .select('product_size.productId')
@@ -186,34 +184,29 @@ export class ProductService {
           createdAfter: new Date(createdAfter)
         });
       }
-
       if (createdBefore) {
         qb.andWhere('product.createdAt <= :createdBefore', {
           createdBefore: new Date(createdBefore)
         });
       }
-
       if (updatedAfter) {
         qb.andWhere('product.updatedAt >= :updatedAfter', {
           updatedAfter: new Date(updatedAfter)
         });
       }
-
       if (updatedBefore) {
         qb.andWhere('product.updatedAt <= :updatedBefore', {
           updatedBefore: new Date(updatedBefore)
         });
       }
 
+      // Get total count
       const itemCount = await qb.getCount();
-
       const { skip, limit } = query;
 
-      // Add sorting
       const allowedSortFields = [
         'id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'
       ];
-
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
       const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
@@ -230,11 +223,13 @@ export class ProductService {
         pageOptionsDto: query,
       });
     } catch (error) {
-      console.log(error)
-      ErrorHelper.InternalServerErrorException(`Error finding products: ${error.message}`, error);
+      console.log(error);
+      ErrorHelper.InternalServerErrorException(
+        `Error finding products: ${error.message}`,
+        error
+      );
     }
   }
-
   async findProductById(id: number): Promise<Product> {
     try {
       const product = await this.productRepository.findOne({
