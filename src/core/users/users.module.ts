@@ -12,12 +12,19 @@ import { Otp } from './entity/otp.entity';
 import { User } from './entity/user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
+import { BusinessesModule } from '../businesses/businesses.module';
+import { Business } from '../businesses/business.entity';
+import { EmailModule } from '../email/email.module';
+import { InsightsModule } from '../insights/insights.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp]),
+    TypeOrmModule.forFeature([User, Otp, Business]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
+    BusinessesModule,
+    InsightsModule,
+    EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

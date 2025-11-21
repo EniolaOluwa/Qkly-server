@@ -95,6 +95,12 @@ export class RegisterUserDto {
 
 export class RegisterUserResponseDto {
   @ApiProperty({
+    description: 'Registration success message',
+    example: 'User registered successfully',
+  })
+  message: string;
+  
+  @ApiProperty({
     description: 'JWT access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
@@ -734,6 +740,12 @@ export class CreatePinDto {
 }
 
 export class CreatePinResponseDto {
+  @ApiProperty({
+    description: 'PIN creation success message',
+    example: 'PIN created successfully',
+  })
+  message: string;
+
   @ApiProperty({
     description: 'Success status',
     example: true,

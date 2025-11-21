@@ -514,6 +514,7 @@ export class UsersController {
       resetPasswordDto.resetToken,
     );
   }
+  
 // settings - change password
   @Patch('settings/change-password')
   @UseGuards(JwtAuthGuard)
