@@ -18,6 +18,7 @@ import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
+import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
 
 
 @Module({
@@ -37,6 +38,7 @@ import { dataSource } from './database';
     LeadModule,
     CategoryModule,
     PaymentModule,
+    CloudinaryModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
