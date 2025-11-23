@@ -6,15 +6,13 @@ import {
   Param,
   Patch,
   Post,
-  Query,
   Request,
   UploadedFile,
-  UploadedFiles,
   UseGuards,
   UseInterceptors,
-  ValidationPipe,
+  ValidationPipe
 } from '@nestjs/common';
-import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiConsumes,
@@ -48,15 +46,11 @@ import {
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   VerifyPhoneOtpDto,
-  VerifyPhoneOtpResponseDto,
-  UpdateBusinessDto,
+  VerifyPhoneOtpResponseDto
 } from '../../common/dto/responses.dto';
-import { ChangePasswordDto, UpdateUserProfileDto, ChangePinDto } from './dto/user.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
+import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
-import { StoreFrontResponseDto } from '../store-front/dto/store-front-response.dto';
-import { InsightsQueryDto } from '../insights/dto/insights-query.dto';
-import { InsightsResponseDto } from '../insights/dto/insights-response.dto';
 
 
 @ApiTags('users')
