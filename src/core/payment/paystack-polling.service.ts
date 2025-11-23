@@ -1,5 +1,3 @@
-// paystack-polling.service.ts
-
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { firstValueFrom } from "rxjs";

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -11,10 +12,7 @@ import {
   Post,
   Query,
   Request,
-  UseGuards,
-  ForbiddenException,
-  UnauthorizedException,
-  Req
+  UseGuards
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -38,6 +36,10 @@ import { ProductService } from './product.service';
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productService: ProductService) { }
+
+  // ============================================
+  // POST ROUTES
+  // ============================================
 
   @Post()
   @ApiBearerAuth()
@@ -132,74 +134,9 @@ export class ProductsController {
     });
   }
 
-  @Public()
-  @Get()
-  @ApiOperation({
-    summary: 'Get all products with filtering',
-    description: 'Retrieves a paginated list of products with various filter options including search, price range, stock status, categories, and more. This is a public endpoint that returns non-sensitive product information.'
-  })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)', example: 10 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search term for product name or description', example: 'wireless' })
-  @ApiQuery({ name: 'businessId', required: false, type: Number, description: 'Filter by business ID', example: 5 })
-  @ApiQuery({ name: 'categoryId', required: false, type: Number, description: 'Filter by category ID', example: 2 })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number, description: 'Minimum price filter', example: 10 })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number, description: 'Maximum price filter', example: 100 })
-  @ApiQuery({ name: 'inStock', required: false, type: Boolean, description: 'Filter by stock availability (true = in stock, false = out of stock)', example: true })
-  @ApiQuery({ name: 'hasVariation', required: false, type: Boolean, description: 'Filter products with variations', example: true })
-  @ApiQuery({ name: 'colors', required: false, type: [String], description: 'Filter by colors (comma-separated)', example: 'Red,Blue' })
-  @ApiQuery({ name: 'sizes', required: false, type: [String], description: 'Filter by sizes (comma-separated)', example: 'M,L,XL' })
-  @ApiQuery({ name: 'sortBy', required: false, enum: ['id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'], description: 'Sort field', example: 'createdAt' })
-  @ApiQuery({ name: 'sortOrder', required: false, enum: ['ASC', 'DESC'], description: 'Sort order', example: 'DESC' })
-  @ApiQuery({ name: 'createdAfter', required: false, type: String, description: 'Filter products created after this date (ISO 8601)', example: '2024-01-01T00:00:00Z' })
-  @ApiQuery({ name: 'createdBefore', required: false, type: String, description: 'Filter products created before this date (ISO 8601)', example: '2024-12-31T23:59:59Z' })
-  @ApiQuery({ name: 'updatedAfter', required: false, type: String, description: 'Filter products updated after this date', example: '2024-01-01T00:00:00Z' })
-  @ApiQuery({ name: 'updatedBefore', required: false, type: String, description: 'Filter products updated before this date', example: '2024-12-31T23:59:59Z' })
-  @ApiResponse({
-    status: 200,
-    description: 'Products retrieved successfully',
-    schema: {
-      example: {
-        success: true,
-        message: 'Products retrieved successfully',
-        data: {
-          data: [
-            {
-              id: 1,
-              name: 'Wireless Mouse',
-              price: 29.99,
-              quantityInStock: 50,
-              businessId: 1,
-              categoryId: 5
-            }
-          ],
-          meta: {
-            page: 1,
-            take: 10,
-            itemCount: 45,
-            pageCount: 5,
-            hasPreviousPage: false,
-            hasNextPage: true
-          }
-        }
-      }
-    }
-  })
-  async findAllProducts(@Query() query: FindAllProductsDto & PaginationDto) {
-    const products = await this.productService.findAllProducts(query);
-
-    // Sanitize product data for public endpoint
-    const sanitizedData = {
-      ...products,
-      data: products.data.map(product => this.sanitizeProductData(product))
-    };
-
-    return HttpResponse.success({
-      data: sanitizedData,
-      message: 'Products retrieved successfully'
-    });
-  }
-
+  // ============================================
+  // GET ROUTES - SPECIFIC PATHS FIRST
+  // ============================================
 
   @Get('user')
   @ApiBearerAuth()
@@ -234,51 +171,6 @@ export class ProductsController {
     return HttpResponse.success({
       data: Array.isArray(products) ? products : products.data,
       message: 'User products retrieved successfully'
-    });
-  }
-
-  @Get('user/:userId')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Get products by user ID',
-    description: 'Retrieves products for a specific user. Regular merchants can only access their own products. Admin users can access any user\'s products.'
-  })
-  @ApiParam({
-    name: 'userId',
-    required: true,
-    type: Number,
-    description: 'The ID of the user whose products to retrieve',
-    example: 123
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Products retrieved successfully'
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Valid JWT token required'
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Access denied: You can only view your own products (unless admin)'
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found'
-  })
-  async findProductsByUserId(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Request() req: any
-  ) {
-    // Only allow users to access their own products unless they are admins
-    if (req.user.userId !== userId && req.user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Access denied: You can only view your own products');
-    }
-
-    const products = await this.productService.findProductsByUserId(userId);
-    return HttpResponse.success({
-      data: Array.isArray(products) ? products : products.data,
-      message: `Products for user ${userId} retrieved successfully`
     });
   }
 
@@ -344,6 +236,91 @@ export class ProductsController {
     });
   }
 
+  @Get()
+  @Public()
+  @ApiOperation({
+    summary: 'Get all products with filtering',
+    description: 'Retrieves a paginated list of products with various filter options including search, price range, stock status, categories, and more. This is a public endpoint that returns non-sensitive product information.'
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)', example: 10 })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search term for product name or description', example: 'wireless' })
+  @ApiQuery({ name: 'businessId', required: false, type: Number, description: 'Filter by business ID', example: 5 })
+  @ApiQuery({ name: 'categoryId', required: false, type: Number, description: 'Filter by category ID', example: 2 })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number, description: 'Minimum price filter', example: 10 })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number, description: 'Maximum price filter', example: 100 })
+  @ApiQuery({ name: 'inStock', required: false, type: Boolean, description: 'Filter by stock availability (true = in stock, false = out of stock)', example: true })
+  @ApiQuery({ name: 'hasVariation', required: false, type: Boolean, description: 'Filter products with variations', example: true })
+  // @ApiQuery({ name: 'colors', required: false, type: [String], description: 'Filter by colors (comma-separated)', example: '#F0F0F0,#CCCCCC' })
+  // @ApiQuery({ name: 'sizes', required: false, type: [String], description: 'Filter by sizes (comma-separated)', example: 'M,L,XL' })
+  @ApiQuery({
+    name: 'colors',
+    required: false,
+    // 💡 Explicit OpenAPI array definition
+    schema: { type: 'array', items: { type: 'string' } },
+    description: 'Filter by colors (comma-separated)',
+    example: '#f0f0f0,#b1f2d2'
+  })
+  @ApiQuery({
+    name: 'sizes',
+    required: false,
+    // 💡 Explicit OpenAPI array definition
+    schema: { type: 'array', items: { type: 'string' } },
+    description: 'Filter by sizes (comma-separated)',
+    example: 'M,L,XL'
+  })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'], description: 'Sort field', example: 'createdAt' })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['ASC', 'DESC'], description: 'Sort order', example: 'DESC' })
+  @ApiQuery({ name: 'createdAfter', required: false, type: String, description: 'Filter products created after this date (ISO 8601)', example: '2024-01-01T00:00:00Z' })
+  @ApiQuery({ name: 'createdBefore', required: false, type: String, description: 'Filter products created before this date (ISO 8601)', example: '2024-12-31T23:59:59Z' })
+  @ApiQuery({ name: 'updatedAfter', required: false, type: String, description: 'Filter products updated after this date', example: '2024-01-01T00:00:00Z' })
+  @ApiQuery({ name: 'updatedBefore', required: false, type: String, description: 'Filter products updated before this date', example: '2024-12-31T23:59:59Z' })
+  @ApiResponse({
+    status: 200,
+    description: 'Products retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Products retrieved successfully',
+        data: {
+          data: [
+            {
+              id: 1,
+              name: 'Wireless Mouse',
+              price: 29.99,
+              quantityInStock: 50,
+              businessId: 1,
+              categoryId: 5
+            }
+          ],
+          meta: {
+            page: 1,
+            take: 10,
+            itemCount: 45,
+            pageCount: 5,
+            hasPreviousPage: false,
+            hasNextPage: true
+          }
+        }
+      }
+    }
+  })
+  async findAllProducts(@Query() query: FindAllProductsDto & PaginationDto) {
+    console.log({ query })
+    const products = await this.productService.findAllProducts(query);
+
+    // Sanitize product data for public endpoint
+    const sanitizedData = {
+      ...products,
+      data: products.data.map(product => this.sanitizeProductData(product))
+    };
+
+    return HttpResponse.success({
+      data: sanitizedData,
+      message: 'Products retrieved successfully'
+    });
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({
@@ -395,6 +372,10 @@ export class ProductsController {
       message: 'Product retrieved successfully'
     });
   }
+
+  // ============================================
+  // PATCH ROUTES
+  // ============================================
 
   @Patch(':id')
   @ApiBearerAuth()
@@ -488,6 +469,10 @@ export class ProductsController {
       message: 'Product updated successfully'
     });
   }
+
+  // ============================================
+  // DELETE ROUTES
+  // ============================================
 
   @Delete(':id')
   @ApiBearerAuth()
@@ -602,6 +587,9 @@ export class ProductsController {
     return this.productService.getCategoriesForBusiness(businessId);
   }
 
+  // ============================================
+  // HELPER METHODS
+  // ============================================
 
   /**
    * Helper method to remove sensitive data from product objects
