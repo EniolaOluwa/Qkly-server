@@ -19,11 +19,9 @@ import { InsightsModule } from '../insights/insights.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp, Business]),
+    TypeOrmModule.forFeature([User, Otp]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
-    BusinessesModule,
-    InsightsModule,
     EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

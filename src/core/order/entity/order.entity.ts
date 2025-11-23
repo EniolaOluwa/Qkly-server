@@ -12,7 +12,7 @@ import {
   BeforeInsert,
 } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
-import { User } from '../../users';
+import { User } from '../../users/entity/user.entity';
 import {
   OrderStatus,
   PaymentStatus,

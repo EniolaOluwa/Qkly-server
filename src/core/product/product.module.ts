@@ -7,11 +7,12 @@ import { ProductSize } from './entity/productSize.entity';
 import { ProductsController } from './product.controller';
 import { ProductService } from './product.service';
 import { CategoryModule } from '../category/category.module';
+import { Category } from '../category/entity/category.entity';
 
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, ProductSize, User, Business]), CategoryModule],
+  imports: [TypeOrmModule.forFeature([Product, ProductSize, User, Business, Category]), CategoryModule],
   controllers: [ProductsController],
   providers: [ProductService],
   exports: [ProductService],

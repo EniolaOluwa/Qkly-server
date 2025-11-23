@@ -11,7 +11,7 @@ import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { Category } from './entity/category.entity';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { ErrorHelper } from '@app/common/utils';
 
 @Injectable()
 export class CategoryService {
@@ -61,4 +62,7 @@ export class CategoryService {
     const category = await this.findOne(id);
     await this.categoryRepository.remove(category);
   }
+
+
+ 
 }

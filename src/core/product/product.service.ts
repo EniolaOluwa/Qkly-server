@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
+
+import { Repository, In } from 'typeorm';
+import { PaginationDto, PaginationMetadataDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CategoryService } from '../category/category.service';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
+import { generateRandomProduct } from '../../common/utils/product-generator';
+import { Category } from '../category/entity/category.entity';
 
 
 
@@ -21,6 +24,8 @@ export class ProductService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
+    @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
     private readonly categoryService: CategoryService
   ) { }
 
@@ -53,9 +58,6 @@ export class ProductService {
       if (!businessExists) {
         ErrorHelper.BadRequestException('Business does not exist.');
       }
-
-
-
 
       if (productData.hasVariation) {
         const hasSizes = productData.sizes && productData.sizes.length > 0;
@@ -371,4 +373,97 @@ export class ProductService {
       ErrorHelper.InternalServerErrorException(`Error deleting product: ${error.message}`, error);
     }
   }
+
+  // get total umber product under a category
+  async getTotalProductsInCategoryTree(categoryId: number): Promise<number> {
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId },
+      relations: ['children'],
+    });
+  
+    if (!category) {
+      ErrorHelper.NotFoundException(`Category with ID ${categoryId} does not exist.`);
+    }
+  
+    const categoryIds: number[] = [categoryId];
+    const stack: Category[] = [...(category.children ?? [])];
+  
+    while (stack.length) {
+      const child = stack.pop();
+      if (!child) continue; // Narrowing
+  
+      categoryIds.push(child.id);
+  
+      if (child.children && child.children.length > 0) {
+        stack.push(...child.children);
+      }
+    }
+  
+    return this.productRepository.count({
+      where: { categoryId: In(categoryIds) },
+    });
+  }
+
+
+  // get total product for a business
+  async getBusinessProductsGroupedByCategory(
+    businessId: number,
+  ) {
+    // Fetch all categories that belong to the business
+    const categories = await this.categoryRepository.find({
+      where: { id:  businessId },
+    });
+  
+    const results: {
+      categoryId: number;
+      categoryName: string;
+      totalProductsInCategory: number;
+      products: Product[];
+    }[] = [];
+  
+    for (const category of categories) {
+      // Count products in this category
+      const totalProducts = await this.productRepository.count({
+        where: {
+          businessId,
+          categoryId: category.id,
+        },
+      });
+  
+      // Fetch products in this category
+      const products = await this.productRepository.find({
+        where: {
+          businessId,
+          categoryId: category.id,
+        },
+        order: { createdAt: 'DESC' },
+      });
+  
+      results.push({
+        categoryId: category.id,
+        categoryName: category.name,
+        totalProductsInCategory: totalProducts,
+        products,
+      });
+    }
+  
+    return {
+      businessId,
+      categories: results,
+      totalCategories: results.length,
+    };
+  }
+  
+
+  // return the category for a product
+  async getCategoriesForBusiness(businessId: number) {
+    const categories = await this.categoryRepository.find({ 
+      where: {id: businessId }
+      })
+    return {
+      message: 'Categories fetched successfully',
+      data: categories,
+    };
+  }
+  
 }

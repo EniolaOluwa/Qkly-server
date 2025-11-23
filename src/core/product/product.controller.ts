@@ -13,7 +13,8 @@ import {
   Request,
   UseGuards,
   ForbiddenException,
-  UnauthorizedException
+  UnauthorizedException,
+  Req
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -122,7 +123,6 @@ export class ProductsController {
       await this.productService.verifyBusinessOwnership(userId, productData.businessId);
     }
     // Admins can create products for any business
-
     const product = await this.productService.createProduct(userId, productData);
 
     // Return sanitized product data (no sensitive user info)
@@ -553,6 +553,55 @@ export class ProductsController {
       message: 'Product deleted successfully'
     });
   }
+
+
+  //get total under a category
+  @Get(':id/product-count')
+  @ApiOperation({ summary: 'Get number of products under a category (including children)' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Product count returned successfully.' })
+  async getProductCount(@Param('id') id: number) {
+    return {
+      categoryId: id,
+      totalProducts: await this.productService.getTotalProductsInCategoryTree(id),
+    };
+  }
+
+  //get total number of product in a product
+    @Get('business/:businessId/products')
+    @ApiOperation({
+      summary: 'Return products grouped by category for a business (paginated)',
+    })
+    async getGroupedProducts(
+      @Param('businessId') businessId: number,
+    ) {
+      return this.productService.getBusinessProductsGroupedByCategory(
+        businessId,
+      );
+    }
+
+
+
+  @Get('business/:businessId')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Fetch all categories for a business',
+    description: 'Returns a list of all categories belonging to the specified business.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories fetched successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found',
+  })
+  async getBusinessCategories(
+    @Param('businessId') businessId: number,
+  ) {
+    return this.productService.getCategoriesForBusiness(businessId);
+  }
+
 
   /**
    * Helper method to remove sensitive data from product objects

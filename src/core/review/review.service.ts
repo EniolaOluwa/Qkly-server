@@ -8,7 +8,7 @@ import { OrderItem } from '../order/entity/order-items.entity';
 import { Order } from '../order/entity/order.entity';
 import { OrderStatus } from '../order/interfaces/order.interface';
 import { Product } from '../product/entity/product.entity';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateReviewDto, GuestReviewVerificationDto, UpdateReviewDto } from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
 

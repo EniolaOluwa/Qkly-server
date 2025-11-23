@@ -17,6 +17,7 @@ import {
 import { FileInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
@@ -556,7 +557,6 @@ export class UsersController {
       data
     }
   }
-  
 // settings - change password
   @Patch('settings/change-password')
   @UseGuards(JwtAuthGuard)
@@ -576,8 +576,6 @@ export class UsersController {
     @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
     @Request() req,
   ) {
-    // Prefer the authenticated user id (from JWT). If admin needs to change another user's password,
-    // that should be a separate admin endpoint.
     const authUserId = req.user?.userId;
 
     if (!authUserId) {
@@ -589,46 +587,10 @@ export class UsersController {
     }
 
     return this.usersService.changePassword(
-   changePasswordDto
+      changePasswordDto
     );
   }
 
-  // settings - update business details 
-  @Patch('settings/business')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Update business details',
-    description: 'Allows an authenticated user to update one of their business records.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Business updated successfully',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Invalid payload',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Business record not found',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Internal server error',
-  })
-  async updateBusinessDetails(
-    @Body(ValidationPipe) updateBusinessDto: UpdateBusinessDto,
-    @Request() req,
-  ) {
-    const authUserId = req.user?.userId;
-    if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
-    }
-
-    return this.usersService.updateBusinessDetails(updateBusinessDto, authUserId);
-  }
-
- 
 
 
   // settings - update user profile
@@ -718,39 +680,11 @@ export class UsersController {
     return this.usersService.changePin(changePinDto);
   }
 
-  // settings - get insights
-  @Get('settings/insights')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Get store insights and analytics',
-    description:
-      'Retrieves key performance indicators (KPIs) and traffic source breakdown for the authenticated user\'s store. Supports time period filtering (today, this_week, this_month, last_month, this_year, custom).',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Insights retrieved successfully',
-    type: InsightsResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Business not found for this user',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing JWT token',
-  })
-  async getInsights(
-    @Query(ValidationPipe) query: InsightsQueryDto,
-    @Request() req,
-  ): Promise<InsightsResponseDto> {
-    const authUserId = req.user?.userId;
-    if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
-    }
 
-    return this.usersService.getInsights(authUserId, query);
-  }
+
+
+  
+
 
   // Example admin-only endpoint demonstrating role-based access control
   @Get('admin/dashboard')
