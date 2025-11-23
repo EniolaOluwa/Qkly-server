@@ -1,21 +1,19 @@
 
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Product } from '../product/entity/product.entity';
+import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { Category } from '../category/entity/category.entity';
-import {
-  PublicBusinessInfoDto,
-  PublicProductDto,
-  PublicProductDetailDto,
-  StoreFrontCategoryDto,
-  PaginatedProductsDto,
-  StoreFrontResponseDto
-} from './dto/store-front-response.dto';
+import { Product } from '../product/entity/product.entity';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
-import { ErrorHelper } from '../../common/utils';
-import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
+import {
+  PaginatedProductsDto,
+  PublicBusinessInfoDto,
+  PublicProductDetailDto,
+  PublicProductDto,
+  StoreFrontCategoryDto
+} from './dto/store-front-response.dto';
 
 
 @Injectable()
@@ -27,7 +25,6 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-    private readonly cloudinaryUtil: CloudinaryUtil,
   ) { }
 
   async getBusinessByUserId(userId: number): Promise<Business> {
