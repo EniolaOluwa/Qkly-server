@@ -5,6 +5,7 @@ import { UpdateCategoryDto } from "./dto/update-category.dto";
 import { Public } from "../../common/decorators/public.decorator";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { RoleGuard } from "../users";
+import { ApiBearerAuth } from "@nestjs/swagger";
 
 
 
@@ -15,6 +16,7 @@ export class CategoryController {
   // only admin can create categories
   @UseGuards(RoleGuard)
   @Admin()
+  @ApiBearerAuth()
   @Post()
   create(@Body() createDto: CreateCategoryDto) {
     return this.categoryService.create(createDto);
@@ -25,6 +27,7 @@ export class CategoryController {
   findAll() {
     return this.categoryService.findAll();
   }
+
 
   @Public()
   @Get(':id')
@@ -38,6 +41,7 @@ export class CategoryController {
   @UseGuards(RoleGuard)
   @Admin()
   @Put(':id')
+  @ApiBearerAuth()
   update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateCategoryDto) {
     return this.categoryService.update(id, updateDto);
   }
@@ -47,6 +51,7 @@ export class CategoryController {
  
   @UseGuards(RoleGuard)
   @Admin()
+  @ApiBearerAuth()
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.categoryService.remove(id);

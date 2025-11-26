@@ -453,7 +453,7 @@ export class ProductService {
   // return the category for a product
   async getCategoriesForBusiness(businessId: number) {
     const categories = await this.categoryRepository.find({ 
-      where: {id: businessId }
+        where: {id: businessId }
       })
     return {
       message: 'Categories fetched successfully',

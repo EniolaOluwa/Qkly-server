@@ -541,6 +541,7 @@ export class ProductsController {
 
 
   //get total under a category
+  @Public()
   @Get(':id/product-count')
   @ApiOperation({ summary: 'Get number of products under a category (including children)' })
   @ApiParam({ name: 'id', type: Number })
@@ -553,6 +554,7 @@ export class ProductsController {
   }
 
   //get total number of product in a product
+    @Public()
     @Get('business/:businessId/products')
     @ApiOperation({
       summary: 'Return products grouped by category for a business (paginated)',

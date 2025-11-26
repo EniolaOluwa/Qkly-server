@@ -7,8 +7,9 @@ import { IsString, IsOptional, IsEmail, IsNumber, Matches, MinLength, MaxLength 
 
 
 export class ChangePasswordDto {
-  @ApiProperty({ example: '1' })
-  userId: string;
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  userId: number;
 
   @ApiProperty({ example: 'oldPassword123' })
   @IsString()

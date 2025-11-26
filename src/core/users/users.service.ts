@@ -32,7 +32,7 @@ import { OnboardingStep } from './dto/onboarding-step.enum';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User } from './entity/user.entity';
-import { CloudinaryUtil } from '@app/common/utils/cloudinary.util';
+
 
 
 
@@ -52,7 +52,7 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     
-   private readonly cloudinaryUtil: CloudinaryUtil,
+
 
     private walletProvisioningUtil: WalletProvisioningUtil,
   ) { }
@@ -108,9 +108,11 @@ export class UsersService {
         role: savedUser.role,
       };
 
+      console.log(payload)
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
-
+      console.log(accessToken)
+ 
       // // email service 
       // const emailDispatcherPayload: MailDispatcherDto = {
       //   to: user.email,
@@ -221,6 +223,7 @@ export class UsersService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
+      console.log(error)
       ErrorHelper.InternalServerErrorException('Failed to login user');
     }
   }
@@ -1020,8 +1023,9 @@ export class UsersService {
 
   async changePassword(
     changePassword: ChangePasswordDto
-  ): Promise<{ message: string; success: boolean }> {
+  ): Promise<any> {
     try {
+      console.log(changePassword)
       // Validate inputs
       if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
         ErrorHelper.BadRequestException('User ID, old password, and new password are required');
@@ -1054,10 +1058,7 @@ export class UsersService {
 
       this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
 
-      return {
-        message: 'Password changed successfully',
-        success: true,
-      };
+      return 
     } catch (error) {
       this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
       ErrorHelper.InternalServerErrorException('Failed to change password');
@@ -1208,14 +1209,6 @@ export class UsersService {
   }
 
 
-  // async uploadImage(imageData: string | Buffer, folder: string = 'Qkly/user_uploads') {
-  //   try {
-  //     const result = await this.cloudinaryUtil.uploadImage(imageData, folder);
-  //     return result;
-  //   } catch (error) {
-  //       ErrorHelper.InternalServerErrorException('Failed to upload image');
-  //   }
-  // }
 
 
   async checkUser(

@@ -52,6 +52,7 @@ import {
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
+import { HttpResponse } from '@app/common/utils/http-response.utils';
 
 
 @ApiTags('users')
@@ -87,7 +88,8 @@ export class UsersController {
   async registerUser(
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
   ) {
-    return this.usersService.registerUser(registerUserDto);
+    const register = this.usersService.registerUser(registerUserDto);
+     return register
   }
 
   @Public()
@@ -113,8 +115,11 @@ export class UsersController {
   async loginUser(
     @Body(ValidationPipe) loginDto: LoginDto,
   ) {
-    const data = await this.usersService.loginUser(loginDto);
-    return data
+    const login = await this.usersService.loginUser(loginDto);
+    return HttpResponse.success({
+      data: login,
+      message: 'User logged in successfully'
+    })
   }
 
   @Get('profile')
@@ -580,9 +585,14 @@ export class UsersController {
       throw new BadRequestException('New password and confirm password do not match');
     }
 
-    return this.usersService.changePassword(
+   const data = await this.usersService.changePassword(
       changePasswordDto
     );
+
+    return HttpResponse.success({
+      data: data,
+      message: 'Password changed successfully'
+    })
   }
 
 
@@ -628,7 +638,12 @@ export class UsersController {
       throw new BadRequestException('Authenticated user id not found');
     }
 
-    return this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+  const data = await this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+
+      return HttpResponse.success({
+        data: data,
+        message: 'User Profile updated successfully'
+      })
   }
 
   // settings - change PIN
@@ -671,7 +686,12 @@ export class UsersController {
     // Override userId from DTO with authenticated user ID for security
     changePinDto.userId = authUserId;
 
-    return this.usersService.changePin(changePinDto);
+   const data = await this.usersService.changePin(changePinDto);
+
+   return HttpResponse.success({
+    data: data,
+    message: 'Pin changed successfully'
+   })
   }
 
 
