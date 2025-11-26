@@ -108,10 +108,9 @@ export class UsersService {
         role: savedUser.role,
       };
 
-      console.log(payload)
+    
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
-      console.log(accessToken)
  
       // // email service 
       // const emailDispatcherPayload: MailDispatcherDto = {
@@ -223,7 +222,7 @@ export class UsersService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      console.log(error)
+     
       ErrorHelper.InternalServerErrorException('Failed to login user');
     }
   }
@@ -1025,7 +1024,7 @@ export class UsersService {
     changePassword: ChangePasswordDto
   ): Promise<any> {
     try {
-      console.log(changePassword)
+    
       // Validate inputs
       if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
         ErrorHelper.BadRequestException('User ID, old password, and new password are required');
