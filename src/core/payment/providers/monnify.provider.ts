@@ -1,8 +1,9 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { catchError, firstValueFrom } from 'rxjs';
 import { MonnifyAuthResponseBody, MonnifyAxiosError, MonnifyPaymentInitResponseBody, MonnifySuccessResponse, MonnifyTransactionResponseBody } from '../../../common/interfaces/monnify-response.interface';
+import { ErrorHelper } from '../../../common/utils';
 import { verifyMonnifySignature } from '../../../common/utils/webhook.utils';
 import {
   BankAccountDetailsDto,
@@ -54,7 +55,7 @@ export class MonnifyProvider extends IPaymentProvider {
       const monnifySecretKey = this.configService.get<string>('MONNIFY_SECRET_KEY');
 
       if (!monnifyApiKey || !monnifySecretKey) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           'Monnify API credentials not configured',
         );
       }
@@ -81,7 +82,7 @@ export class MonnifyProvider extends IPaymentProvider {
                 'Monnify authentication failed:',
                 error.response?.data || error.message,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 `Failed to authenticate with Monnify: ${error.response?.data?.responseMessage || error.message}`,
               );
             }),
@@ -98,13 +99,13 @@ export class MonnifyProvider extends IPaymentProvider {
         return this.accessToken;
       }
 
-      throw new Error('Failed to get access token from Monnify');
+      ErrorHelper.InternalServerErrorException('Failed to get access token from Monnify');
     } catch (error) {
       this.logger.error(
         'Monnify authentication failed:',
         error.response?.data || error.message,
       );
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to authenticate with Monnify',
       );
     }
@@ -145,7 +146,7 @@ export class MonnifyProvider extends IPaymentProvider {
               this.logger.error(
                 `Failed to create wallet: ${JSON.stringify(error.response?.data)}`,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 `Failed to create wallet: ${error.response?.data?.responseMessage || error.message}`,
               );
             }),
@@ -155,7 +156,7 @@ export class MonnifyProvider extends IPaymentProvider {
       const walletResponse = response.data;
 
       if (!walletResponse.requestSuccessful) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           walletResponse.responseMessage || 'Wallet creation failed',
         );
       }
@@ -202,7 +203,7 @@ export class MonnifyProvider extends IPaymentProvider {
               this.logger.error(
                 `Failed to fetch wallet balance: ${JSON.stringify(error.response?.data || error.message)}`,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 error.response?.data?.responseMessage ||
                 'Failed to fetch wallet balance',
               );
@@ -213,7 +214,7 @@ export class MonnifyProvider extends IPaymentProvider {
       const balanceResponse = response.data;
 
       if (!balanceResponse.requestSuccessful) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           balanceResponse.responseMessage || 'Failed to fetch wallet balance',
         );
       }
@@ -234,7 +235,7 @@ export class MonnifyProvider extends IPaymentProvider {
   ): Promise<VirtualAccountResponseDto> {
     // Monnify doesn't have a direct endpoint for this
     // We'll need to fetch from database or return basic info
-    throw new Error('Method not directly supported by Monnify');
+    ErrorHelper.UnprocessableEntityException('Method not directly supported by Monnify');
   }
 
 
@@ -281,7 +282,7 @@ export class MonnifyProvider extends IPaymentProvider {
               this.logger.error(
                 `Monnify payment initialization failed: ${JSON.stringify(error.response?.data)}`,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 `Failed to initialize payment: ${error.response?.data?.responseMessage || error.message}`,
               );
             }),
@@ -291,7 +292,7 @@ export class MonnifyProvider extends IPaymentProvider {
       const paymentResponse = response.data;
 
       if (!paymentResponse.requestSuccessful) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           paymentResponse.responseMessage || 'Payment initialization failed',
         );
       }
@@ -335,7 +336,7 @@ export class MonnifyProvider extends IPaymentProvider {
               this.logger.error(
                 `Monnify payment verification failed: ${JSON.stringify(error.response?.data)}`,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 `Failed to verify payment: ${error.response?.data?.responseMessage || error.message}`,
               );
             }),
@@ -345,7 +346,7 @@ export class MonnifyProvider extends IPaymentProvider {
       const verificationResponse = response.data;
 
       if (!verificationResponse.requestSuccessful) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           verificationResponse.responseMessage || 'Payment verification failed',
         );
       }
@@ -413,7 +414,7 @@ export class MonnifyProvider extends IPaymentProvider {
               this.logger.error(
                 `Transfer failed: ${JSON.stringify(error.response?.data || error.message)}`,
               );
-              throw new InternalServerErrorException(
+              ErrorHelper.InternalServerErrorException(
                 error.response?.data?.responseMessage || 'Transfer failed',
               );
             }),
@@ -493,7 +494,7 @@ export class MonnifyProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Bank account resolution failed:', error.message);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to resolve bank account',
       );
     }
@@ -521,7 +522,7 @@ export class MonnifyProvider extends IPaymentProvider {
       }));
     } catch (error) {
       this.logger.error('Failed to get bank list:', error.message);
-      throw new InternalServerErrorException('Failed to get bank list');
+      ErrorHelper.InternalServerErrorException('Failed to get bank list');
     }
   }
 

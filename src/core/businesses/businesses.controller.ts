@@ -32,6 +32,7 @@ import {
   UpdateBusinessDto,
   BusinessResponseDto,
 } from '../../common/dto/responses.dto';
+import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('business')
 @Controller('business')
@@ -223,7 +224,7 @@ export class BusinessesController {
   ): Promise<BusinessResponseDto> {
     // Validate that logo is provided
     if (!logo) {
-      throw new BadRequestException('Logo is required for business creation');
+      ErrorHelper.BadRequestException('Logo is required for business creation');
     }
 
     // Extract user ID from JWT token
@@ -462,7 +463,7 @@ export class BusinessesController {
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
     return this.businessesService.updateBusinessDetails(updateBusinessDto, authUserId, id);
   }

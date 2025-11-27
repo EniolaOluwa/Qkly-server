@@ -545,7 +545,7 @@ export class OrderService {
       const order = await this.findOrderById(orderId);
 
       if (order.paymentStatus === PaymentStatus.PAID) {
-        throw new ConflictException('Payment already processed');
+        ErrorHelper.ConflictException('Payment already processed');
       }
 
       const business = await this.businessRepository.findOne({
@@ -553,11 +553,11 @@ export class OrderService {
       });
 
       if (!business) {
-        throw new ConflictException('Business not found');
+        ErrorHelper.ConflictException('Business not found');
       }
 
       if (!business.paystackSubaccountCode) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Business subaccount not configured. Please contact support.',
         );
       }

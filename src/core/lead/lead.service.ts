@@ -1,12 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-import { Leads } from './entity/leads.entity';
 import { ErrorHelper } from '../../common/utils';
-import { CreateLeadFormDto, UpdateLeadFormDto, LeadFormResponseDto, CreateLeadDto, UpdateLeadDto } from './dto/lead.dto';
+import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
 import { LeadForm } from './entity/leadForm.entity';
-import { IpInfo } from '../../common/types/ipinfo.types';
+import { Leads } from './entity/leads.entity';
 
 @Injectable()
 export class LeadService {
@@ -25,7 +24,7 @@ export class LeadService {
     async createLeadForm(dto: CreateLeadFormDto, userId: number, businessId: number): Promise<LeadForm> {
         try {
             if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
-                throw new BadRequestException('Title, buttonText, and at least one input field are required');
+                ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
             }
 
             const form = this.leadFormRepo.create({
@@ -90,7 +89,7 @@ export class LeadService {
             });
 
             if (!form) {
-                throw new NotFoundException(`Lead form with ID ${id} not found`);
+                ErrorHelper.NotFoundException(`Lead form with ID ${id} not found`);
             }
 
             return form;
@@ -112,7 +111,7 @@ export class LeadService {
             const form = await this.getLeadFormById(id, businessId);
 
             if (form.businessId !== businessId) {
-                throw new ForbiddenException('You do not have permission to update this lead form');
+                ErrorHelper.ForbiddenException('You do not have permission to update this lead form');
             }
 
             Object.assign(form, dto);
@@ -137,7 +136,7 @@ export class LeadService {
             const form = await this.getLeadFormById(id, businessId);
 
             if (form.businessId !== businessId) {
-                throw new ForbiddenException('You do not have permission to delete this lead form');
+                ErrorHelper.ForbiddenException('You do not have permission to delete this lead form');
             }
 
             await this.leadFormRepo.remove(form);
@@ -164,7 +163,7 @@ export class LeadService {
             const form = await this.getLeadFormById(id, businessId);
 
             if (form.businessId !== businessId) {
-                throw new ForbiddenException('You do not have permission to modify this lead form');
+                ErrorHelper.ForbiddenException('You do not have permission to modify this lead form');
             }
 
             form.isActive = isActive;
@@ -202,7 +201,7 @@ export class LeadService {
     async createLead(formId: number, dto: CreateLeadDto): Promise<Leads> {
         try {
             if (!dto.email) {
-                throw new BadRequestException('Email is required');
+                ErrorHelper.BadRequestException('Email is required');
             }
 
             // Get the form and verify it's active
@@ -212,11 +211,11 @@ export class LeadService {
             });
 
             if (!form) {
-                throw new NotFoundException(`Lead form with ID ${formId} not found`);
+                ErrorHelper.NotFoundException(`Lead form with ID ${formId} not found`);
             }
 
             if (!form.isActive) {
-                throw new BadRequestException('This lead form is currently inactive');
+                ErrorHelper.BadRequestException('This lead form is currently inactive');
             }
 
             const lead = this.leadsRepo.create({
@@ -260,7 +259,7 @@ export class LeadService {
             });
 
             if (!lead) {
-                throw new NotFoundException(`Lead with ID ${id} not found`);
+                ErrorHelper.NotFoundException(`Lead with ID ${id} not found`);
             }
 
             return lead;
@@ -412,7 +411,7 @@ export class LeadService {
             });
 
             if (!form) {
-                throw new NotFoundException(`Form not found`);
+                ErrorHelper.NotFoundException(`Form not found`);
             }
 
             return form;
@@ -443,17 +442,17 @@ export class LeadService {
     ): Promise<Leads> {
         try {
             if (!dto.email) {
-                throw new BadRequestException('Email is required');
+                ErrorHelper.BadRequestException('Email is required');
             }
 
             const form = await this.getFormByPublicId(publicId);
 
             if (!form.isActive) {
-                throw new BadRequestException('This form is currently inactive');
+                ErrorHelper.BadRequestException('This form is currently inactive');
             }
 
             if (!form.canAcceptSubmissions()) {
-                throw new BadRequestException('This form has reached its submission limit');
+                ErrorHelper.BadRequestException('This form has reached its submission limit');
             }
 
             this.validateFormInputs(dto, form.inputs);
@@ -523,18 +522,18 @@ export class LeadService {
 
         for (const field of requiredFields) {
             if (field === 'email' && !dto.email) {
-                throw new BadRequestException(`${field} is required`);
+                ErrorHelper.BadRequestException(`${field} is required`);
             }
             if (field === 'name' && !dto.name) {
-                throw new BadRequestException(`${field} is required`);
+                ErrorHelper.BadRequestException(`${field} is required`);
             }
             if (field === 'phone' && !dto.phone) {
-                throw new BadRequestException(`${field} is required`);
+                ErrorHelper.BadRequestException(`${field} is required`);
             }
             // Check custom fields in formResponses
             if (!['email', 'name', 'phone'].includes(field)) {
                 if (!dto.formResponses || !dto.formResponses[field]) {
-                    throw new BadRequestException(`${field} is required`);
+                    ErrorHelper.BadRequestException(`${field} is required`);
                 }
             }
         }

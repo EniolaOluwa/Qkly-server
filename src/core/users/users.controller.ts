@@ -53,6 +53,7 @@ import { RoleGuard } from '../../common/guards/role.guard';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 import { HttpResponse } from '@app/common/utils/http-response.utils';
+import { ErrorHelper } from '../../common/utils';
 
 
 @ApiTags('users')
@@ -89,7 +90,7 @@ export class UsersController {
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
   ) {
     const register = this.usersService.registerUser(registerUserDto);
-     return register
+    return register
   }
 
   @Public()
@@ -309,7 +310,7 @@ export class UsersController {
     @Request() req,
   ) {
     if (!selfieImage) {
-      throw new BadRequestException('Selfie image is required');
+      ErrorHelper.BadRequestException('Selfie image is required');
     }
 
     const data = this.usersService.verifyBvnWithSelfie(
@@ -556,7 +557,7 @@ export class UsersController {
       data
     }
   }
-// settings - change password
+  // settings - change password
   @Patch('settings/change-password')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -578,14 +579,14 @@ export class UsersController {
     const authUserId = req.user?.userId;
 
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
     if (changePasswordDto.newPassword !== changePasswordDto.confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match');
+      ErrorHelper.BadRequestException('New password and confirm password do not match');
     }
 
-   const data = await this.usersService.changePassword(
+    const data = await this.usersService.changePassword(
       changePasswordDto
     );
 
@@ -635,15 +636,15 @@ export class UsersController {
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-  const data = await this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+    const data = await this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
 
-      return HttpResponse.success({
-        data: data,
-        message: 'User Profile updated successfully'
-      })
+    return HttpResponse.success({
+      data: data,
+      message: 'User Profile updated successfully'
+    })
   }
 
   // settings - change PIN
@@ -680,24 +681,24 @@ export class UsersController {
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
     // Override userId from DTO with authenticated user ID for security
     changePinDto.userId = authUserId;
 
-   const data = await this.usersService.changePin(changePinDto);
+    const data = await this.usersService.changePin(changePinDto);
 
-   return HttpResponse.success({
-    data: data,
-    message: 'Pin changed successfully'
-   })
+    return HttpResponse.success({
+      data: data,
+      message: 'Pin changed successfully'
+    })
   }
 
 
 
 
-  
+
 
 
   // Example admin-only endpoint demonstrating role-based access control

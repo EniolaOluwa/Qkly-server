@@ -42,7 +42,7 @@ export class BusinessesService {
       });
 
       if (existingBusinessType) {
-        throw new ConflictException(
+        ErrorHelper.ConflictException(
           'Business type with this name already exists',
         );
       }
@@ -58,7 +58,7 @@ export class BusinessesService {
       if (error instanceof ConflictException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to create business type');
+      ErrorHelper.InternalServerErrorException('Failed to create business type');
     }
   }
 
@@ -74,7 +74,7 @@ export class BusinessesService {
       where: { id },
     });
     if (!businessType) {
-      throw new NotFoundException(`Business type with ID ${id} not found`);
+      ErrorHelper.NotFoundException(`Business type with ID ${id} not found`);
     }
     return businessType;
   }
@@ -96,7 +96,7 @@ export class BusinessesService {
         });
 
         if (existingBusinessType) {
-          throw new ConflictException(
+          ErrorHelper.ConflictException(
             'Business type with this name already exists',
           );
         }
@@ -112,7 +112,7 @@ export class BusinessesService {
       ) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to update business type');
+      ErrorHelper.InternalServerErrorException('Failed to update business type');
     }
   }
 
@@ -133,7 +133,7 @@ export class BusinessesService {
       });
 
       if (existingBusiness) {
-        throw new ConflictException(
+        ErrorHelper.ConflictException(
           'User already has a business. Only one business per user is allowed',
         );
       }
@@ -144,11 +144,11 @@ export class BusinessesService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
-        throw new ConflictException(
+        ErrorHelper.ConflictException(
           `User must be have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
         );
       }
@@ -158,7 +158,7 @@ export class BusinessesService {
 
       // Upload logo to Cloudinary (logo is required but validated in controller)
       if (!createBusinessDto.logo) {
-        throw new Error('Logo is required for business creation');
+        ErrorHelper.BadRequestException('Logo is required for business creation');
       }
 
       const uploadResult = await this.cloudinaryUtil.uploadImage(
@@ -191,7 +191,7 @@ export class BusinessesService {
       if (error instanceof NotFoundException || error instanceof ConflictException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to create business');
+      ErrorHelper.InternalServerErrorException('Failed to create business');
     }
   }
 
@@ -208,7 +208,7 @@ export class BusinessesService {
       relations: ['businessType', 'user'],
     });
     if (!business) {
-      throw new NotFoundException(`Business with ID ${id} not found`);
+      ErrorHelper.NotFoundException(`Business with ID ${id} not found`);
     }
     return business;
   }
@@ -272,7 +272,7 @@ export class BusinessesService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to update business');
+      ErrorHelper.InternalServerErrorException('Failed to update business');
     }
   }
 

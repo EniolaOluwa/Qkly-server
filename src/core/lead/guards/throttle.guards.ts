@@ -3,6 +3,7 @@ import type { ThrottlerLimitDetail } from '@nestjs/throttler';
 import { ThrottlerException, ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
 import { User } from '../../users';
+import { ErrorHelper } from '../../../common/utils';
 
 
 @Injectable()
@@ -38,7 +39,7 @@ export class LeadSubmissionThrottleGuard extends ThrottlerGuard {
     context: ExecutionContext,
     throttlerLimitDetail: ThrottlerLimitDetail
   ): Promise<void> {
-    throw new ThrottlerException(
+    ErrorHelper.ThrottlerException(
       'Too many submissions. Please try again in a few minutes.'
     );
   }
@@ -72,7 +73,7 @@ export class AuthenticatedThrottleGuard extends ThrottlerGuard {
     context: ExecutionContext,
     throttlerLimitDetail: ThrottlerLimitDetail
   ): Promise<void> {
-    throw new ThrottlerException(
+    ErrorHelper.ThrottlerException(
       'Too many requests. Please slow down.'
     );
   }

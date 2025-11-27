@@ -1,9 +1,10 @@
 // src/core/order/refund.service.ts
 
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
@@ -23,9 +24,7 @@ export class RefundService {
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
-    private readonly businessRepository: Repository<Business>,
     private readonly paystackProvider: PaystackProvider,
     private readonly dataSource: DataSource,
   ) { }
@@ -51,7 +50,7 @@ export class RefundService {
       });
 
       if (!order) {
-        throw new NotFoundException(`Order with ID ${orderId} not found`);
+        ErrorHelper.NotFoundException(`Order with ID ${orderId} not found`);
       }
 
       // Validate order can be refunded
@@ -223,12 +222,12 @@ export class RefundService {
   ): void {
     // Check if order is paid
     if (order.paymentStatus !== 'PAID') {
-      throw new BadRequestException('Only paid orders can be refunded');
+      ErrorHelper.BadRequestException('Only paid orders can be refunded');
     }
 
     // Check if already fully refunded
     if (order.isRefunded) {
-      throw new BadRequestException('Order has already been fully refunded');
+      ErrorHelper.BadRequestException('Order has already been fully refunded');
     }
 
     // Check if refund amount exceeds available amount
@@ -236,11 +235,11 @@ export class RefundService {
 
     if (refundType === RefundType.PARTIAL) {
       if (!amount || amount <= 0) {
-        throw new BadRequestException('Partial refund requires a valid amount');
+        ErrorHelper.BadRequestException('Partial refund requires a valid amount');
       }
 
       if (amount > availableForRefund) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           `Refund amount (₦${amount}) exceeds available refund amount (₦${availableForRefund})`,
         );
       }
@@ -254,7 +253,7 @@ export class RefundService {
     if (daysSincePurchase > 30) {
       this.logger.warn(`Refund requested ${daysSincePurchase} days after purchase`);
       // You can decide to throw error or just log warning
-      // throw new BadRequestException('Refund window has expired (30 days)');
+      // ErrorHelper.BadRequestException('Refund window has expired (30 days)');
     }
   }
 
@@ -300,7 +299,7 @@ export class RefundService {
       const balance = await this.getBusinessBalance(userId);
 
       if (balance < amount) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           `Insufficient wallet balance for refund. Required: ₦${amount}, Available: ₦${balance}`,
         );
       }
@@ -385,7 +384,7 @@ export class RefundService {
       });
 
       if (!order) {
-        throw new NotFoundException(`Order with ID ${orderId} not found`);
+        ErrorHelper.NotFoundException(`Order with ID ${orderId} not found`);
       }
 
       const refundTransactions = await this.transactionRepository.find({

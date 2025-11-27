@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { OrderAction, ORDER_ACTION_KEY } from '../../../common/decorators/order.decorator';
 import { UserRole } from '../../users';
 import { OrderService } from '../order.service';
+import { ErrorHelper } from '../../../common/utils';
 
 @Injectable()
 export class OrderAuthorizationGuard implements CanActivate {
@@ -26,7 +27,7 @@ export class OrderAuthorizationGuard implements CanActivate {
     const orderId = parseInt(request.params.id || request.params.orderId);
 
     if (!user || !orderId) {
-      throw new ForbiddenException('Invalid request');
+      ErrorHelper.ForbiddenException('Invalid request');
     }
 
     // Admin can do everything

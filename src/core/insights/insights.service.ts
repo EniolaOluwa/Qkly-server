@@ -8,6 +8,7 @@ import { OrderItem } from '../order/entity/order-items.entity';
 import { Business } from '../businesses/business.entity';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto, InsightsKPIDto, TrafficSourceDto } from './dto/insights-response.dto';
+import { ErrorHelper } from '../../common/utils';
 
 
 @Injectable()
@@ -21,7 +22,7 @@ export class InsightsService {
     private readonly orderItemRepository: Repository<OrderItem>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
-  ) {}
+  ) { }
 
   async getInsights(
     userId: number,
@@ -33,7 +34,7 @@ export class InsightsService {
     });
 
     if (!business) {
-      throw new NotFoundException('Business not found for this user');
+      ErrorHelper.NotFoundException('Business not found for this user');
     }
 
     // Calculate date range based on period
@@ -172,8 +173,8 @@ export class InsightsService {
     const trafficSources: TrafficSourceDto[] = visitsBySource.map((item) => ({
       source: item.source || 'others',
       visits: parseInt(item.visits, 10),
-      percentage: totalVisits > 0 
-        ? Math.round((parseInt(item.visits, 10) / totalVisits) * 100) 
+      percentage: totalVisits > 0
+        ? Math.round((parseInt(item.visits, 10) / totalVisits) * 100)
         : 0,
     }));
 

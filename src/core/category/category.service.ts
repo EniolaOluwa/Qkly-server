@@ -13,7 +13,6 @@ export class CategoryService {
     private readonly categoryRepository: Repository<Category>,
   ) { }
 
-  // Auto-create or find category by name
   async findOrCreate(name: string, parentId?: number): Promise<Category> {
     const normalized = name.trim();
     let category = await this.categoryRepository.findOne({ where: { name: normalized } });
@@ -28,27 +27,13 @@ export class CategoryService {
     return this.findOrCreate(createDto.name, createDto.parentId);
   }
 
-  async findOrCreateCategory(name: string): Promise<Category> {
-    // Trim and normalize case for consistency
-    const normalized = name.trim();
-
-    let category = await this.categoryRepository.findOne({ where: { name: normalized } });
-
-    if (!category) {
-      category = this.categoryRepository.create({ name: normalized });
-      category = await this.categoryRepository.save(category);
-    }
-
-    return category;
-  }
-
   async findAll(): Promise<Category[]> {
     return this.categoryRepository.find({ relations: ['children', 'parent'] });
   }
 
   async findOne(id: number): Promise<Category> {
     const category = await this.categoryRepository.findOne({ where: { id }, relations: ['children', 'parent'] });
-    if (!category) throw new NotFoundException('Category not found');
+    if (!category) ErrorHelper.NotFoundException('Category not found');
     return category;
   }
 
@@ -62,7 +47,4 @@ export class CategoryService {
     const category = await this.findOne(id);
     await this.categoryRepository.remove(category);
   }
-
-
- 
 }

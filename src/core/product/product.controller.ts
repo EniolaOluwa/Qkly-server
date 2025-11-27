@@ -30,6 +30,7 @@ import { JwtAuthGuard, UserRole } from '../users';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from './product.service';
+import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('products')
 @UseGuards(JwtAuthGuard)
@@ -454,7 +455,7 @@ export class ProductsController {
 
     // Authorization check: Only product owner or admin can update
     if (userRole !== UserRole.ADMIN && product.userId !== userId) {
-      throw new ForbiddenException('Access denied: You can only update your own products');
+      ErrorHelper.ForbiddenException('Access denied: You can only update your own products');
     }
 
     // For merchants, verify they still own the business
@@ -523,7 +524,7 @@ export class ProductsController {
 
     // Authorization check: Only product owner or admin can delete
     if (userRole !== UserRole.ADMIN && product.userId !== userId) {
-      throw new ForbiddenException('Access denied: You can only delete your own products');
+      ErrorHelper.ForbiddenException('Access denied: You can only delete your own products');
     }
 
     // For merchants, verify they still own the business
@@ -554,18 +555,18 @@ export class ProductsController {
   }
 
   //get total number of product in a product
-    @Public()
-    @Get('business/:businessId/products')
-    @ApiOperation({
-      summary: 'Return products grouped by category for a business (paginated)',
-    })
-    async getGroupedProducts(
-      @Param('businessId') businessId: number,
-    ) {
-      return this.productService.getBusinessProductsGroupedByCategory(
-        businessId,
-      );
-    }
+  @Public()
+  @Get('business/:businessId/products')
+  @ApiOperation({
+    summary: 'Return products grouped by category for a business (paginated)',
+  })
+  async getGroupedProducts(
+    @Param('businessId') businessId: number,
+  ) {
+    return this.productService.getBusinessProductsGroupedByCategory(
+      businessId,
+    );
+  }
 
 
 

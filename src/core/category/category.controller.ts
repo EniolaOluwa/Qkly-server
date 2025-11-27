@@ -1,25 +1,30 @@
-import { Controller, Post, Body, Get, Param, ParseIntPipe, Put, Delete, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth } from "@nestjs/swagger";
+import { Admin } from "../../common/decorators/admin.decorator";
+import { Public } from "../../common/decorators/public.decorator";
+import { RoleGuard } from "../users";
 import { CategoryService } from "./category.service";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { UpdateCategoryDto } from "./dto/update-category.dto";
-import { Public } from "../../common/decorators/public.decorator";
-import { Admin } from "../../common/decorators/admin.decorator";
-import { RoleGuard } from "../users";
-import { ApiBearerAuth } from "@nestjs/swagger";
-
+import { count } from "console";
+import { HttpResponse } from "../../common/utils/http-response.utils";
 
 
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) { }
 
-  // only admin can create categories
   @UseGuards(RoleGuard)
   @Admin()
   @ApiBearerAuth()
   @Post()
-  create(@Body() createDto: CreateCategoryDto) {
-    return this.categoryService.create(createDto);
+  async create(@Body() createDto: CreateCategoryDto) {
+    const data = await this.categoryService.create(createDto);
+
+    return HttpResponse.success({
+      data,
+      message: 'Category Created successfully',
+    });
   }
 
   @Public()
@@ -36,8 +41,6 @@ export class CategoryController {
   }
 
 
-  // only admin can update category
- 
   @UseGuards(RoleGuard)
   @Admin()
   @Put(':id')
@@ -47,8 +50,6 @@ export class CategoryController {
   }
 
 
-  // only admin can delete categories
- 
   @UseGuards(RoleGuard)
   @Admin()
   @ApiBearerAuth()

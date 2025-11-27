@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ErrorHelper } from './error.utils';
 
 @Injectable()
 export class CloudinaryUtil {
@@ -45,7 +46,7 @@ export class CloudinaryUtil {
           dataToUpload = imageData;
         }
       } else {
-        throw new Error('Invalid image data format');
+        ErrorHelper.BadRequestException('Invalid image data format');
       }
 
       const result = await cloudinary.uploader.upload(dataToUpload, {
@@ -73,7 +74,7 @@ export class CloudinaryUtil {
       };
     } catch (error) {
       console.error('Cloudinary upload error:', error);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to upload image to cloud storage',
       );
     }
@@ -90,7 +91,7 @@ export class CloudinaryUtil {
       return result;
     } catch (error) {
       console.error('Cloudinary delete error:', error);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to delete image from cloud storage',
       );
     }

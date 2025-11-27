@@ -51,7 +51,7 @@ export class UsersService {
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
-    
+
 
 
     private walletProvisioningUtil: WalletProvisioningUtil,
@@ -108,10 +108,10 @@ export class UsersService {
         role: savedUser.role,
       };
 
-    
+
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
- 
+
       // // email service 
       // const emailDispatcherPayload: MailDispatcherDto = {
       //   to: user.email,
@@ -120,7 +120,7 @@ export class UsersService {
       //   html: signup(user.firstName),
       // };
 
-  
+
       // // send mail to user
       // this.emailService.emailDispatcher(emailDispatcherPayload);
 
@@ -141,7 +141,7 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-    
+
       if (error instanceof ConflictException) {
         throw error;
       }
@@ -222,7 +222,7 @@ export class UsersService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-     
+
       ErrorHelper.InternalServerErrorException('Failed to login user');
     }
   }
@@ -1024,7 +1024,7 @@ export class UsersService {
     changePassword: ChangePasswordDto
   ): Promise<any> {
     try {
-    
+
       // Validate inputs
       if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
         ErrorHelper.BadRequestException('User ID, old password, and new password are required');
@@ -1057,7 +1057,7 @@ export class UsersService {
 
       this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
 
-      return 
+      return
     } catch (error) {
       this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
       ErrorHelper.InternalServerErrorException('Failed to change password');
@@ -1147,15 +1147,15 @@ export class UsersService {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(changePinDto.newPin)) {
-        throw new BadRequestException('New PIN must be exactly 4 digits');
+        ErrorHelper.BadRequestException('New PIN must be exactly 4 digits');
       }
 
       if (changePinDto.newPin !== changePinDto.confirmPin) {
-        throw new BadRequestException('New PIN and confirm PIN do not match');
+        ErrorHelper.BadRequestException('New PIN and confirm PIN do not match');
       }
 
       if (changePinDto.oldPin === changePinDto.newPin) {
-        throw new BadRequestException('New PIN must be different from old PIN');
+        ErrorHelper.BadRequestException('New PIN must be different from old PIN');
       }
 
       // Find user by ID
@@ -1164,17 +1164,17 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (!user.pin) {
-        throw new BadRequestException('User does not have a PIN set. Please create a PIN first.');
+        ErrorHelper.BadRequestException('User does not have a PIN set. Please create a PIN first.');
       }
 
       // Verify old PIN
       const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
       if (!isOldPinValid) {
-        throw new UnauthorizedException('Invalid current PIN');
+        ErrorHelper.UnauthorizedException('Invalid current PIN');
       }
 
       // Encrypt the new PIN
@@ -1203,7 +1203,7 @@ export class UsersService {
         `Failed to change PIN for user ${changePinDto.userId}:`,
         error,
       );
-      throw new InternalServerErrorException('Failed to change PIN');
+      ErrorHelper.InternalServerErrorException('Failed to change PIN');
     }
   }
 
@@ -1225,14 +1225,14 @@ export class UsersService {
       } else if (identifierType === 'phone') {
         whereClause = { phone: identifier };
       } else {
-        throw new BadRequestException(`Invalid identifier type: ${identifierType}`);
+        ErrorHelper.BadRequestException(`Invalid identifier type: ${identifierType}`);
       }
 
       // Find user
       const user = await this.userRepository.findOne({ where: whereClause });
 
       if (!user) {
-        throw new NotFoundException(
+        ErrorHelper.NotFoundException(
           `User not found with ${identifierType}: ${identifier}`,
         );
       }
@@ -1246,10 +1246,10 @@ export class UsersService {
         `Error checking user with ${identifierType}: ${identifier}`,
         error,
       );
-      throw new InternalServerErrorException('Failed to check user');
+      ErrorHelper.InternalServerErrorException('Failed to check user');
     }
   }
 
 
-  
+
 }
