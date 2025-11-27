@@ -545,18 +545,7 @@ export class LeadService {
      */
     private async sendLeadNotification(form: LeadForm, lead: Leads): Promise<void> {
         try {
-            // Example:
-            // await this.emailService.send({
-            //     to: form.business.user.email,
-            //     subject: `New lead from ${form.title}`,
-            //     template: 'new-lead',
-            //     context: {
-            //         formName: form.title,
-            //         leadName: lead.name,
-            //         leadEmail: lead.email,
-            //         leadPhone: lead.phone,
-            //     },
-            // });
+            // TODO: Implement Notification both mail and App
         } catch (error) {
             // Log error but don't throw - notification failure shouldn't block lead creation
             console.error('Failed to send lead notification:', error);

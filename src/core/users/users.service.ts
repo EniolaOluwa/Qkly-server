@@ -1,32 +1,27 @@
 import { HttpService } from '@nestjs/axios';
 import {
-  Injectable,
+  BadRequestException,
   ConflictException,
-  InternalServerErrorException,
-  NotFoundException,
-  UnauthorizedException,
+  Injectable,
   Logger,
-  BadRequestException
+  NotFoundException,
+  UnauthorizedException
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
 import {
-  LoginDto,
-  RegisterUserDto,
-  RegisterUserResponseDto,
-  LoginResponseDto,
-  KycVerificationResponseDto,
   CreatePinResponseDto,
-  UpdateBusinessDto,
+  KycVerificationResponseDto,
+  LoginDto,
+  LoginResponseDto,
+  RegisterUserDto,
+  RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
-import { EmailService } from '../email/email.service';
-import { MailDispatcherDto } from '../email/dto/sendMail.dto';
-import { signup } from '../email/templates/register.template';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { OnboardingStep } from './dto/onboarding-step.enum';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
@@ -112,18 +107,9 @@ export class UsersService {
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
 
-      // // email service 
-      // const emailDispatcherPayload: MailDispatcherDto = {
-      //   to: user.email,
-      //   from: 'onboarding@resend.dev',
-      //   subject: 'Welcome message',
-      //   html: signup(user.firstName),
-      // };
-
-
-      // // send mail to user
-      // this.emailService.emailDispatcher(emailDispatcherPayload);
-
+      /**
+       * TODO: Send Email to user
+      */
 
       // Return user information with token
       return {

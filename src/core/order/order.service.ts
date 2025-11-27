@@ -1292,8 +1292,6 @@ export class OrderService {
       }
 
       // TODO: Implement email/notification service
-      // this.emailService.sendPaymentConfirmation(...)
-      // this.notificationService.notifyBusiness(...)
 
       this.logger.log(`Notifications sent for order ${orderId}`);
     } catch (error) {
