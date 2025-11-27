@@ -42,7 +42,6 @@ export class Order {
   @Index()
   userId: number;
 
-
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;

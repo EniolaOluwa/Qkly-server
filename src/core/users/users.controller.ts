@@ -576,9 +576,10 @@ export class UsersController {
     @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
     @Request() req,
   ) {
-    const authUserId = req.user?.userId;
 
-    if (!authUserId) {
+    const userId = req.user?.userId;
+
+    if (!userId) {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 

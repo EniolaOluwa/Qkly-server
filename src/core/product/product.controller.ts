@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -25,12 +24,12 @@ import {
 } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/queries/dto';
+import { ErrorHelper } from '../../common/utils';
 import { HttpResponse } from '../../common/utils/http-response.utils';
 import { JwtAuthGuard, UserRole } from '../users';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductService } from './product.service';
-import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('products')
 @UseGuards(JwtAuthGuard)
@@ -42,16 +41,19 @@ export class ProductsController {
   // POST ROUTES
   // ============================================
 
+
   @Post()
   @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a new product',
-    description: 'Creates a new product with optional variations (sizes/colors). Requires authentication. The authenticated user (merchant) will be set as the product owner.'
+    description:
+      'Creates a new product with optional variations (sizes/colors). Requires authentication. Merchants can only create products under their own business.',
   })
   @ApiBody({
     type: CreateProductDto,
-    description: 'Product data including name, description, price, business ID, category, and optional variations',
+    description:
+      'Product data including name, description, price, business ID, category, and optional variations (sizes or colors).',
     examples: {
       basic: {
         summary: 'Basic product without variations',
@@ -63,9 +65,10 @@ export class ProductsController {
           businessId: 1,
           category: 'Electronics',
           hasVariation: false,
-          images: ['https://example.com/mouse.jpg']
-        }
+          images: ['https://example.com/mouse.jpg'],
+        },
       },
+
       withVariations: {
         summary: 'Product with size and color variations',
         value: {
@@ -76,12 +79,21 @@ export class ProductsController {
           businessId: 1,
           category: 'Clothing',
           hasVariation: true,
-          sizes: ['S', 'M', 'L', 'XL'],
-          colors: ['Red', 'Blue', 'Black', 'White'],
-          images: ['https://example.com/tshirt.jpg']
-        }
-      }
-    }
+          sizes: [
+            {
+              measurement: 'SIZE', // MeasurementType.SIZE
+              value: ['S', 'M', 'L', 'XL'],
+            },
+            {
+              measurement: 'LABEL', // MeasurementType.LABEL
+              value: ['Slim Fit', 'Regular Fit'],
+            },
+          ],
+          colors: ['#FF0000', '#0000FF', '#FFFFFF'],
+          images: ['https://example.com/tshirt.jpg'],
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
@@ -93,47 +105,50 @@ export class ProductsController {
         data: {
           id: 1,
           name: 'Wireless Mouse',
-          description: 'Ergonomic wireless mouse',
+          description: 'Ergonomic wireless mouse with USB receiver',
           price: 29.99,
           quantityInStock: 50,
           businessId: 1,
           categoryId: 5,
           hasVariation: false,
+          images: ['https://example.com/mouse.jpg'],
+          colors: [],
+          sizes: [],
           createdAt: '2024-01-15T10:30:00Z',
-          updatedAt: '2024-01-15T10:30:00Z'
-        }
-      }
-    }
+          updatedAt: '2024-01-15T10:30:00Z',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - Invalid data (e.g., business not found, missing category, invalid variations)'
+    description:
+      'Bad request — Invalid data (missing category, invalid colors, no variation values provided when hasVariation=true)',
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - Valid JWT token required'
+    description: 'Unauthorized — Valid JWT token required',
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - Merchant can only create products for their own business'
+    description: 'Forbidden — Merchant can only create products for their own business',
   })
   async createProduct(@Request() req, @Body() productData: CreateProductDto) {
     const userId = req.user.userId;
     const userRole = req.user.role;
 
-    // Verify the merchant owns the business they're creating a product for
     if (userRole === UserRole.MERCHANT) {
       await this.productService.verifyBusinessOwnership(userId, productData.businessId);
     }
-    // Admins can create products for any business
+
     const product = await this.productService.createProduct(userId, productData);
 
-    // Return sanitized product data (no sensitive user info)
     return HttpResponse.success({
       data: this.sanitizeProductData(product),
-      message: 'Product created successfully'
+      message: 'Product created successfully',
     });
   }
+
 
   // ============================================
   // GET ROUTES - SPECIFIC PATHS FIRST
@@ -252,12 +267,9 @@ export class ProductsController {
   @ApiQuery({ name: 'maxPrice', required: false, type: Number, description: 'Maximum price filter', example: 100 })
   @ApiQuery({ name: 'inStock', required: false, type: Boolean, description: 'Filter by stock availability (true = in stock, false = out of stock)', example: true })
   @ApiQuery({ name: 'hasVariation', required: false, type: Boolean, description: 'Filter products with variations', example: true })
-  // @ApiQuery({ name: 'colors', required: false, type: [String], description: 'Filter by colors (comma-separated)', example: '#F0F0F0,#CCCCCC' })
-  // @ApiQuery({ name: 'sizes', required: false, type: [String], description: 'Filter by sizes (comma-separated)', example: 'M,L,XL' })
   @ApiQuery({
     name: 'colors',
     required: false,
-    // 💡 Explicit OpenAPI array definition
     schema: { type: 'array', items: { type: 'string' } },
     description: 'Filter by colors (comma-separated)',
     example: '#f0f0f0,#b1f2d2'
@@ -265,7 +277,6 @@ export class ProductsController {
   @ApiQuery({
     name: 'sizes',
     required: false,
-    // 💡 Explicit OpenAPI array definition
     schema: { type: 'array', items: { type: 'string' } },
     description: 'Filter by sizes (comma-separated)',
     example: 'M,L,XL'
