@@ -470,6 +470,7 @@ export class ProductsController {
     });
   }
 
+
   // ============================================
   // DELETE ROUTES
   // ============================================
@@ -540,54 +541,6 @@ export class ProductsController {
   }
 
 
-  //get total under a category
-  @Public()
-  @Get(':id/product-count')
-  @ApiOperation({ summary: 'Get number of products under a category (including children)' })
-  @ApiParam({ name: 'id', type: Number })
-  @ApiResponse({ status: 200, description: 'Product count returned successfully.' })
-  async getProductCount(@Param('id') id: number) {
-    return {
-      categoryId: id,
-      totalProducts: await this.productService.getTotalProductsInCategoryTree(id),
-    };
-  }
-
-  //get total number of product in a product
-    @Public()
-    @Get('business/:businessId/products')
-    @ApiOperation({
-      summary: 'Return products grouped by category for a business (paginated)',
-    })
-    async getGroupedProducts(
-      @Param('businessId') businessId: number,
-    ) {
-      return this.productService.getBusinessProductsGroupedByCategory(
-        businessId,
-      );
-    }
-
-
-
-  @Get('business/:businessId')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Fetch all categories for a business',
-    description: 'Returns a list of all categories belonging to the specified business.',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Categories fetched successfully',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Business not found',
-  })
-  async getBusinessCategories(
-    @Param('businessId') businessId: number,
-  ) {
-    return this.productService.getCategoriesForBusiness(businessId);
-  }
 
   // ============================================
   // HELPER METHODS

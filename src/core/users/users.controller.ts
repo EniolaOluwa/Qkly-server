@@ -162,9 +162,10 @@ export class UsersController {
   })
   async getUserById(@Param('id') id: number) {
     const data = await this.usersService.findUserById(id);
-    return {
-      data
-    };
+    return HttpResponse.success( {
+      message: "User retrieved successfully",
+      data: data
+    });
   }
 
 
@@ -202,10 +203,10 @@ export class UsersController {
       generatePhoneOtpDto.phone,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -248,10 +249,10 @@ export class UsersController {
       verifyPhoneOtpDto.otp,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'Phone number verified successfully',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -318,10 +319,10 @@ export class UsersController {
       selfieImage,
     );
 
-    return {
+    return HttpResponse.success( {
       message: 'BVN verification completed successfully',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -360,10 +361,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
 
-    return {
+    return HttpResponse.success({
       message: 'PIN created successfully',
-      data
-    }
+      data: data
+    })
   }
 
   @Post('generate-create-pin-otp')
@@ -400,10 +401,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.generateCreatePinOtp(req.user.userId);
 
-    return {
+    return HttpResponse.success( {
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data: data
+    })
   }
 
   @Post('verify-create-pin-otp')
@@ -437,10 +438,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
 
-    return {
+    return HttpResponse.success( {
       message: 'OTP verified successfully. You can now create your PIN.',
-      data,
-    }
+      data: data,
+    })
   }
 
   @Post('forgot-password')
@@ -470,10 +471,10 @@ export class UsersController {
     @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
   ) {
     const data = await this.usersService.forgotPassword(forgotPasswordDto.email);
-    return {
-      message: 'OTP sent successfully to your phone number',
-      data
-    }
+    return HttpResponse.success( {
+      message: 'forget password request successful',
+      data: data
+    })
   }
 
   @Public()
@@ -509,10 +510,10 @@ export class UsersController {
       verifyPasswordResetOtpDto.otp,
     );
 
-    return {
-      message: 'OTP verified successfully. You can now reset your password.',
-      data
-    }
+    return HttpResponse.success( {
+      message: 'Verify password reset otp successful',
+      data: data
+    })
   }
 
   @Public()
@@ -551,10 +552,10 @@ export class UsersController {
       resetPasswordDto.resetToken,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'Password reset successfully',
-      data
-    }
+      data: data
+    })
   }
 // settings - change password
   @Patch('settings/change-password')
