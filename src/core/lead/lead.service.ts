@@ -6,6 +6,7 @@ import { ErrorHelper } from '../../common/utils';
 import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
 import { LeadForm } from './entity/leadForm.entity';
 import { Leads } from './entity/leads.entity';
+import { Business } from '../businesses/business.entity';
 
 @Injectable()
 export class LeadService {
@@ -13,7 +14,9 @@ export class LeadService {
         @InjectRepository(LeadForm)
         private readonly leadFormRepo: Repository<LeadForm>,
         @InjectRepository(Leads)
-        private readonly leadsRepo: Repository<Leads>
+        private readonly leadsRepo: Repository<Leads>,
+        @InjectRepository(Business)
+        private readonly businessRepository: Repository<Business>
     ) { }
 
     /**
@@ -21,18 +24,29 @@ export class LeadService {
      * @param dto - CreateLeadFormDto containing form details
      * @returns Promise<LeadForm> - The created lead form
      */
-    async createLeadForm(dto: CreateLeadFormDto, userId: number, businessId: number): Promise<LeadForm> {
+    async createLeadForm(dto: CreateLeadFormDto, userId: number): Promise<LeadForm> {
         try {
+
             if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
                 ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
             }
 
+            // Fetch the user's business dynamically
+            const business = await this.businessRepository.findOne({ where: { userId } });
+
+            if (!business) {
+                throw ErrorHelper.BadRequestException(
+                    'User must have a business to create lead forms'
+                );
+            }
+
             const form = this.leadFormRepo.create({
                 ...dto,
-                businessId,
+                businessId: business.id,
                 createdBy: userId,
                 isActive: dto.isActive ?? true,
             });
+
 
             return await this.leadFormRepo.save(form);
         } catch (error) {
@@ -391,6 +405,7 @@ export class LeadService {
                 deletedCount: result.affected || 0,
             };
         } catch (error) {
+
             if (error instanceof NotFoundException) throw error;
             ErrorHelper.InternalServerErrorException(`Error deleting leads: ${error.message}`, error);
         }
@@ -424,6 +439,7 @@ export class LeadService {
 
 
 
+
     /**
  * Create a lead from public submission with full tracking
  */
@@ -441,11 +457,13 @@ export class LeadService {
         utmParameters: any,
     ): Promise<Leads> {
         try {
+
             if (!dto.email) {
                 ErrorHelper.BadRequestException('Email is required');
             }
 
             const form = await this.getFormByPublicId(publicId);
+
 
             if (!form.isActive) {
                 ErrorHelper.BadRequestException('This form is currently inactive');
@@ -485,6 +503,7 @@ export class LeadService {
             });
 
             const savedLead = await this.leadsRepo.save(lead);
+
 
             // Increment submission count
             await this.leadFormRepo.increment(

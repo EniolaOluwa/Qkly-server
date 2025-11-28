@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsArray, IsBoolean, ValidateNested, IsObject, IsU
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
-class InputField {
+export class InputField {
   @ApiProperty({
     description: 'Input field type (e.g., text, email, phone, textarea)',
     example: 'email',
@@ -240,9 +240,10 @@ export class CreateLeadFormDto {
   customStyling?: CustomStylingDto;
 
   // These will be set from auth context
-  businessId?: number;
+  businessId: number;
   createdBy?: number;
 }
+
 
 export class UpdateLeadFormDto extends PartialType(CreateLeadFormDto) {
   @ApiPropertyOptional()

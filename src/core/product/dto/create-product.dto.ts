@@ -141,7 +141,6 @@ export class CreateProductDto {
   sizes?: SizeDto[];
 
 
-
   @ApiPropertyOptional({
     description: 'Product category name (text). Will be created if it does not exist.',
     example: 'T-Shirts',
