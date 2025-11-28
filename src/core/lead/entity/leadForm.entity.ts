@@ -4,6 +4,7 @@ import { User } from '../../users/entity/user.entity';
 import { Leads } from './leads.entity';
 import { shortUUID } from '../../../common/utils/uuid.utils';
 
+
 @Entity({ name: 'lead-forms' })
 export class LeadForm {
   @PrimaryGeneratedColumn()

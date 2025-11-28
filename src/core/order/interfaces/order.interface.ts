@@ -1,4 +1,5 @@
 import { PaymentEventCustomer } from "../dto/payment.dto";
+import { RefundMethod, RefundType } from "../dto/refund.dto";
 
 export enum OrderItemStatus {
   PENDING = 'PENDING',
@@ -11,7 +12,6 @@ export enum OrderItemStatus {
 }
 
 
-
 export enum PaymentMethod {
   MONNIFY = 'MONNIFY',
   BANK_TRANSFER = 'BANK_TRANSFER',
@@ -21,13 +21,11 @@ export enum PaymentMethod {
   USSD = 'USSD',
 }
 
-
 export enum DeliveryMethod {
   STANDARD = 'STANDARD',
   EXPRESS = 'EXPRESS',
   PICKUP = 'PICKUP',
 }
-
 export interface OrderItemDetails {
   productId: number;
   quantity: number;
@@ -46,7 +44,6 @@ export interface DeliveryDetails {
   meta?: any;
 
 }
-
 export interface SettlementDetails {
   businessId: number;
   businessName: string;
@@ -60,7 +57,6 @@ export interface SettlementDetails {
   bankName?: string;
   meta?: any;
 }
-
 export interface MonnifyPaymentResponse {
   requestSuccessful: boolean;
   responseMessage?: string;
@@ -119,8 +115,6 @@ export interface PaymentEventData {
   metaData?: Record<string, any>;
 }
 
-
-
 export interface PaymentDetails {
   paymentMethod: PaymentMethod;
   paymentReference: string;
@@ -178,22 +172,94 @@ export interface PaymentDetails {
 
 
 
-export interface RefundDetails {
+export enum RefundStatus {
+  REQUESTED = 'REQUESTED',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  PARTIALLY_COMPLETED = 'PARTIALLY_COMPLETED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum RefundTransactionType {
+  PLATFORM_REFUND = 'PLATFORM_REFUND',
+  BUSINESS_REFUND = 'BUSINESS_REFUND',
+}
+
+export enum RefundTransactionStatus {
+  PENDING = 'PENDING',
+  SUCCESS = 'SUCCESS',
+  FAILED = 'FAILED',
+}
+
+export interface RefundTransaction {
+  type: RefundTransactionType;
   amount: number;
+  reference: string;       // e.g., wallet tx or bank reversal ref
+  status: RefundTransactionStatus;
+  processedAt?: Date | null;
+}
+
+
+
+
+export interface RefundDetails {
+  // Core
+  refundReference: string;
+  amountRequested: number;
+  amountApproved: number;
+  amountRefunded: number;
+  remainingAmount: number;
+
+  // Status
+  status: RefundStatus;
+
+  // Notes
   reason: string;
-  refundType: 'FULL' | 'PARTIAL';
-  refundMethod: 'ORIGINAL_PAYMENT' | 'WALLET';
+  refundType: RefundType;
+  refundMethod: RefundMethod;
   customerNote?: string;
   merchantNote?: string;
-  refundedBy: number; // userId who initiated refund
-  refundedAt: Date;
-  transactions: Array<{
-    type: 'PLATFORM_REFUND' | 'BUSINESS_REFUND';
-    amount: number;
-    reference: string;
-    status: string;
-  }>;
+
+  // Actors
+  requestedBy: number;
+  approvedBy?: number;
+  refundedBy?: number;
+
+  // Timeline
+  requestedAt: Date;
+  approvedAt?: Date | null;
+  processingAt?: Date | null;
+  refundedAt?: Date | null;
+  failedAt?: Date | null;
+  cancelledAt?: Date | null;
+
+  // Transaction events
+  transactions: RefundTransaction[];
+
+  // Extra metadata
+  meta?: Record<string, any>;
 }
+
+
+
+// export interface RefundDetails {
+//   amount: number;
+//   reason: string;
+//   refundType: RefundType;
+//   refundMethod: RefundMethod;
+//   customerNote?: string;
+//   merchantNote?: string;
+//   refundedBy: number;
+//   refundedAt: Date | null;
+//   requestedAt: Date | null;
+//   transactions: Array<{
+//     type: 'PLATFORM_REFUND' | 'BUSINESS_REFUND';
+//     amount: number;
+//     reference: string;
+//     status: string;
+//   }>;
+// }
 
 
 

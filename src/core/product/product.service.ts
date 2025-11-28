@@ -11,6 +11,7 @@ import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
 import { generateRandomProduct } from '../../common/utils/product-generator';
+import { Category } from '../category/entity/category.entity';
 
 
 
@@ -24,7 +25,10 @@ export class ProductService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
+     @InjectRepository(Category)
+    private readonly categoryRepository: Repository<Category>,
     private readonly categoryService: CategoryService
+
   ) { }
 
 
@@ -335,31 +339,60 @@ export class ProductService {
   }
 
   async updateProduct(
-    id: number,
-    updateData: UpdateProductDto,
-  ): Promise<Product> {
-    try {
-      const product = await this.findProductById(id);
+  id: number,
+  updateData: UpdateProductDto,
+): Promise<Product> {
+  try {
+    const product = await this.findProductById(id);
 
-      if (updateData.hasVariation !== undefined) {
-        const hasSizes = (updateData.sizes && updateData.sizes.length > 0) ||
-          (product.sizes && product.sizes.length > 0 && !updateData.sizes);
-        const hasColors = (updateData.colors && updateData.colors.length > 0) ||
-          (product.colors && product.colors.length > 0 && !updateData.colors);
+    // Validate variations
+    if (updateData.hasVariation !== undefined) {
+      const hasSizes =
+        (updateData.sizes && updateData.sizes.length > 0) ||
+        (product.sizes && product.sizes.length > 0 && !updateData.sizes);
+      const hasColors =
+        (updateData.colors && updateData.colors.length > 0) ||
+        (product.colors && product.colors.length > 0 && !updateData.colors);
 
-        if (updateData.hasVariation && !hasSizes && !hasColors) {
-          ErrorHelper.BadRequestException(
-            'Product marked as having variations must include at least one size or color.',
-          );
-        }
+      if (updateData.hasVariation && !hasSizes && !hasColors) {
+        ErrorHelper.BadRequestException(
+          'Product marked as having variations must include at least one size or color.',
+        );
+      }
+    }
+
+    // Handle category update by name
+    if (updateData.category) {
+      let category = await this.categoryRepository.findOne({
+        where: { name: updateData.category },
+      });
+
+      // If category does not exist, create it
+      if (!category) {
+        category = this.categoryRepository.create({ name: updateData.category });
+        category = await this.categoryRepository.save(category);
       }
 
-      Object.assign(product, updateData);
-      return await this.productRepository.save(product);
-    } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error updating product: ${error.message}`, error);
+      product.category = category;
+      product.categoryId = category.id;
     }
+
+    // Assign other fields
+    Object.assign(product, {
+      ...updateData,
+      category: product.category,
+      categoryId: product.categoryId,
+    });
+
+    return await this.productRepository.save(product);
+  } catch (error) {
+    ErrorHelper.InternalServerErrorException(
+      `Error updating product: ${error.message}`,
+      error,
+    );
   }
+}
+
 
   async deleteProduct(id: number): Promise<void> {
     try {

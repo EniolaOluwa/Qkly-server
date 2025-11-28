@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Req, Request, Res, UseGuards } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiOperation,
   ApiParam,
@@ -14,14 +15,14 @@ import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common
 import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import { AcceptOrderDto, FindAllOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
-import { CreateRefundDto } from './dto/refund.dto';
+import { InitiateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
-
+import { ErrorHelper } from '../../common/utils';
 
 
 @ApiTags('orders')
@@ -68,66 +69,6 @@ export class OrdersController {
     return await this.orderService.findAllOrders(query);
   }
 
-  @Get('my-business-orders')
-  @ApiPaginatedResponse(
-    Order,
-    "Get orders for authenticated user's businesses",
-    'Retrieves all orders that belong to businesses owned by the authenticated user.',
-  )
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    description: 'Page number (starts from 1)',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    description: 'Number of items per page',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Orders retrieved successfully',
-  })
-  async findOrdersForMyBusinesses(
-    @Request() req,
-    @Query() paginationDto: PaginationDto,
-  ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(
-      req.user.userId,
-      paginationDto,
-    );
-  }
-
-  @Get('user')
-  @ApiAuth()
-  @ApiPaginatedResponse(
-    Order,
-    'Get orders for authenticated user',
-    'Retrieves orders for the authenticated user using JWT token.',
-  )
-  async findOrdersForCurrentUser(
-    @Request() req,
-    @Query() paginationDto: PaginationDto,
-  ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(
-      req.user.userId,
-      paginationDto,
-    );
-  }
-
-  @Get('user/:userId')
-  @ApiAuth()
-  @ApiFindOneDecorator(
-    Order,
-    'userId',
-    'Retrieves orders for a specific user. Returns paginated list.',
-  )
-  async findOrdersByUserId(
-    @Param('userId', ParseIntPipe) userId: number,
-    @Query() paginationDto: PaginationDto,
-  ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(userId, paginationDto);
-  }
 
   @Get('business/:businessId')
   @ApiFindOneDecorator(
@@ -144,6 +85,109 @@ export class OrdersController {
       paginationDto,
     );
   }
+
+
+
+  @Patch(':id/accept')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Accept an order (Business action)',
+    description: 'Business accepts a paid order and moves it to CONFIRMED status',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Order ID',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order accepted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Order cannot be accepted (not paid, wrong status, or business mismatch)'
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async acceptOrder(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() acceptOrderDto: AcceptOrderDto,
+  ) {
+    // Get business ID from user's business
+    const user = await this.orderService['userRepository'].findOne({
+      where: { id: req.user.userId },
+      relations: ['business'],
+    });
+
+    if (!user?.businessId) {
+      throw new Error('User does not have a business');
+    }
+
+    return this.orderService.acceptOrder(id, user.businessId, acceptOrderDto.notes);
+  }
+
+
+  @Patch(':id/reject')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reject an order (Business action)',
+    description: 'Business rejects a paid order, initiates refund, and returns inventory',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Order ID',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order rejected successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Order cannot be rejected (not paid, wrong status, or business mismatch)'
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async rejectOrder(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() rejectOrderDto: RejectOrderDto,
+  ) {
+    // Get business ID from user's business
+    const user = await this.orderService['userRepository'].findOne({
+      where: { id: req.user.userId },
+      relations: ['business'],
+    });
+
+    if (!user?.businessId) {
+      ErrorHelper.NotFoundException('User does not have a business');
+    }
+
+    return this.orderService.rejectOrder(id, user.businessId, rejectOrderDto.reason);
+  }
+
+
+  @Get('reference/:reference')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get order by reference' })
+  @ApiParam({
+    name: 'reference',
+    description: 'Order reference',
+    type: String,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderByReference(@Param('reference') reference: string) {
+    return this.orderService.findOrderByReference(reference);
+  }
+
 
   @Get(':id')
   @ApiAuth()
@@ -250,10 +294,18 @@ export class OrdersController {
     description: 'Order not found',
   })
   async updateOrderStatus(
+    @Request() req,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateStatusDto: UpdateOrderStatusDto,
   ): Promise<Order> {
-    return await this.orderService.updateOrderStatus(id, updateStatusDto);
+
+    const user = await this.orderService['userRepository'].findOne({
+      where: { id: req.user.userId },
+      relations: ['business'],
+    });
+
+    return await this.orderService.updateOrderStatus(id, updateStatusDto, user?.businessId,
+    );
   }
 
   @Patch(':orderId/items/:itemId/status')
@@ -521,7 +573,7 @@ export class OrdersController {
   @ApiOperation({ summary: 'Process a refund for an order' })
   @ApiResponse({ status: 200, description: 'Refund processed successfully' })
   async processRefund(
-    @Body() createRefundDto: CreateRefundDto,
+    @Body() createRefundDto: InitiateRefundDto,
     @Request() req
   ): Promise<any> {
 
