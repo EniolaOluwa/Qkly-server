@@ -443,6 +443,7 @@ export class LeadService {
 
 
 
+
     /**
  * Create a lead from public submission with full tracking
  */
@@ -460,15 +461,13 @@ export class LeadService {
         utmParameters: any,
     ): Promise<Leads> {
         try {
-            console.log('debug1')
-
-            console.log('debug2')
+          
             if (!dto.email) {
                 ErrorHelper.BadRequestException('Email is required');
             }
 
             const form = await this.getFormByPublicId(publicId);
-            console.log(form)
+           
 
             if (!form.isActive) {
                 ErrorHelper.BadRequestException('This form is currently inactive');
@@ -509,10 +508,7 @@ export class LeadService {
 
             const savedLead = await this.leadsRepo.save(lead);
 
-            console.log(savedLead)
-            console.log(savedLead.id);      // leadId
-            console.log(savedLead.formId);
-
+           
             // Increment submission count
             await this.leadFormRepo.increment(
                 { id: form.id },
@@ -530,7 +526,6 @@ export class LeadService {
 
             return savedLead;
         } catch (error) {
-            console.log(error)
             if (error instanceof NotFoundException || error instanceof BadRequestException) {
                 throw error;
             }
