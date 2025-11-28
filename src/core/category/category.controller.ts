@@ -101,7 +101,7 @@ export class CategoryController {
 
   //get total number of product in a product
   @Public()
-  @Get(':businesId/product')
+  @Get('business/:businessId/products')
   @ApiOperation({
     summary: 'Return products grouped by category for a business (paginated)',
   })
