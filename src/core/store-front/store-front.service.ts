@@ -33,7 +33,7 @@ export class StoreFrontService {
     });
 
     if (!business) {
-      throw new NotFoundException('Business not found for this user');
+      ErrorHelper.NotFoundException('Business not found for this user');
     }
 
     return business;

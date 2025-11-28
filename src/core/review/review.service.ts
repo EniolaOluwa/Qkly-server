@@ -8,9 +8,10 @@ import { OrderItem } from '../order/entity/order-items.entity';
 import { Order } from '../order/entity/order.entity';
 import { OrderStatus } from '../order/interfaces/order.interface';
 import { Product } from '../product/entity/product.entity';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateReviewDto, GuestReviewVerificationDto, UpdateReviewDto } from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
+import { ErrorHelper } from '../../common/utils';
 
 
 
@@ -40,7 +41,7 @@ export class ReviewService {
 
       // Validate guest review requirements
       if (isGuestReview && (!reviewData.guestEmail || !reviewData.guestName)) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Guest reviews require guestEmail and guestName',
         );
       }
@@ -56,12 +57,12 @@ export class ReviewService {
         });
 
         if (!order) {
-          throw new NotFoundException(`Order with ID ${reviewData.orderId} not found`);
+          ErrorHelper.NotFoundException(`Order with ID ${reviewData.orderId} not found`);
         }
 
         // Verify guest email matches order
         if (order.customerEmail.toLowerCase() !== (reviewData?.guestEmail ?? '').toLowerCase()) {
-          throw new BadRequestException(
+          ErrorHelper.BadRequestException(
             'Email does not match the order email',
           );
         }
@@ -77,7 +78,7 @@ export class ReviewService {
         });
 
         if (!order) {
-          throw new NotFoundException(
+          ErrorHelper.NotFoundException(
             `Order with ID ${reviewData.orderId} not found or does not belong to you`,
           );
         }
@@ -90,7 +91,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to create review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to create review: ${error.message}`,
       );
     }
@@ -105,7 +106,7 @@ export class ReviewService {
   ): Promise<Review> {
     // Check if the order is delivered
     if (order.status !== OrderStatus.DELIVERED) {
-      throw new BadRequestException(
+      ErrorHelper.BadRequestException(
         'Cannot review a product from an order that is not delivered',
       );
     }
@@ -113,26 +114,26 @@ export class ReviewService {
     // Find the specific order item
     const orderItem = order.items.find(item => item.id === reviewData.orderItemId);
     if (!orderItem) {
-      throw new NotFoundException(
+      ErrorHelper.NotFoundException(
         `Order item with ID ${reviewData.orderItemId} not found in this order`,
       );
     }
 
     // Validate that the product ID matches the order item
     if (orderItem.productId !== reviewData.productId) {
-      throw new BadRequestException(
+      ErrorHelper.BadRequestException(
         `Product ID ${reviewData.productId} does not match the product in the order item`,
       );
     }
 
     // Validate that the business ID matches the order
     if (order.businessId !== reviewData.businessId) {
-      throw new BadRequestException('Business ID does not match the order');
+      ErrorHelper.BadRequestException('Business ID does not match the order');
     }
 
     // Check if order item status is delivered
     if (orderItem.status !== OrderItemStatus.DELIVERED) {
-      throw new BadRequestException(
+      ErrorHelper.BadRequestException(
         'Cannot review a product that has not been delivered',
       );
     }
@@ -151,7 +152,7 @@ export class ReviewService {
     });
 
     if (existingReview) {
-      throw new BadRequestException(
+      ErrorHelper.BadRequestException(
         'You have already reviewed this product from this order',
       );
     }
@@ -197,7 +198,7 @@ export class ReviewService {
 
       if (isGuest) {
         if (!guestVerification || !guestVerification.email || !guestVerification.orderReference) {
-          throw new BadRequestException(
+          ErrorHelper.BadRequestException(
             'Guest review updates require email and order reference for verification',
           );
         }
@@ -209,14 +210,14 @@ export class ReviewService {
         }) as Review;
 
         if (!review) {
-          throw new NotFoundException(
+          ErrorHelper.NotFoundException(
             `Review with ID ${reviewId} not found or email does not match`,
           );
         }
 
         // Verify order reference
         if (review.order.orderReference !== guestVerification.orderReference) {
-          throw new BadRequestException('Order reference does not match');
+          ErrorHelper.BadRequestException('Order reference does not match');
         }
       } else {
         review = await this.reviewRepository.findOne({
@@ -224,7 +225,7 @@ export class ReviewService {
         }) as Review;
 
         if (!review) {
-          throw new NotFoundException(
+          ErrorHelper.NotFoundException(
             `Review with ID ${reviewId} not found or does not belong to you`,
           );
         }
@@ -238,7 +239,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to update review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to update review: ${error.message}`,
       );
     }
@@ -256,7 +257,7 @@ export class ReviewService {
 
       if (isGuest) {
         if (!guestVerification || !guestVerification.email || !guestVerification.orderReference) {
-          throw new BadRequestException(
+          ErrorHelper.BadRequestException(
             'Guest review deletion requires email and order reference for verification',
           );
         }
@@ -267,13 +268,13 @@ export class ReviewService {
         }) as Review;
 
         if (!review) {
-          throw new NotFoundException(
+          ErrorHelper.NotFoundException(
             `Review with ID ${reviewId} not found or email does not match`,
           );
         }
 
         if (review.order.orderReference !== guestVerification.orderReference) {
-          throw new BadRequestException('Order reference does not match');
+          ErrorHelper.BadRequestException('Order reference does not match');
         }
       } else {
         review = await this.reviewRepository.findOne({
@@ -281,7 +282,7 @@ export class ReviewService {
         }) as Review;
 
         if (!review) {
-          throw new NotFoundException(
+          ErrorHelper.NotFoundException(
             `Review with ID ${reviewId} not found or does not belong to you`,
           );
         }
@@ -294,7 +295,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to delete review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to delete review: ${error.message}`,
       );
     }
@@ -312,7 +313,7 @@ export class ReviewService {
       });
 
       if (!product) {
-        throw new NotFoundException(`Product with ID ${productId} not found`);
+        ErrorHelper.NotFoundException(`Product with ID ${productId} not found`);
       }
 
       const queryBuilder = this.reviewRepository
@@ -348,7 +349,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by product id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to find reviews: ${error.message}`,
       );
     }
@@ -365,7 +366,7 @@ export class ReviewService {
       });
 
       if (!business) {
-        throw new NotFoundException(`Business with ID ${businessId} not found`);
+        ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
       }
 
       const queryBuilder = this.reviewRepository
@@ -402,7 +403,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by business id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to find reviews: ${error.message}`,
       );
     }
@@ -418,7 +419,7 @@ export class ReviewService {
       });
 
       if (!user) {
-        throw new NotFoundException(`User with ID ${userId} not found`);
+        ErrorHelper.NotFoundException(`User with ID ${userId} not found`);
       }
 
       const queryBuilder = this.reviewRepository
@@ -453,7 +454,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by user id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to find reviews: ${error.message}`,
       );
     }
@@ -493,7 +494,7 @@ export class ReviewService {
       });
     } catch (error) {
       this.logger.error(`Failed to find reviews by guest email: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to find reviews: ${error.message}`,
       );
     }
@@ -509,7 +510,7 @@ export class ReviewService {
       });
 
       if (!review) {
-        throw new NotFoundException(`Review with ID ${id} not found`);
+        ErrorHelper.NotFoundException(`Review with ID ${id} not found`);
       }
 
       return review;
@@ -519,7 +520,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find review by id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to find review: ${error.message}`,
       );
     }
@@ -532,7 +533,7 @@ export class ReviewService {
       });
 
       if (!product) {
-        throw new NotFoundException(`Product with ID ${productId} not found`);
+        ErrorHelper.NotFoundException(`Product with ID ${productId} not found`);
       }
 
       const result = await this.reviewRepository
@@ -549,7 +550,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to get product average rating: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to get product average rating: ${error.message}`,
       );
     }
@@ -563,7 +564,7 @@ export class ReviewService {
       });
 
       if (!product) {
-        throw new NotFoundException(`Product with ID ${productId} not found`);
+        ErrorHelper.NotFoundException(`Product with ID ${productId} not found`);
       }
 
       const totalReviews = await this.reviewRepository.count({
@@ -621,7 +622,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to get product review stats: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         `Failed to get product review stats: ${error.message}`,
       );
     }

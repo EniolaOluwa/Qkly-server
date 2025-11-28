@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
+import { ErrorHelper } from '../../common/utils';
 
 @Injectable()
 export class CloudinaryService {
@@ -7,7 +8,7 @@ export class CloudinaryService {
 
   async uploadImage(file: Express.Multer.File) {
     if (!file) {
-      throw new Error('Image file is required');
+      ErrorHelper.BadRequestException('Image file is required');
     }
 
     const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);

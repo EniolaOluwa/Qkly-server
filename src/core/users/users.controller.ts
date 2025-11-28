@@ -15,6 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
@@ -51,6 +52,8 @@ import {
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
+import { HttpResponse } from '@app/common/utils/http-response.utils';
+import { ErrorHelper } from '../../common/utils';
 
 
 @ApiTags('users')
@@ -86,7 +89,8 @@ export class UsersController {
   async registerUser(
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
   ) {
-    return this.usersService.registerUser(registerUserDto);
+    const register = this.usersService.registerUser(registerUserDto);
+    return register
   }
 
   @Public()
@@ -112,8 +116,11 @@ export class UsersController {
   async loginUser(
     @Body(ValidationPipe) loginDto: LoginDto,
   ) {
-    const data = await this.usersService.loginUser(loginDto);
-    return data
+    const login = await this.usersService.loginUser(loginDto);
+    return HttpResponse.success({
+      data: login,
+      message: 'User logged in successfully'
+    })
   }
 
   @Get('profile')
@@ -156,9 +163,10 @@ export class UsersController {
   })
   async getUserById(@Param('id') id: number) {
     const data = await this.usersService.findUserById(id);
-    return {
-      data
-    };
+    return HttpResponse.success( {
+      message: "User retrieved successfully",
+      data: data
+    });
   }
 
 
@@ -196,10 +204,10 @@ export class UsersController {
       generatePhoneOtpDto.phone,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -242,10 +250,10 @@ export class UsersController {
       verifyPhoneOtpDto.otp,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'Phone number verified successfully',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -303,7 +311,7 @@ export class UsersController {
     @Request() req,
   ) {
     if (!selfieImage) {
-      throw new BadRequestException('Selfie image is required');
+      ErrorHelper.BadRequestException('Selfie image is required');
     }
 
     const data = this.usersService.verifyBvnWithSelfie(
@@ -312,10 +320,10 @@ export class UsersController {
       selfieImage,
     );
 
-    return {
+    return HttpResponse.success( {
       message: 'BVN verification completed successfully',
-      data
-    }
+      data: data
+    })
   }
 
 
@@ -354,10 +362,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
 
-    return {
+    return HttpResponse.success({
       message: 'PIN created successfully',
-      data
-    }
+      data: data
+    })
   }
 
   @Post('generate-create-pin-otp')
@@ -394,10 +402,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.generateCreatePinOtp(req.user.userId);
 
-    return {
+    return HttpResponse.success( {
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data: data
+    })
   }
 
   @Post('verify-create-pin-otp')
@@ -431,10 +439,10 @@ export class UsersController {
   ) {
     const data = await this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
 
-    return {
+    return HttpResponse.success( {
       message: 'OTP verified successfully. You can now create your PIN.',
-      data,
-    }
+      data: data,
+    })
   }
 
   @Post('forgot-password')
@@ -464,10 +472,10 @@ export class UsersController {
     @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
   ) {
     const data = await this.usersService.forgotPassword(forgotPasswordDto.email);
-    return {
-      message: 'OTP sent successfully to your phone number',
-      data
-    }
+    return HttpResponse.success( {
+      message: 'forget password request successful',
+      data: data
+    })
   }
 
   @Public()
@@ -503,10 +511,10 @@ export class UsersController {
       verifyPasswordResetOtpDto.otp,
     );
 
-    return {
-      message: 'OTP verified successfully. You can now reset your password.',
-      data
-    }
+    return HttpResponse.success( {
+      message: 'Verify password reset otp successful',
+      data: data
+    })
   }
 
   @Public()
@@ -545,10 +553,10 @@ export class UsersController {
       resetPasswordDto.resetToken,
     );
 
-    return {
+    return HttpResponse.success({
       message: 'Password reset successfully',
-      data
-    }
+      data: data
+    })
   }
   // settings - change password
   @Patch('settings/change-password')
@@ -569,19 +577,25 @@ export class UsersController {
     @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
     @Request() req,
   ) {
-    const authUserId = req.user?.userId;
 
-    if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
     if (changePasswordDto.newPassword !== changePasswordDto.confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match');
+      ErrorHelper.BadRequestException('New password and confirm password do not match');
     }
 
-    return this.usersService.changePassword(
+    const data = await this.usersService.changePassword(
       changePasswordDto
     );
+
+    return HttpResponse.success({
+      data: data,
+      message: 'Password changed successfully'
+    })
   }
 
 
@@ -624,10 +638,15 @@ export class UsersController {
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    return this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+    const data = await this.usersService.updateUserProfile(authUserId, updateUserProfileDto);
+
+    return HttpResponse.success({
+      data: data,
+      message: 'User Profile updated successfully'
+    })
   }
 
   // settings - change PIN
@@ -664,14 +683,24 @@ export class UsersController {
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
     // Override userId from DTO with authenticated user ID for security
     changePinDto.userId = authUserId;
 
-    return this.usersService.changePin(changePinDto);
+    const data = await this.usersService.changePin(changePinDto);
+
+    return HttpResponse.success({
+      data: data,
+      message: 'Pin changed successfully'
+    })
   }
+
+
+
+
+
 
 
   // Example admin-only endpoint demonstrating role-based access control

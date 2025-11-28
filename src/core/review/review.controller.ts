@@ -33,6 +33,7 @@ import {
 } from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
 import { ReviewService } from './review.service';
+import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('reviews')
 @Controller('reviews')
@@ -275,7 +276,7 @@ export class ReviewController {
     @Query() paginationDto: PaginationDto,
   ) {
     if (!email) {
-      throw new BadRequestException('Email query parameter is required');
+      ErrorHelper.BadRequestException('Email query parameter is required');
     }
     return await this.reviewService.findReviewsByGuestEmail(email, paginationDto);
   }

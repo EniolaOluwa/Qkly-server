@@ -19,6 +19,7 @@ import {
   WebhookEventDto,
   PaymentProviderType,
 } from './dto/payment-provider.dto';
+import { ErrorHelper } from '../../common/utils';
 
 /**
  * Payment Service - Unified interface for all payment providers
@@ -181,7 +182,7 @@ export class PaymentService {
   ): Promise<TransferResponseDto> {
     try {
       if (!this.provider.transferBetweenWallets) {
-        throw new InternalServerErrorException(
+        ErrorHelper.InternalServerErrorException(
           `Wallet-to-wallet transfer not supported by ${this.providerType}`,
         );
       }
@@ -238,7 +239,7 @@ export class PaymentService {
       if (signature) {
         const isValid = this.provider.validateWebhookSignature(payload, signature);
         if (!isValid) {
-          throw new InternalServerErrorException('Invalid webhook signature');
+          ErrorHelper.InternalServerErrorException('Invalid webhook signature');
         }
       }
 
@@ -292,7 +293,7 @@ export class PaymentService {
     if (this.provider.getAccessToken) {
       return await this.provider.getAccessToken();
     }
-    throw new InternalServerErrorException(
+    ErrorHelper.InternalServerErrorException(
       'Access token not supported by current provider',
     );
   }

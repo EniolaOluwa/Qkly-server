@@ -13,6 +13,7 @@ import {
 } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { PaystackProvider } from './providers/paystack.provider';
+import { ErrorHelper } from '../../common/utils';
 
 @Injectable()
 export class PaystackIntegrationService {
@@ -50,7 +51,7 @@ export class PaystackIntegrationService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       const business = await this.businessRepository.findOne({
@@ -58,7 +59,7 @@ export class PaystackIntegrationService {
       });
 
       if (!business) {
-        throw new NotFoundException('Business not found');
+        ErrorHelper.NotFoundException('Business not found');
       }
 
       // Step 1: Create DVA for the user (their wallet)
@@ -129,7 +130,7 @@ export class PaystackIntegrationService {
 
       // Ensure user has wallet account (DVA) for settlement
       if (!user.walletAccountNumber || !user.walletBankCode) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'User must have a wallet account (DVA) before creating subaccount',
         );
       }

@@ -1,32 +1,29 @@
-// src/core/payment/providers/paystack.provider.ts
-
+import { HttpService } from '@nestjs/axios';
 import {
   Injectable,
-  Logger,
-  InternalServerErrorException,
-  BadRequestException,
+  Logger
 } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { firstValueFrom } from 'rxjs';
 import * as crypto from 'crypto';
-import { IPaymentProvider } from '../interfaces/payment-provider.interface';
+import { firstValueFrom } from 'rxjs';
+import { ErrorHelper } from '../../../common/utils';
 import {
+  BankAccountDetailsDto,
   CreateVirtualAccountDto,
-  VirtualAccountResponseDto,
-  WalletBalanceDto,
   InitializePaymentRequestDto,
   InitializePaymentResponseDto,
-  VerifyPaymentResponseDto,
-  TransferRequestDto,
-  TransferResponseDto,
-  ResolveBankAccountDto,
-  BankAccountDetailsDto,
-  WebhookEventDto,
   PaymentProviderType,
   PaymentVerificationStatus,
+  ResolveBankAccountDto,
+  TransferRequestDto,
+  TransferResponseDto,
   TransferStatus,
+  VerifyPaymentResponseDto,
+  VirtualAccountResponseDto,
+  WalletBalanceDto,
+  WebhookEventDto,
 } from '../dto/payment-provider.dto';
+import { IPaymentProvider } from '../interfaces/payment-provider.interface';
 
 @Injectable()
 export class PaystackProvider extends IPaymentProvider {
@@ -51,7 +48,7 @@ export class PaystackProvider extends IPaymentProvider {
     );
 
     if (!this.secretKey) {
-      throw new InternalServerErrorException('Paystack secret key not configured');
+      ErrorHelper.InternalServerErrorException('Paystack secret key not configured');
     }
   }
 
@@ -99,7 +96,7 @@ export class PaystackProvider extends IPaymentProvider {
           error.response?.data?.message?.toLowerCase().includes('customer')
         ) {
           this.logger.warn(`Customer ${dto.customerEmail} exists, will fetch DVA`);
-          throw new BadRequestException('CUSTOMER_EXISTS');
+          ErrorHelper.BadRequestException('CUSTOMER_EXISTS');
         }
         throw error;
       });
@@ -112,7 +109,7 @@ export class PaystackProvider extends IPaymentProvider {
       }
 
       this.logger.error('DVA creation failed:', error);
-      throw new InternalServerErrorException('Failed to create virtual account');
+      ErrorHelper.InternalServerErrorException('Failed to create virtual account');
     }
   }
 
@@ -132,7 +129,7 @@ export class PaystackProvider extends IPaymentProvider {
       const customerCode = customer.customer_code;
 
       if (!customerCode) {
-        throw new Error('Customer code not found');
+        ErrorHelper.NotFoundException('Customer code not found');
       }
 
       // Step 2: Fetch customer's dedicated accounts
@@ -145,7 +142,7 @@ export class PaystackProvider extends IPaymentProvider {
       const accounts = dvaResponse.data.data;
 
       if (!accounts || accounts.length === 0) {
-        throw new Error('No dedicated accounts found');
+        ErrorHelper.NotFoundException('No dedicated accounts found');
       }
 
       // Get the first active account
@@ -166,7 +163,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Error fetching existing DVA:', error);
-      throw new InternalServerErrorException('Failed to fetch existing account');
+      ErrorHelper.InternalServerErrorException('Failed to fetch existing account');
     }
   }
 
@@ -225,7 +222,7 @@ export class PaystackProvider extends IPaymentProvider {
       const accounts = response.data.data;
 
       if (!accounts || accounts.length === 0) {
-        throw new BadRequestException('No virtual account found');
+        ErrorHelper.BadRequestException('No virtual account found');
       }
 
       const account = accounts[0];
@@ -245,14 +242,14 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Failed to fetch virtual account:', error);
-      throw new InternalServerErrorException('Failed to fetch account details');
+      ErrorHelper.InternalServerErrorException('Failed to fetch account details');
     }
   }
 
   async getWalletBalance(walletReference: string): Promise<WalletBalanceDto> {
     // Note: Paystack doesn't provide individual DVA balances
     // You must track this in your database via transactions
-    throw new InternalServerErrorException(
+    ErrorHelper.InternalServerErrorException(
       'Wallet balance must be calculated from transaction history in your database',
     );
   }
@@ -295,7 +292,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Payment initialization failed:', error);
-      throw new InternalServerErrorException('Failed to initialize payment');
+      ErrorHelper.InternalServerErrorException('Failed to initialize payment');
     }
   }
 
@@ -325,7 +322,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Payment verification failed:', error);
-      throw new InternalServerErrorException('Failed to verify payment');
+      ErrorHelper.InternalServerErrorException('Failed to verify payment');
     }
   }
 
@@ -374,7 +371,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Transfer failed:', error);
-      throw new InternalServerErrorException('Failed to process transfer');
+      ErrorHelper.InternalServerErrorException('Failed to process transfer');
     }
   }
 
@@ -401,7 +398,7 @@ export class PaystackProvider extends IPaymentProvider {
       }
 
       this.logger.error('Failed to create recipient:', error);
-      throw new InternalServerErrorException('Failed to create transfer recipient');
+      ErrorHelper.InternalServerErrorException('Failed to create transfer recipient');
     }
   }
 
@@ -453,7 +450,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Refund failed:', error);
-      throw new InternalServerErrorException('Failed to process refund');
+      ErrorHelper.InternalServerErrorException('Failed to process refund');
     }
   }
 
@@ -479,7 +476,7 @@ export class PaystackProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Bank account resolution failed:', error);
-      throw new BadRequestException('Failed to resolve bank account');
+      ErrorHelper.BadRequestException('Failed to resolve bank account');
     }
   }
 
@@ -498,7 +495,7 @@ export class PaystackProvider extends IPaymentProvider {
       }));
     } catch (error) {
       this.logger.error('Failed to get bank list:', error);
-      throw new InternalServerErrorException('Failed to get bank list');
+      ErrorHelper.InternalServerErrorException('Failed to get bank list');
     }
   }
 

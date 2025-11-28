@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 
 export class ErrorHelper {
   static BadRequestException(msg: string | string[]): never {
@@ -35,5 +36,10 @@ export class ErrorHelper {
   static UnprocessableEntityException(msg: string): never {
     console.error('[UnprocessableEntityException]', msg);
     throw new HttpException(msg, HttpStatus.UNPROCESSABLE_ENTITY);
+  }
+
+  static ThrottlerException(msg: string): never {
+    console.error('[UnprocessableEntityException]', msg);
+    throw new ThrottlerException(msg);
   }
 }

@@ -43,7 +43,6 @@ export class SizeDto {
 }
 
 
-
 export class CreateProductDto {
   @ApiProperty({
     description: 'Business ID for the product',

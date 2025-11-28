@@ -12,7 +12,7 @@ import {
   BeforeInsert,
 } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
-import { User } from '../../users';
+import { User } from '../../users/entity/user.entity';
 import {
   OrderStatus,
   PaymentStatus,
@@ -41,7 +41,6 @@ export class Order {
   @Column({ nullable: true })
   @Index()
   userId: number;
-
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })

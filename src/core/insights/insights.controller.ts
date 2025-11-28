@@ -24,12 +24,13 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { InsightsService } from './insights.service';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto } from './dto/insights-response.dto';
+import { ErrorHelper } from '../../common/utils';
 
 
 @ApiTags('insights')
 @Controller('insights')
 export class InsightsController {
-  constructor(private readonly insightsService: InsightsService) {}
+  constructor(private readonly insightsService: InsightsService) { }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -79,7 +80,7 @@ export class InsightsController {
   ): Promise<InsightsResponseDto> {
     const userId = req.user?.userId;
     if (!userId) {
-      throw new BadRequestException('Authenticated user id not found');
+      ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
     return this.insightsService.getInsights(userId, query);

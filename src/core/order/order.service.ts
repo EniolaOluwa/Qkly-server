@@ -11,7 +11,7 @@ import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
@@ -545,7 +545,7 @@ export class OrderService {
       const order = await this.findOrderById(orderId);
 
       if (order.paymentStatus === PaymentStatus.PAID) {
-        throw new ConflictException('Payment already processed');
+        ErrorHelper.ConflictException('Payment already processed');
       }
 
       const business = await this.businessRepository.findOne({
@@ -553,11 +553,11 @@ export class OrderService {
       });
 
       if (!business) {
-        throw new ConflictException('Business not found');
+        ErrorHelper.ConflictException('Business not found');
       }
 
       if (!business.paystackSubaccountCode) {
-        throw new BadRequestException(
+        ErrorHelper.BadRequestException(
           'Business subaccount not configured. Please contact support.',
         );
       }
@@ -1292,8 +1292,6 @@ export class OrderService {
       }
 
       // TODO: Implement email/notification service
-      // this.emailService.sendPaymentConfirmation(...)
-      // this.notificationService.notifyBusiness(...)
 
       this.logger.log(`Notifications sent for order ${orderId}`);
     } catch (error) {

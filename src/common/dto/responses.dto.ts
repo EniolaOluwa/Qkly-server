@@ -1,3 +1,4 @@
+import { ErrorHelper } from './../utils/error.utils';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
@@ -94,6 +95,12 @@ export class RegisterUserDto {
 }
 
 export class RegisterUserResponseDto {
+  @ApiProperty({
+    description: 'Registration success message',
+    example: 'User registered successfully',
+  })
+  message: string;
+
   @ApiProperty({
     description: 'JWT access token',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -224,7 +231,7 @@ export class CreateBusinessDto {
     if (typeof value === 'string') {
       const parsed = parseInt(value, 10);
       if (isNaN(parsed)) {
-        throw new Error('Business type ID must be a valid number');
+        ErrorHelper.BadRequestException('Business type ID must be a valid number');
       }
       return parsed;
     }
@@ -318,7 +325,7 @@ export class UpdateBusinessDto {
     if (typeof value === 'string') {
       const parsed = parseInt(value, 10);
       if (isNaN(parsed)) {
-        throw new Error('Business type ID must be a valid number');
+        ErrorHelper.BadRequestException('Business type ID must be a valid number');
       }
       return parsed;
     }
@@ -734,6 +741,12 @@ export class CreatePinDto {
 }
 
 export class CreatePinResponseDto {
+  @ApiProperty({
+    description: 'PIN creation success message',
+    example: 'PIN created successfully',
+  })
+  message: string;
+
   @ApiProperty({
     description: 'Success status',
     example: true,

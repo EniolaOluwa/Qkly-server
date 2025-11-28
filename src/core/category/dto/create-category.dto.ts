@@ -8,11 +8,4 @@ export class CreateCategoryDto {
   })
   @IsString()
   name: string;
-
-  @ApiPropertyOptional({
-    description: 'Parent category ID (for hierarchical categories)',
-    example: 1,
-  })
-  @IsOptional()
-  parentId?: number;
 }

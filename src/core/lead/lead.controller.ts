@@ -26,6 +26,7 @@ import { HttpResponse } from '../../common/utils/http-response.utils';
 import { JwtAuthGuard } from '../users';
 import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
 import { LeadService } from './lead.service';
+import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('Lead Forms')
 @Controller('lead-forms')
@@ -47,7 +48,7 @@ export class LeadController {
         const businessId = req.user.businessId;
 
         if (!businessId) {
-            throw new BadRequestException('User must have a business to create lead forms');
+            ErrorHelper.BadRequestException('User must have a business to create lead forms');
         }
 
         const data = await this.leadService.createLeadForm(dto, userId, businessId);
