@@ -26,9 +26,7 @@ export class LeadService {
      */
     async createLeadForm(dto: CreateLeadFormDto, userId: number): Promise<LeadForm> {
         try {
-             console.log(userId)
-             
-             console.log(dto)
+         
             if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
                 ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
             }
@@ -49,11 +47,11 @@ export class LeadService {
                 isActive: dto.isActive ?? true,
             });
 
-            console.log(form)
+     
 
             return await this.leadFormRepo.save(form);
         } catch (error) {
-            console.log(error)
+        
             if (error instanceof BadRequestException) throw error;
             ErrorHelper.InternalServerErrorException(`Error creating lead form: ${error.message}`, error);
         }
@@ -96,6 +94,7 @@ export class LeadService {
      * @param id - The ID of the lead form
      * @returns Promise<LeadForm> - The lead form details
      */
+
     async getLeadFormById(id: number, businessId?: number): Promise<LeadForm> {
         try {
             const whereClause: any = { id };
@@ -370,6 +369,7 @@ export class LeadService {
             await this.getLeadFormById(formId, businessId);
             return await this.leadsRepo.count({ where: { formId, businessId } });
         } catch (error) {
+       
             if (error instanceof NotFoundException) throw error;
             ErrorHelper.InternalServerErrorException(`Error counting leads: ${error.message}`, error);
         }
@@ -426,8 +426,10 @@ export class LeadService {
         try {
             const form = await this.leadFormRepo.findOne({
                 where: { publicId },
-                relations: ['business'],
+                relations: ['business','leads'],
             });
+
+          
 
             if (!form) {
                 ErrorHelper.NotFoundException(`Form not found`);
@@ -461,14 +463,15 @@ export class LeadService {
         utmParameters: any,
     ): Promise<Leads> {
         try {
-          
+        
             if (!dto.email) {
                 ErrorHelper.BadRequestException('Email is required');
             }
 
+          
             const form = await this.getFormByPublicId(publicId);
            
-
+        
             if (!form.isActive) {
                 ErrorHelper.BadRequestException('This form is currently inactive');
             }
@@ -480,7 +483,6 @@ export class LeadService {
             this.validateFormInputs(dto, form.inputs);
 
 
-
             // Create the lead with all tracking data
             const lead = this.leadsRepo.create({
                 name: dto.name,
@@ -489,7 +491,6 @@ export class LeadService {
                 formResponses: dto.formResponses,
                 formId: form.id,
                 businessId: form.businessId,
-
                 // Tracking data
                 ipAddress: trackingData.ipAddress,
                 userAgent: trackingData.userAgent,
@@ -506,9 +507,9 @@ export class LeadService {
                 isContacted: false,
             });
 
+    
             const savedLead = await this.leadsRepo.save(lead);
 
-           
             // Increment submission count
             await this.leadFormRepo.increment(
                 { id: form.id },

@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsArray, IsBoolean, ValidateNested, IsObject, IsUUID, IsEmail, ArrayMinSize, IsInt, IsUrl, Max, MaxLength, Min, MinLength, Matches, IsEnum } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { Exclude, Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 export class InputField {
@@ -383,7 +383,7 @@ export class CreateLeadDto {
     description: 'Name of the lead'
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Name must be a string' })
   @MinLength(2, { message: 'Name must be at least 2 characters long' })
   @MaxLength(200, { message: 'Name cannot exceed 200 characters' })
   @Transform(({ value }) => value?.trim())
@@ -403,7 +403,7 @@ export class CreateLeadDto {
     description: 'Phone number of the lead'
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Phone must be a string' })
   @Matches(/^\+?[1-9]\d{1,14}$/, {
     message: 'Phone number must be in E.164 format (e.g., +2348012345678)'
   })
@@ -418,13 +418,18 @@ export class CreateLeadDto {
     description: 'Additional form responses as key-value pairs'
   })
   @IsOptional()
-  @IsObject()
+  @IsObject({ message: 'formResponses must be an object' })
   formResponses?: Record<string, any>;
 
-  // These will be set internally
+  // Internal fields (ignored by ValidationPipe)
+  @Exclude()
+  @IsOptional()
   formId?: number;
+  @Exclude()
+  @IsOptional()
   businessId?: number;
 }
+
 
 export class UpdateLeadDto {
   @ApiPropertyOptional({ example: 'Jane Doe' })
