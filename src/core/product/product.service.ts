@@ -82,7 +82,6 @@ export class ProductService {
         userId
       });
 
-      console.log(product)
 
       return await this.productRepository.save(product);
     } catch (error) {
@@ -227,7 +226,7 @@ export class ProductService {
         pageOptionsDto: query,
       });
     } catch (error) {
-   
+
       ErrorHelper.InternalServerErrorException(
         `Error finding products: ${error.message}`,
         error
@@ -235,7 +234,7 @@ export class ProductService {
     }
   }
 
-  
+
   async findProductById(id: number): Promise<Product> {
     try {
       const product = await this.productRepository.findOne({
@@ -376,5 +375,5 @@ export class ProductService {
 
 
 
-  
+
 }

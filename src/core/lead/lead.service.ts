@@ -26,9 +26,7 @@ export class LeadService {
      */
     async createLeadForm(dto: CreateLeadFormDto, userId: number): Promise<LeadForm> {
         try {
-             console.log(userId)
-             
-             console.log(dto)
+
             if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
                 ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
             }
@@ -37,9 +35,9 @@ export class LeadService {
             const business = await this.businessRepository.findOne({ where: { userId } });
 
             if (!business) {
-            throw ErrorHelper.BadRequestException(
-                'User must have a business to create lead forms'
-            );
+                throw ErrorHelper.BadRequestException(
+                    'User must have a business to create lead forms'
+                );
             }
 
             const form = this.leadFormRepo.create({
@@ -49,11 +47,9 @@ export class LeadService {
                 isActive: dto.isActive ?? true,
             });
 
-            console.log(form)
 
             return await this.leadFormRepo.save(form);
         } catch (error) {
-            console.log(error)
             if (error instanceof BadRequestException) throw error;
             ErrorHelper.InternalServerErrorException(`Error creating lead form: ${error.message}`, error);
         }
@@ -409,7 +405,7 @@ export class LeadService {
                 deletedCount: result.affected || 0,
             };
         } catch (error) {
-           
+
             if (error instanceof NotFoundException) throw error;
             ErrorHelper.InternalServerErrorException(`Error deleting leads: ${error.message}`, error);
         }
@@ -461,13 +457,13 @@ export class LeadService {
         utmParameters: any,
     ): Promise<Leads> {
         try {
-          
+
             if (!dto.email) {
                 ErrorHelper.BadRequestException('Email is required');
             }
 
             const form = await this.getFormByPublicId(publicId);
-           
+
 
             if (!form.isActive) {
                 ErrorHelper.BadRequestException('This form is currently inactive');
@@ -508,7 +504,7 @@ export class LeadService {
 
             const savedLead = await this.leadsRepo.save(lead);
 
-           
+
             // Increment submission count
             await this.leadFormRepo.increment(
                 { id: form.id },

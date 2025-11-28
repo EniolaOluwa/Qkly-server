@@ -50,7 +50,7 @@ async function bootstrap() {
     jsonDocumentUrl: '/api/docs-json', // This exposes the JSON
   });
 
-  const port = process.env.PORT ?? 3001;
+  const port = process.env.PORT!;
   await app.listen(port);
 
   console.log(`Application is running on: http://localhost:${port}`);
