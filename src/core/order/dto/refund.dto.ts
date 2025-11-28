@@ -1,7 +1,7 @@
 // dto/refund.dto.ts
 
-import { IsNumber, IsString, IsOptional, IsEnum, Min, Max } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 export enum RefundType {
   FULL = 'FULL',
@@ -13,49 +13,120 @@ export enum RefundMethod {
   WALLET = 'WALLET', // Refund to customer's wallet (if they have one)
 }
 
-export class CreateRefundDto {
-  @ApiProperty({ description: 'Order ID to refund' })
+
+export enum RefundReason {
+  ORDER_REJECTED = 'ORDER_REJECTED',
+  ORDER_CANCELLED = 'ORDER_CANCELLED',
+  PRODUCT_DEFECTIVE = 'PRODUCT_DEFECTIVE',
+  WRONG_ITEM_SHIPPED = 'WRONG_ITEM_SHIPPED',
+  CUSTOMER_REQUEST = 'CUSTOMER_REQUEST',
+  DUPLICATE_ORDER = 'DUPLICATE_ORDER',
+  OTHER = 'OTHER',
+}
+
+export class InitiateRefundDto {
+  @ApiProperty({
+    description: 'Order ID to refund',
+    example: 1,
+  })
+  @IsNotEmpty()
   @IsNumber()
   orderId: number;
 
   @ApiProperty({
     description: 'Refund type',
     enum: RefundType,
-    default: RefundType.FULL
+    example: RefundType.FULL,
   })
+  @IsNotEmpty()
   @IsEnum(RefundType)
   refundType: RefundType;
 
-  @ApiProperty({
-    description: 'Amount to refund (required for partial refunds)',
-    required: false
+  @ApiPropertyOptional({
+    description: 'Refund amount (required for partial refunds)',
+    example: 5000,
+    minimum: 0,
   })
   @IsOptional()
   @IsNumber()
   @Min(0)
   amount?: number;
 
-  @ApiProperty({ description: 'Reason for refund' })
+  @ApiProperty({
+    description: 'Reason for refund',
+    enum: RefundReason,
+    example: RefundReason.ORDER_REJECTED,
+  })
+  @IsNotEmpty()
+  @IsEnum(RefundReason)
+  reason: RefundReason;
+
+  @ApiPropertyOptional({
+    description: 'Additional details about the refund reason',
+    example: 'Product was out of stock',
+    maxLength: 500,
+  })
+  @IsOptional()
   @IsString()
-  reason: string;
+  @MaxLength(500)
+  reasonDetails?: string;
 
   @ApiProperty({
     description: 'Refund method',
     enum: RefundMethod,
-    default: RefundMethod.ORIGINAL_PAYMENT
+    example: RefundMethod.ORIGINAL_PAYMENT,
   })
+  @IsNotEmpty()
   @IsEnum(RefundMethod)
   refundMethod: RefundMethod;
 
-  @ApiProperty({ description: 'Note for customer', required: false })
+  @ApiPropertyOptional({
+    description: 'Note for customer',
+    example: 'Your refund will be processed within 3-5 business days',
+    maxLength: 500,
+  })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   customerNote?: string;
 
-  @ApiProperty({ description: 'Internal merchant note', required: false })
+  @ApiPropertyOptional({
+    description: 'Internal merchant note',
+    example: 'Product defective - batch #12345',
+    maxLength: 500,
+  })
   @IsOptional()
   @IsString()
+  @MaxLength(500)
   merchantNote?: string;
+}
+
+
+
+export class RefundStatusDto {
+  @ApiProperty({ description: 'Refund status', example: 'SUCCESS' })
+  status: string;
+
+  @ApiProperty({ description: 'Order reference', example: 'ORD-12345678' })
+  orderReference: string;
+
+  @ApiProperty({ description: 'Refund amount', example: 10000 })
+  amount: number;
+
+  @ApiProperty({ description: 'Refund type', example: 'FULL' })
+  refundType: string;
+
+  @ApiProperty({ description: 'Refund method', example: 'ORIGINAL_PAYMENT' })
+  refundMethod: string;
+
+  @ApiProperty({ description: 'Platform refund reference', example: 'REF-PLATFORM-12345' })
+  platformRefundReference?: string;
+
+  @ApiProperty({ description: 'Business refund reference', example: 'REF-BUSINESS-12345' })
+  businessRefundReference?: string;
+
+  @ApiProperty({ description: 'Refund date' })
+  refundDate: Date;
 }
 
 export class RefundResponseDto {

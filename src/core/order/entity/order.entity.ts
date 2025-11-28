@@ -176,8 +176,6 @@ export class Order {
   @Column({ type: 'json', nullable: true })
   refundDetails: RefundDetails;
 
-
-
   @CreateDateColumn()
   createdAt: Date;
 

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsOptional,
   IsNumber,
@@ -8,6 +8,8 @@ import {
   Min,
   IsPositive,
   IsObject,
+  IsNotEmpty,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, OrderItemStatus } from '../interfaces/order.interface';
@@ -150,7 +152,7 @@ export class UpdateOrderStatusDto {
   @ApiProperty({
     description: 'Notes or reason for status change',
     example: 'Order confirmed and processing started',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
@@ -184,3 +186,33 @@ export class UpdateOrderItemStatusDto {
   @IsString()
   notes?: string;
 }
+
+
+
+export class AcceptOrderDto {
+  @ApiPropertyOptional({
+    description: 'Optional notes for accepting the order',
+    example: 'Order accepted and will be processed within 24 hours',
+    maxLength: 500,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+/**
+ * DTO for rejecting an order
+ */
+export class RejectOrderDto {
+  @ApiProperty({
+    description: 'Reason for rejecting the order',
+    example: 'Product out of stock',
+    maxLength: 500,
+  })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(500)
+  reason: string;
+}
+
