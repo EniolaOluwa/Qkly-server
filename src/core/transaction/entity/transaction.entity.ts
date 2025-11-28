@@ -12,7 +12,6 @@ import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { Order } from '../../order/entity/order.entity';
 
-
 export enum TransactionType {
   ORDER_PAYMENT = 'ORDER_PAYMENT',
   SETTLEMENT = 'SETTLEMENT',
@@ -50,14 +49,13 @@ export class Transaction {
   @Index()
   userId: number | null;
 
-
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
 
   @Column({ nullable: true })
   @Index()
-  businessId: number | null
+  businessId: number | null;
 
   @ManyToOne(() => Business, { nullable: true })
   @JoinColumn({ name: 'businessId' })

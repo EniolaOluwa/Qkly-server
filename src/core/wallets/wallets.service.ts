@@ -10,10 +10,7 @@ import { Repository } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateOrReject } from 'class-validator';
 import { User } from '../users/entity/user.entity';
-import {
-  GenerateWalletDto,
-  GenerateWalletResponseDto,
-} from './dto/wallet.dto';
+import { GenerateWalletDto, GenerateWalletResponseDto } from './dto/wallet.dto';
 import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
 import {
   WalletTransferOtpDto,
@@ -30,7 +27,7 @@ export class WalletsService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly paymentService: PaymentService,
-  ) { }
+  ) {}
 
   /**
    * Generate wallet for user using configured payment provider
@@ -55,9 +52,7 @@ export class WalletsService {
         walletReference: generateWalletDto.walletReference ?? '',
         walletName: generateWalletDto.walletName,
         customerEmail: generateWalletDto.customerEmail,
-        customerName:
-          generateWalletDto.customerName ??
-          `${user.firstName} ${user.lastName}`,
+        customerName: generateWalletDto.customerName ?? `${user.firstName} ${user.lastName}`,
         bvn: generateWalletDto.bvn,
         dateOfBirth: generateWalletDto.dateOfBirth,
         currencyCode: generateWalletDto.currencyCode || 'NGN',
@@ -92,10 +87,7 @@ export class WalletsService {
         throw error;
       }
 
-      this.logger.error(
-        'Wallet generation failed:',
-        error.response?.data || error.message,
-      );
+      this.logger.error('Wallet generation failed:', error.response?.data || error.message);
 
       throw new InternalServerErrorException('Failed to create wallet');
     }
@@ -137,18 +129,14 @@ export class WalletsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException(
-        'Failed to retrieve wallet information',
-      );
+      throw new InternalServerErrorException('Failed to retrieve wallet information');
     }
   }
 
   /**
    * Get user wallet with balance
    */
-  async getUserWalletWithBalance(
-    userId: number,
-  ): Promise<WalletBalanceResponseDto> {
+  async getUserWalletWithBalance(userId: number): Promise<WalletBalanceResponseDto> {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId },
@@ -163,13 +151,10 @@ export class WalletsService {
       });
 
       if (!user) throw new NotFoundException('User not found');
-      if (!user.walletReference)
-        throw new BadRequestException('User does not have a wallet');
+      if (!user.walletReference) throw new BadRequestException('User does not have a wallet');
 
       // Use PaymentService to get balance
-      const balance = await this.paymentService.getWalletBalance(
-        user.walletReference,
-      );
+      const balance = await this.paymentService.getWalletBalance(user.walletReference);
 
       const walletDto = plainToInstance(WalletBalanceResponseDto, {
         walletReference: user.walletReference,
@@ -240,9 +225,7 @@ export class WalletsService {
         throw new Error('OTP validation not yet implemented for current provider');
       }
 
-      throw new BadRequestException(
-        'OTP validation not supported by current payment provider',
-      );
+      throw new BadRequestException('OTP validation not supported by current payment provider');
     } catch (error) {
       this.logger.error('OTP validation failed', error.stack);
       throw new InternalServerErrorException('OTP validation failed');
@@ -252,10 +235,7 @@ export class WalletsService {
   /**
    * Resolve bank account details
    */
-  async resolveBankAccount(
-    accountNumber: string,
-    bankCode: string,
-  ): Promise<any> {
+  async resolveBankAccount(accountNumber: string, bankCode: string): Promise<any> {
     try {
       return await this.paymentService.resolveBankAccount({
         accountNumber,

@@ -11,5 +11,4 @@ export enum OrderAction {
 }
 
 export const ORDER_ACTION_KEY = 'order_action';
-export const OrderAuthorization = (action: OrderAction) =>
-  SetMetadata(ORDER_ACTION_KEY, action);
+export const OrderAuthorization = (action: OrderAction) => SetMetadata(ORDER_ACTION_KEY, action);

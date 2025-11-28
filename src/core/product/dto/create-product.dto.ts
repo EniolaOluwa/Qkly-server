@@ -14,12 +14,10 @@ import {
 } from 'class-validator';
 import { PaginationDto } from '../../../common/queries/dto';
 
-
 export enum MeasurementType {
   SIZE = 'SIZE',
   LABEL = 'LABEL',
 }
-
 
 /**
  * DTO for product sizes
@@ -42,8 +40,6 @@ export class SizeDto {
   value: string[];
 }
 
-
-
 export class CreateProductDto {
   @ApiProperty({
     description: 'Business ID for the product',
@@ -53,13 +49,9 @@ export class CreateProductDto {
   @IsNotEmpty()
   businessId: number;
 
-
   @ApiProperty({
     description: 'Array of product image URLs',
-    example: [
-      'https://example.com/image1.jpg',
-      'https://example.com/image2.jpg',
-    ],
+    example: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
     type: [String],
     required: false,
   })
@@ -67,7 +59,6 @@ export class CreateProductDto {
   @IsArray()
   @IsString({ each: true })
   images?: string[];
-
 
   @ApiProperty({
     description: 'Product color in hex format',
@@ -83,7 +74,6 @@ export class CreateProductDto {
   })
   colors?: string[];
 
-
   @ApiProperty({
     description: 'Indicates if product has size or color variations',
     example: true,
@@ -92,7 +82,6 @@ export class CreateProductDto {
   @IsOptional()
   hasVariation?: boolean;
 
-
   @ApiProperty({
     description: 'Product title',
     example: 'Premium Cotton T-Shirt',
@@ -100,7 +89,6 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   name: string;
-
 
   @ApiProperty({
     description: 'Product description',
@@ -111,7 +99,6 @@ export class CreateProductDto {
   @IsString()
   description?: string;
 
-
   @ApiProperty({
     description: 'Quantity in stock',
     example: 100,
@@ -120,7 +107,6 @@ export class CreateProductDto {
   @IsOptional()
   @IsNumber()
   quantityInStock?: number;
-
 
   @ApiProperty({
     description: 'Product price',
@@ -131,7 +117,6 @@ export class CreateProductDto {
   @Min(0, { message: 'Price must be a positive number' })
   price: number;
 
-
   @ApiProperty({
     description: 'List of size or label variations',
     type: [SizeDto],
@@ -141,8 +126,6 @@ export class CreateProductDto {
   @IsArray()
   sizes?: SizeDto[];
 
-
-
   @ApiPropertyOptional({
     description: 'Product category name (text). Will be created if it does not exist.',
     example: 'T-Shirts',
@@ -151,11 +134,10 @@ export class CreateProductDto {
   category: string;
 }
 
-
 export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter by user ID',
-    type: Number
+    type: Number,
   })
   @IsOptional()
   @IsNumber()
@@ -164,7 +146,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by business ID',
-    type: Number
+    type: Number,
   })
   @IsOptional()
   @IsNumber()
@@ -173,7 +155,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by category ID',
-    type: Number
+    type: Number,
   })
   @IsOptional()
   @IsNumber()
@@ -182,7 +164,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Search in product name and description',
-    type: String
+    type: String,
   })
   @IsOptional()
   @IsString()
@@ -191,7 +173,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Sort by field',
     enum: ['id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'],
-    default: 'createdAt'
+    default: 'createdAt',
   })
   @IsOptional()
   @IsString()
@@ -200,7 +182,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Sort order',
     enum: ['ASC', 'DESC'],
-    default: 'DESC'
+    default: 'DESC',
   })
   @IsOptional()
   @IsEnum(['ASC', 'DESC'])
@@ -208,7 +190,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Minimum price',
-    type: Number
+    type: Number,
   })
   @IsOptional()
   @IsNumber()
@@ -218,7 +200,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Maximum price',
-    type: Number
+    type: Number,
   })
   @IsOptional()
   @IsNumber()
@@ -228,7 +210,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by stock availability',
-    type: Boolean
+    type: Boolean,
   })
   @IsOptional()
   @IsBoolean()
@@ -241,7 +223,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by variation status',
-    type: Boolean
+    type: Boolean,
   })
   @IsOptional()
   @IsBoolean()
@@ -254,7 +236,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by colors',
-    type: [String]
+    type: [String],
   })
   @IsOptional()
   @IsArray()
@@ -263,7 +245,7 @@ export class FindAllProductsDto extends PaginationDto {
 
   @ApiPropertyOptional({
     description: 'Filter by sizes',
-    type: [String]
+    type: [String],
   })
   @IsOptional()
   @IsArray()
@@ -273,7 +255,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter products created after this date',
     type: String,
-    example: '2023-01-01'
+    example: '2023-01-01',
   })
   @IsOptional()
   @Type(() => Date)
@@ -282,7 +264,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter products created before this date',
     type: String,
-    example: '2023-12-31'
+    example: '2023-12-31',
   })
   @IsOptional()
   @Type(() => Date)
@@ -291,7 +273,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter products updated after this date',
     type: String,
-    example: '2023-01-01'
+    example: '2023-01-01',
   })
   @IsOptional()
   @Type(() => Date)
@@ -300,7 +282,7 @@ export class FindAllProductsDto extends PaginationDto {
   @ApiPropertyOptional({
     description: 'Filter products updated before this date',
     type: String,
-    example: '2023-12-31'
+    example: '2023-12-31',
   })
   @IsOptional()
   @Type(() => Date)

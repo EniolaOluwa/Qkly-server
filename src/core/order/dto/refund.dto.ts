@@ -21,14 +21,14 @@ export class CreateRefundDto {
   @ApiProperty({
     description: 'Refund type',
     enum: RefundType,
-    default: RefundType.FULL
+    default: RefundType.FULL,
   })
   @IsEnum(RefundType)
   refundType: RefundType;
 
   @ApiProperty({
     description: 'Amount to refund (required for partial refunds)',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsNumber()
@@ -42,7 +42,7 @@ export class CreateRefundDto {
   @ApiProperty({
     description: 'Refund method',
     enum: RefundMethod,
-    default: RefundMethod.ORIGINAL_PAYMENT
+    default: RefundMethod.ORIGINAL_PAYMENT,
   })
   @IsEnum(RefundMethod)
   refundMethod: RefundMethod;

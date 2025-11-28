@@ -1,4 +1,22 @@
-import { IsString, IsOptional, IsArray, IsBoolean, ValidateNested, IsObject, IsUUID, IsEmail, ArrayMinSize, IsInt, IsUrl, Max, MaxLength, Min, MinLength, Matches, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsBoolean,
+  ValidateNested,
+  IsObject,
+  IsUUID,
+  IsEmail,
+  ArrayMinSize,
+  IsInt,
+  IsUrl,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  Matches,
+  IsEnum,
+} from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
@@ -17,7 +35,6 @@ class InputField {
   @IsString()
   placeholder: string;
 }
-
 
 export class FormInputDto {
   @ApiProperty({ example: 'email', description: 'Input type: email, text, phone, textarea, etc.' })
@@ -38,13 +55,12 @@ export class FormInputDto {
   required?: boolean;
 }
 
-
 export class CustomStylingDto {
   @ApiPropertyOptional({ example: '#007bff' })
   @IsOptional()
   @IsString()
   @Matches(/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/, {
-    message: 'primaryColor must be a valid hex color code'
+    message: 'primaryColor must be a valid hex color code',
   })
   primaryColor?: string;
 
@@ -58,7 +74,7 @@ export class CustomStylingDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d+(px|rem|em)$/, {
-    message: 'borderRadius must be a valid CSS unit (px, rem, em)'
+    message: 'borderRadius must be a valid CSS unit (px, rem, em)',
   })
   borderRadius?: string;
 }
@@ -95,11 +111,10 @@ export class UtmParametersDto {
   content?: string;
 }
 
-
 export class CreateLeadFormDto {
   @ApiProperty({
     example: 'Contact Us Form',
-    description: 'Title of the lead form'
+    description: 'Title of the lead form',
   })
   @IsString()
   @MinLength(3, { message: 'Title must be at least 3 characters long' })
@@ -109,7 +124,7 @@ export class CreateLeadFormDto {
 
   @ApiPropertyOptional({
     example: 'Get in touch with us for any inquiries',
-    description: 'Description of the form'
+    description: 'Description of the form',
   })
   @IsOptional()
   @IsString()
@@ -119,7 +134,7 @@ export class CreateLeadFormDto {
 
   @ApiProperty({
     example: 'Submit',
-    description: 'Text for the submit button'
+    description: 'Text for the submit button',
   })
   @IsString()
   @MinLength(2, { message: 'Button text must be at least 2 characters long' })
@@ -130,10 +145,10 @@ export class CreateLeadFormDto {
   @ApiProperty({
     example: [
       { type: 'email', placeholder: 'Enter your email', required: true },
-      { type: 'phone', placeholder: 'Enter your phone number', required: false }
+      { type: 'phone', placeholder: 'Enter your phone number', required: false },
     ],
     description: 'Array of form input fields',
-    type: [FormInputDto]
+    type: [FormInputDto],
   })
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one input field is required' })
@@ -143,7 +158,7 @@ export class CreateLeadFormDto {
 
   @ApiPropertyOptional({
     example: 'https://example.com/logo.png',
-    description: 'URL of the logo to display on the form'
+    description: 'URL of the logo to display on the form',
   })
   @IsOptional()
   @IsUrl({}, { message: 'Logo URL must be a valid URL' })
@@ -153,7 +168,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: true,
     default: true,
-    description: 'Whether the form is active'
+    description: 'Whether the form is active',
   })
   @IsOptional()
   @IsBoolean()
@@ -162,7 +177,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: false,
     default: false,
-    description: 'Require email verification before accepting lead'
+    description: 'Require email verification before accepting lead',
   })
   @IsOptional()
   @IsBoolean()
@@ -171,7 +186,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: false,
     default: false,
-    description: 'Enable CAPTCHA verification'
+    description: 'Enable CAPTCHA verification',
   })
   @IsOptional()
   @IsBoolean()
@@ -180,7 +195,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: true,
     default: true,
-    description: 'Send email notification on new lead'
+    description: 'Send email notification on new lead',
   })
   @IsOptional()
   @IsBoolean()
@@ -188,7 +203,7 @@ export class CreateLeadFormDto {
 
   @ApiPropertyOptional({
     example: 'Thank you for your submission! We will contact you soon.',
-    description: 'Custom success message after submission'
+    description: 'Custom success message after submission',
   })
   @IsOptional()
   @IsString()
@@ -198,7 +213,7 @@ export class CreateLeadFormDto {
 
   @ApiPropertyOptional({
     example: 'https://example.com/thank-you',
-    description: 'Redirect URL after successful submission'
+    description: 'Redirect URL after successful submission',
   })
   @IsOptional()
   @IsUrl({}, { message: 'Redirect URL must be a valid URL' })
@@ -208,7 +223,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: 100,
     default: 0,
-    description: 'Maximum submissions allowed (0 = unlimited)'
+    description: 'Maximum submissions allowed (0 = unlimited)',
   })
   @IsOptional()
   @IsInt()
@@ -219,7 +234,7 @@ export class CreateLeadFormDto {
   @ApiPropertyOptional({
     example: ['example.com', 'app.example.com'],
     description: 'Allowed domains for CORS (for embedded forms)',
-    type: [String]
+    type: [String],
   })
   @IsOptional()
   @IsArray()
@@ -230,9 +245,9 @@ export class CreateLeadFormDto {
     example: {
       primaryColor: '#007bff',
       fontFamily: 'Arial, sans-serif',
-      borderRadius: '8px'
+      borderRadius: '8px',
     },
-    description: 'Custom styling for embedded form'
+    description: 'Custom styling for embedded form',
   })
   @IsOptional()
   @ValidateNested()
@@ -275,7 +290,6 @@ export class UpdateLeadFormDto extends PartialType(CreateLeadFormDto) {
   @Type(() => FormInputDto)
   inputs?: FormInputDto[];
 }
-
 
 export class LeadFormResponseDto {
   @ApiProperty()
@@ -339,7 +353,6 @@ export class LeadFormResponseDto {
   updatedAt: Date;
 }
 
-
 // Lead DTOs
 // export class CreateLeadDto {
 //   @ApiProperty({
@@ -375,11 +388,10 @@ export class LeadFormResponseDto {
 //   formId: string;
 // }
 
-
 export class CreateLeadDto {
   @ApiPropertyOptional({
     example: 'John Doe',
-    description: 'Name of the lead'
+    description: 'Name of the lead',
   })
   @IsOptional()
   @IsString()
@@ -390,7 +402,7 @@ export class CreateLeadDto {
 
   @ApiProperty({
     example: 'john.doe@example.com',
-    description: 'Email address of the lead'
+    description: 'Email address of the lead',
   })
   @IsEmail({}, { message: 'Please provide a valid email address' })
   @MaxLength(255, { message: 'Email cannot exceed 255 characters' })
@@ -399,12 +411,12 @@ export class CreateLeadDto {
 
   @ApiPropertyOptional({
     example: '+2348012345678',
-    description: 'Phone number of the lead'
+    description: 'Phone number of the lead',
   })
   @IsOptional()
   @IsString()
   @Matches(/^\+?[1-9]\d{1,14}$/, {
-    message: 'Phone number must be in E.164 format (e.g., +2348012345678)'
+    message: 'Phone number must be in E.164 format (e.g., +2348012345678)',
   })
   phone?: string;
 
@@ -412,9 +424,9 @@ export class CreateLeadDto {
     example: {
       message: 'I am interested in your services',
       companySize: '10-50',
-      budget: '$1000-$5000'
+      budget: '$1000-$5000',
     },
-    description: 'Additional form responses as key-value pairs'
+    description: 'Additional form responses as key-value pairs',
   })
   @IsOptional()
   @IsObject()
@@ -445,7 +457,7 @@ export class UpdateLeadDto {
   @IsOptional()
   @IsString()
   @Matches(/^\+?[1-9]\d{1,14}$/, {
-    message: 'Phone number must be in E.164 format'
+    message: 'Phone number must be in E.164 format',
   })
   phone?: string;
 
@@ -456,11 +468,11 @@ export class UpdateLeadDto {
 
   @ApiPropertyOptional({
     example: 'contacted',
-    enum: ['new', 'contacted', 'qualified', 'converted', 'lost']
+    enum: ['new', 'contacted', 'qualified', 'converted', 'lost'],
   })
   @IsOptional()
   @IsEnum(['new', 'contacted', 'qualified', 'converted', 'lost'], {
-    message: 'Status must be one of: new, contacted, qualified, converted, lost'
+    message: 'Status must be one of: new, contacted, qualified, converted, lost',
   })
   status?: string;
 
@@ -470,7 +482,7 @@ export class UpdateLeadDto {
   isContacted?: boolean;
 
   @ApiPropertyOptional({
-    example: 'Customer expressed interest in premium package'
+    example: 'Customer expressed interest in premium package',
   })
   @IsOptional()
   @IsString()
@@ -483,10 +495,6 @@ export class UpdateLeadDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
-
-
-
-
 
 export class LeadResponseDto {
   @ApiProperty()
@@ -550,11 +558,10 @@ export class LeadResponseDto {
   createdAt: Date;
 }
 
-
 export class LeadFilterDto {
   @ApiPropertyOptional({
     example: 'new',
-    enum: ['new', 'contacted', 'qualified', 'converted', 'lost']
+    enum: ['new', 'contacted', 'qualified', 'converted', 'lost'],
   })
   @IsOptional()
   @IsEnum(['new', 'contacted', 'qualified', 'converted', 'lost'])
@@ -584,7 +591,7 @@ export class LeadFilterDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: 'Date must be in YYYY-MM-DD format'
+    message: 'Date must be in YYYY-MM-DD format',
   })
   startDate?: string;
 
@@ -592,7 +599,7 @@ export class LeadFilterDto {
   @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: 'Date must be in YYYY-MM-DD format'
+    message: 'Date must be in YYYY-MM-DD format',
   })
   endDate?: string;
 

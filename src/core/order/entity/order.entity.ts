@@ -42,7 +42,6 @@ export class Order {
   @Index()
   userId: number;
 
-
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
@@ -161,7 +160,6 @@ export class Order {
   @Column({ type: 'json', nullable: true })
   settlementDetails: SettlementDetails;
 
-
   @Column({ type: 'boolean', default: false })
   isRefunded: boolean;
 
@@ -176,8 +174,6 @@ export class Order {
 
   @Column({ type: 'json', nullable: true })
   refundDetails: RefundDetails;
-
-
 
   @CreateDateColumn()
   createdAt: Date;

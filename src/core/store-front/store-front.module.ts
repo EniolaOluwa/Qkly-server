@@ -10,12 +10,9 @@ import { BusinessType } from '../businesses/business-type.entity';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Product, Business, Category, BusinessType]),
-    ConfigModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Product, Business, Category, BusinessType]), ConfigModule],
   controllers: [StoreFrontController],
   providers: [StoreFrontService, CloudinaryUtil],
-  exports: [StoreFrontService]
+  exports: [StoreFrontService],
 })
-export class StoreFrontModule { }
+export class StoreFrontModule {}

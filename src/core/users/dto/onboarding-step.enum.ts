@@ -6,7 +6,6 @@ export enum OnboardingStep {
   AUTHENTICATION_PIN = 4,
 }
 
-
 export const OnboardingStepLabels = {
   [OnboardingStep.PERSONAL_INFORMATION]: 'Personal Information',
   [OnboardingStep.PHONE_VERIFICATION]: 'Phone Verification',

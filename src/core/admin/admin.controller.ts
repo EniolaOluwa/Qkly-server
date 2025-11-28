@@ -1,10 +1,14 @@
 import { Body, Controller, Logger, Post } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiNotFoundResponse,
+  ApiOperation,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/admin.decorator';
 import { PaymentStatus } from '../order/interfaces/order.interface';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
-
 
 @Admin()
 @Controller('admin')
@@ -14,13 +18,14 @@ export class AdminController {
   constructor(
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
-  ) { }
+  ) {}
 
   @Post('payment/verify-and-update')
   // @UseGuards(AdminAuthGuard)
   @ApiOperation({
     summary: 'Verify payment status with gateway and update if needed',
-    description: 'Checks payment status with gateway and updates the order if payment was successful',
+    description:
+      'Checks payment status with gateway and updates the order if payment was successful',
   })
   @ApiResponse({
     status: 200,
@@ -220,9 +225,7 @@ export class AdminController {
       const order = await this.orderService.findOrderById(orderId);
 
       // Verify with gateway
-      const gatewayStatus = await this.paymentService.verifyPayment(
-        order.transactionReference,
-      );
+      const gatewayStatus = await this.paymentService.verifyPayment(order.transactionReference);
 
       return {
         success: true,
@@ -245,8 +248,7 @@ export class AdminController {
             paidOn: gatewayStatus.paidOn,
           },
           statusMatch:
-            order.paymentStatus === PaymentStatus.PAID &&
-            gatewayStatus.paymentStatus === 'SUCCESS',
+            order.paymentStatus === PaymentStatus.PAID && gatewayStatus.paymentStatus === 'SUCCESS',
         },
       };
     } catch (error) {

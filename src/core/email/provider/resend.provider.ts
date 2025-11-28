@@ -1,6 +1,5 @@
-
-import {EmailProvider } from "../interfaces/mail.interfaces";
-import { Resend } from "resend";
+import { EmailProvider } from '../interfaces/mail.interfaces';
+import { Resend } from 'resend';
 
 export class ResendProvider implements EmailProvider {
   private resend: Resend;

@@ -41,7 +41,7 @@ export class User {
     type: 'enum',
     enum: UserRole,
     default: UserRole.MERCHANT,
-    comment: 'User role: merchant or admin'
+    comment: 'User role: merchant or admin',
   })
   role: UserRole;
 
@@ -59,7 +59,6 @@ export class User {
 
   @Column({ nullable: true, comment: 'Monnify wallet bank code' })
   walletBankCode: string;
-
 
   @Column({ nullable: true, comment: 'User’s preferred bank account number for payouts' })
   personalAccountNumber: string;
@@ -90,7 +89,8 @@ export class User {
     type: 'enum',
     enum: OnboardingStep,
     default: OnboardingStep.PERSONAL_INFORMATION,
-    comment: 'Current onboarding step for the user (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)'
+    comment:
+      'Current onboarding step for the user (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
   })
   onboardingStep: OnboardingStep;
 
@@ -106,7 +106,6 @@ export class User {
   @Column({ type: 'float', nullable: false })
   latitude: number;
 
-
   @Column({ nullable: true, comment: 'Paystack customer code' })
   paystackCustomerCode: string;
 
@@ -116,11 +115,10 @@ export class User {
   @Column({ type: 'varchar', default: 'PENDING', comment: 'DVA account status' })
   paystackAccountStatus: string;
 
-
   @Column({
     type: 'varchar',
     default: 'PAYSTACK',
-    comment: 'Payment provider for this user'
+    comment: 'Payment provider for this user',
   })
   paymentProvider: string;
 

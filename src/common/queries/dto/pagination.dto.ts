@@ -13,7 +13,7 @@ export class PaginationResultDto<T> {
     params: {
       itemCount: number;
       pageOptionsDto: PaginationDto;
-    }
+    },
   ) {
     const n = new PaginationMetadataDto(params);
     this.data = data;

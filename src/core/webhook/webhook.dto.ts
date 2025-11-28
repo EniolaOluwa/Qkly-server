@@ -1,9 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsNotEmpty,
-  IsObject,
-  IsString
-} from 'class-validator';
+import { IsNotEmpty, IsObject, IsString } from 'class-validator';
 
 export class MonnifyWebhookDto {
   @ApiProperty({ example: 'SUCCESSFUL_TRANSACTION' })

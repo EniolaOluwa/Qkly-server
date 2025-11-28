@@ -11,5 +11,4 @@ import { Leads } from './entity/leads.entity';
   providers: [LeadService],
   exports: [LeadService],
 })
-
 export class LeadModule {}

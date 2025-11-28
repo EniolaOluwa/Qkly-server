@@ -22,11 +22,6 @@ import { PaystackProvider } from './providers/paystack.provider';
     PaystackWebhookHandler,
     PaystackIntegrationService,
   ],
-  exports: [
-    PaymentService,
-    PaystackProvider,
-    PaystackWebhookHandler,
-    PaystackIntegrationService,
-  ],
+  exports: [PaymentService, PaystackProvider, PaystackWebhookHandler, PaystackIntegrationService],
 })
-export class PaymentModule { }
+export class PaymentModule {}

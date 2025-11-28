@@ -10,7 +10,7 @@ import {
   IsString,
   Matches,
   Min,
-  ValidateNested
+  ValidateNested,
 } from 'class-validator';
 import { PaymentMethod } from '../interfaces/order.interface';
 
@@ -42,17 +42,17 @@ export class PaymentEventData {
   @IsString()
   paymentReference: string;
 
-  @ApiProperty({ description: 'Amount paid', example: 15000.00 })
+  @ApiProperty({ description: 'Amount paid', example: 15000.0 })
   @IsNumber()
   @IsPositive()
   amountPaid: number;
 
-  @ApiProperty({ description: 'Total payment', example: 15000.00 })
+  @ApiProperty({ description: 'Total payment', example: 15000.0 })
   @IsNumber()
   @IsPositive()
   totalPayment: number;
 
-  @ApiProperty({ description: 'Settlement amount', example: 14700.00 })
+  @ApiProperty({ description: 'Settlement amount', example: 14700.0 })
   @IsNumber()
   settlementAmount: number;
 
@@ -76,7 +76,7 @@ export class PaymentEventData {
   @ApiProperty({
     description: 'Metadata (optional)',
     example: { orderId: '12345' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
@@ -105,7 +105,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.MONNIFY,
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -114,7 +114,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Redirect URL after payment',
     example: 'https://example.com/payment/success',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
@@ -124,7 +124,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Payment metadata (optional)',
     example: { customerDevice: 'mobile', source: 'web' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
@@ -140,13 +140,13 @@ export class ProcessPaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.MONNIFY,
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;
 
-  @ApiProperty({ description: 'Payment amount', example: 15000.00 })
+  @ApiProperty({ description: 'Payment amount', example: 15000.0 })
   @IsNotEmpty()
   @IsNumber()
   @IsPositive()
@@ -160,7 +160,7 @@ export class ProcessPaymentDto {
   @ApiProperty({
     description: 'Payment metadata (optional)',
     example: { channel: 'web', ipAddress: '192.168.1.1' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
@@ -180,7 +180,7 @@ export class RefundPaymentDto {
   @IsNumber()
   orderId: number;
 
-  @ApiProperty({ description: 'Refund amount', example: 15000.00 })
+  @ApiProperty({ description: 'Refund amount', example: 15000.0 })
   @IsNotEmpty()
   @IsNumber()
   @IsPositive()
@@ -194,7 +194,7 @@ export class RefundPaymentDto {
   @ApiProperty({
     description: 'Refund metadata (optional)',
     example: { approvedBy: 'admin', returnedCondition: 'good' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
@@ -207,7 +207,7 @@ export class SettleBusinessDto {
   @IsNumber()
   orderId: number;
 
-  @ApiProperty({ description: 'Amount to settle', example: 14250.00, required: false })
+  @ApiProperty({ description: 'Amount to settle', example: 14250.0, required: false })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -216,7 +216,7 @@ export class SettleBusinessDto {
   @ApiProperty({
     description: 'Settlement method',
     example: 'BANK_TRANSFER',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
@@ -225,13 +225,12 @@ export class SettleBusinessDto {
   @ApiProperty({
     description: 'Settlement metadata (optional)',
     example: { settlementBatch: '20230115-001' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
 }
-
 
 export class WebhookCustomerDto {
   @ApiProperty({ example: 'John Doe' })
@@ -245,7 +244,6 @@ export class WebhookCustomerDto {
   email: string;
 }
 
-
 export class WebhookProductDto {
   @ApiProperty({ example: 'TXN-79C925E3' })
   @IsString()
@@ -255,7 +253,6 @@ export class WebhookProductDto {
   @IsString()
   type: string;
 }
-
 
 export class WebhookCardDetailsDto {
   @ApiProperty({ example: '1111' })
@@ -287,8 +284,6 @@ export class WebhookCardDetailsDto {
   @IsOptional()
   reusable?: boolean;
 }
-
-
 
 export class WebhookEventDataDto {
   @ApiProperty({ type: WebhookProductDto })
@@ -361,7 +356,6 @@ export class WebhookEventDataDto {
   @Type(() => WebhookCustomerDto)
   customer: WebhookCustomerDto;
 }
-
 
 export class MonnifyWebhookDto {
   @ApiProperty({ example: 'SUCCESSFUL_TRANSACTION' })

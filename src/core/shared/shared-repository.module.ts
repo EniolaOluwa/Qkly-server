@@ -8,9 +8,7 @@ import { Product } from '../product/entity/product.entity';
 import { Transaction } from '../transaction/entity/transaction.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, Business, Transaction, Order, OrderItem, Product]),
-  ],
+  imports: [TypeOrmModule.forFeature([User, Business, Transaction, Order, OrderItem, Product])],
   exports: [TypeOrmModule],
 })
-export class SharedRepositoryModule { }
+export class SharedRepositoryModule {}

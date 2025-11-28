@@ -10,7 +10,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
-  ValidateNested
+  ValidateNested,
 } from 'class-validator';
 import { DeliveryMethod } from '../interfaces/order.interface';
 import { OrderItemDto } from './create-order.dto';
@@ -60,7 +60,7 @@ export class OrderDataDto {
 
   @ApiProperty({
     description: 'Order items',
-    type: [OrderItemDto]
+    type: [OrderItemDto],
   })
   @IsArray()
   @ValidateNested({ each: true })
@@ -72,7 +72,7 @@ export class OrderDataDto {
 export class CreateOrderGroupDto {
   @ApiProperty({
     description: 'Customer information',
-    type: CustomerInfoDto
+    type: CustomerInfoDto,
   })
   @IsObject()
   @ValidateNested()
@@ -82,7 +82,7 @@ export class CreateOrderGroupDto {
 
   @ApiProperty({
     description: 'Orders in this group',
-    type: [OrderDataDto]
+    type: [OrderDataDto],
   })
   @IsArray()
   @ValidateNested({ each: true })

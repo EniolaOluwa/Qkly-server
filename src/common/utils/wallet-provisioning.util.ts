@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { User } from '../../core/users/entity/user.entity';
 import { WalletsService } from '../../core/wallets/wallets.service';
 
-
 export interface BvnVerificationData {
   bvn: string;
   customerName: string;
@@ -16,7 +15,6 @@ export interface BvnVerificationData {
   dateOfBirth: string;
   verification_status: string;
 }
-
 
 export interface WalletVerificationData {
   walletReference: string;
@@ -50,9 +48,8 @@ export class WalletProvisioningUtil {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private configService: ConfigService,
-    private walletService: WalletsService
-  ) { }
-
+    private walletService: WalletsService,
+  ) {}
 
   async provisionWalletOnBvnSuccess(
     userId: number,
@@ -72,7 +69,6 @@ export class WalletProvisioningUtil {
         where: { id: userId },
         select: ['id', 'walletReference', 'bvn', 'firstName', 'lastName'],
       });
-
 
       if (!user) {
         return {
@@ -97,11 +93,10 @@ export class WalletProvisioningUtil {
       const walletName = `${envName}-${walletReference}`;
 
       // Get customer name - prefer from BVN data, fallback to user data
-      const customerName = bvnVerificationData.customerName ||
-        `${user.firstName} ${user.lastName}`.trim();
+      const customerName =
+        bvnVerificationData.customerName || `${user.firstName} ${user.lastName}`.trim();
 
-      console.log({ customerName, envName })
-
+      console.log({ customerName, envName });
 
       if (!customerName) {
         return {
@@ -111,8 +106,6 @@ export class WalletProvisioningUtil {
         };
       }
 
-
-
       // Create wallet through Monnify
       const walletData = await this.walletService.generateWallet(userId, {
         walletReference,
@@ -121,9 +114,8 @@ export class WalletProvisioningUtil {
         customerName,
         bvn: bvnVerificationData.bvn,
         currencyCode: 'NGN',
-        dateOfBirth: bvnVerificationData.dateOfBirth
+        dateOfBirth: bvnVerificationData.dateOfBirth,
       });
-
 
       // Update user record with wallet information and BVN
       await this.userRepository.update(userId, {
@@ -148,7 +140,6 @@ export class WalletProvisioningUtil {
           bankCode: walletData.bankCode,
         },
       };
-
     } catch (error) {
       this.logger.error(`Failed to provision wallet for user ${userId}:`, error);
       return {
@@ -164,9 +155,10 @@ export class WalletProvisioningUtil {
 
     return {
       bvn: verificationData.bvn || verificationData.searchParameter,
-      customerName: verificationData.first_name && verificationData.last_name
-        ? `${verificationData.first_name} ${verificationData.last_name}`.trim()
-        : verificationData.name || verificationData.customerName,
+      customerName:
+        verificationData.first_name && verificationData.last_name
+          ? `${verificationData.first_name} ${verificationData.last_name}`.trim()
+          : verificationData.name || verificationData.customerName,
       firstName: verificationData.first_name,
       lastName: verificationData.last_name,
       dateOfBirth: verificationData.date_of_birth || verificationData.dateOfBirth,

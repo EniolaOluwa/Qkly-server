@@ -4,10 +4,7 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { AdminController } from './admin.controller';
 
 @Module({
-  imports: [
-    OrderModule,
-    WalletsModule
-  ],
+  imports: [OrderModule, WalletsModule],
   controllers: [AdminController],
 })
-export class AdminModule { }
+export class AdminModule {}

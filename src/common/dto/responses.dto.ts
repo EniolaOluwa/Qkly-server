@@ -426,14 +426,16 @@ export class BusinessResponseDto {
 
   @ApiProperty({
     description: 'Business logo URL from Cloudinary',
-    example: 'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/business-logos/logo.jpg',
+    example:
+      'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/business-logos/logo.jpg',
     required: false,
   })
   logo?: string;
 
   @ApiPropertyOptional({
     description: 'Cover image URL for store front',
-    example: 'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/store-fronts/cover.jpg',
+    example:
+      'https://res.cloudinary.com/your-cloud/image/upload/v1234567890/store-fronts/cover.jpg',
   })
   coverImage?: string;
 
@@ -639,7 +641,8 @@ export class LoginResponseDto {
   isPhoneVerified: boolean;
 
   @ApiProperty({
-    description: 'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
+    description:
+      'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
     example: 0,
   })
   onboardingStep: number;

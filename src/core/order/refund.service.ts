@@ -2,16 +2,20 @@
 
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
-import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
+import {
+  Transaction,
+  TransactionFlow,
+  TransactionStatus,
+  TransactionType,
+} from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateRefundDto, RefundType } from './dto/refund.dto';
 import { Order } from './entity/order.entity';
 import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
-
 
 @Injectable()
 export class RefundService {
@@ -28,21 +32,19 @@ export class RefundService {
     private readonly businessRepository: Repository<Business>,
     private readonly paystackProvider: PaystackProvider,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   /**
    * Process a refund for an order
    */
-  async processRefund(
-    createRefundDto: CreateRefundDto,
-    refundedByUserId: number,
-  ): Promise<any> {
+  async processRefund(createRefundDto: CreateRefundDto, refundedByUserId: number): Promise<any> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const { orderId, refundType, amount, reason, refundMethod, customerNote, merchantNote } = createRefundDto;
+      const { orderId, refundType, amount, reason, refundMethod, customerNote, merchantNote } =
+        createRefundDto;
 
       // 1. Fetch and validate order
       const order = await this.orderRepository.findOne({
@@ -63,7 +65,9 @@ export class RefundService {
       // 3. Generate refund reference
       const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-      this.logger.log(`Processing ${refundType} refund for order ${order.id}: ₦${refundCalculation.totalRefund}`);
+      this.logger.log(
+        `Processing ${refundType} refund for order ${order.id}: ₦${refundCalculation.totalRefund}`,
+      );
 
       // 4. Process refund on Paystack (refund to customer)
       const paystackRefund = await this.paystackProvider.createRefund({
@@ -92,7 +96,6 @@ export class RefundService {
         reference: string;
         status: string;
       }> = [];
-
 
       // Customer refund transaction (platform perspective)
       const customerRefundTxn = await queryRunner.manager.save(Transaction, {
@@ -179,7 +182,8 @@ export class RefundService {
         refundDate: new Date(),
         refundDetails,
         status: refundType === RefundType.FULL ? OrderStatus.REFUNDED : order.status,
-        paymentStatus: refundType === RefundType.FULL ? PaymentStatus.REFUNDED : order.paymentStatus,
+        paymentStatus:
+          refundType === RefundType.FULL ? PaymentStatus.REFUNDED : order.paymentStatus,
       });
 
       // 8. Return inventory if full refund
@@ -216,11 +220,7 @@ export class RefundService {
   /**
    * Validate if order is eligible for refund
    */
-  private validateRefundEligibility(
-    order: Order,
-    refundType: RefundType,
-    amount?: number,
-  ): void {
+  private validateRefundEligibility(order: Order, refundType: RefundType, amount?: number): void {
     // Check if order is paid
     if (order.paymentStatus !== 'PAID') {
       throw new BadRequestException('Only paid orders can be refunded');
@@ -270,7 +270,7 @@ export class RefundService {
     platformRefund: number;
     businessRefund: number;
   } {
-    const totalRefund = refundType === RefundType.FULL ? order.total : (amount || 0);
+    const totalRefund = refundType === RefundType.FULL ? order.total : amount || 0;
 
     // Calculate based on original split (e.g., 5% platform, 95% business)
     const platformFeePercentage = 0.05; // 5%
@@ -364,9 +364,7 @@ export class RefundService {
           item.quantity,
         );
 
-        this.logger.log(
-          `Returned ${item.quantity} units of product ${item.productId} to stock`,
-        );
+        this.logger.log(`Returned ${item.quantity} units of product ${item.productId} to stock`);
       }
     } catch (error) {
       this.logger.error('Failed to return inventory:', error);

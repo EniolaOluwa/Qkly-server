@@ -11,8 +11,6 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
 import { generateRandomProduct } from '../../common/utils/product-generator';
 
-
-
 @Injectable()
 export class ProductService {
   constructor(
@@ -22,13 +20,12 @@ export class ProductService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
-    private readonly categoryService: CategoryService
-  ) { }
-
+    private readonly categoryService: CategoryService,
+  ) {}
 
   async verifyBusinessOwnership(userId: number, businessId: number): Promise<void> {
     const business = await this.businessRepository.findOne({
-      where: { id: businessId }
+      where: { id: businessId },
     });
 
     if (!business) {
@@ -37,7 +34,7 @@ export class ProductService {
 
     if (business.userId !== userId) {
       ErrorHelper.ForbiddenException(
-        'Access denied: You can only manage products for your own business'
+        'Access denied: You can only manage products for your own business',
       );
     }
   }
@@ -50,7 +47,9 @@ export class ProductService {
         ErrorHelper.BadRequestException('User does not exist.');
       }
 
-      const businessExists = await this.businessRepository.findOne({ where: { id: productData.businessId } });
+      const businessExists = await this.businessRepository.findOne({
+        where: { id: productData.businessId },
+      });
       if (!businessExists) {
         ErrorHelper.BadRequestException('Business does not exist.');
       }
@@ -77,7 +76,7 @@ export class ProductService {
       const product = this.productRepository.create({
         ...rest,
         categoryId: category.id,
-        userId
+        userId,
       });
 
       return await this.productRepository.save(product);
@@ -86,10 +85,7 @@ export class ProductService {
     }
   }
 
-
-  async findAllProducts(
-    query: FindAllProductsDto,
-  ): Promise<PaginationResultDto<Product>> {
+  async findAllProducts(query: FindAllProductsDto): Promise<PaginationResultDto<Product>> {
     try {
       const {
         userId,
@@ -107,7 +103,7 @@ export class ProductService {
         createdAfter,
         createdBefore,
         updatedAfter,
-        updatedBefore
+        updatedBefore,
       } = query;
 
       // Create a QueryBuilder for more flexibility
@@ -134,7 +130,7 @@ export class ProductService {
       if (search) {
         qb.andWhere(
           '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
-          { search: `%${search}%` }
+          { search: `%${search}%` },
         );
       }
 
@@ -181,22 +177,22 @@ export class ProductService {
       // Date range filters
       if (createdAfter) {
         qb.andWhere('product.createdAt >= :createdAfter', {
-          createdAfter: new Date(createdAfter)
+          createdAfter: new Date(createdAfter),
         });
       }
       if (createdBefore) {
         qb.andWhere('product.createdAt <= :createdBefore', {
-          createdBefore: new Date(createdBefore)
+          createdBefore: new Date(createdBefore),
         });
       }
       if (updatedAfter) {
         qb.andWhere('product.updatedAt >= :updatedAfter', {
-          updatedAfter: new Date(updatedAfter)
+          updatedAfter: new Date(updatedAfter),
         });
       }
       if (updatedBefore) {
         qb.andWhere('product.updatedAt <= :updatedBefore', {
-          updatedBefore: new Date(updatedBefore)
+          updatedBefore: new Date(updatedBefore),
         });
       }
 
@@ -205,7 +201,12 @@ export class ProductService {
       const { skip, limit } = query;
 
       const allowedSortFields = [
-        'id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'
+        'id',
+        'name',
+        'price',
+        'quantityInStock',
+        'createdAt',
+        'updatedAt',
       ];
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
       const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
@@ -213,10 +214,7 @@ export class ProductService {
       qb.orderBy(`product.${validSortBy}`, validSortOrder);
 
       // Apply pagination
-      const data = await qb
-        .skip(skip)
-        .take(limit)
-        .getMany();
+      const data = await qb.skip(skip).take(limit).getMany();
 
       return new PaginationResultDto(data, {
         itemCount,
@@ -224,10 +222,7 @@ export class ProductService {
       });
     } catch (error) {
       console.log(error);
-      ErrorHelper.InternalServerErrorException(
-        `Error finding products: ${error.message}`,
-        error
-      );
+      ErrorHelper.InternalServerErrorException(`Error finding products: ${error.message}`, error);
     }
   }
   async findProductById(id: number): Promise<Product> {
@@ -243,13 +238,16 @@ export class ProductService {
 
       return product;
     } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding product by id: ${error.message}`, error);
+      ErrorHelper.InternalServerErrorException(
+        `Error finding product by id: ${error.message}`,
+        error,
+      );
     }
   }
 
   async findProductsByUserId(
     userId: number,
-    pageOptionsDto?: PaginationDto
+    pageOptionsDto?: PaginationDto,
   ): Promise<Product[] | PaginationResultDto<Product>> {
     try {
       const user = await this.userRepository.findOne({ where: { id: userId } });
@@ -267,11 +265,7 @@ export class ProductService {
         const itemCount = await qb.getCount();
         const { skip, limit, order } = pageOptionsDto;
 
-        const data = await qb
-          .skip(skip)
-          .take(limit)
-          .orderBy('product.createdAt', order)
-          .getMany();
+        const data = await qb.skip(skip).take(limit).orderBy('product.createdAt', order).getMany();
 
         return new PaginationResultDto(data, {
           itemCount,
@@ -284,13 +278,16 @@ export class ProductService {
         relations: ['sizes'],
       });
     } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding products by user id: ${error.message}`, error);
+      ErrorHelper.InternalServerErrorException(
+        `Error finding products by user id: ${error.message}`,
+        error,
+      );
     }
   }
 
   async findProductsByBusinessId(
     businessId: number,
-    pageOptionsDto?: PaginationDto
+    pageOptionsDto?: PaginationDto,
   ): Promise<Product[] | PaginationResultDto<Product>> {
     try {
       const business = await this.businessRepository.findOne({ where: { id: businessId } });
@@ -308,11 +305,7 @@ export class ProductService {
         const itemCount = await qb.getCount();
         const { skip, limit, order } = pageOptionsDto;
 
-        const data = await qb
-          .skip(skip)
-          .take(limit)
-          .orderBy('product.createdAt', order)
-          .getMany();
+        const data = await qb.skip(skip).take(limit).orderBy('product.createdAt', order).getMany();
 
         return new PaginationResultDto(data, {
           itemCount,
@@ -325,21 +318,23 @@ export class ProductService {
         relations: ['user', 'business', 'sizes'],
       });
     } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding products by business id: ${error.message}`, error);
+      ErrorHelper.InternalServerErrorException(
+        `Error finding products by business id: ${error.message}`,
+        error,
+      );
     }
   }
 
-  async updateProduct(
-    id: number,
-    updateData: UpdateProductDto,
-  ): Promise<Product> {
+  async updateProduct(id: number, updateData: UpdateProductDto): Promise<Product> {
     try {
       const product = await this.findProductById(id);
 
       if (updateData.hasVariation !== undefined) {
-        const hasSizes = (updateData.sizes && updateData.sizes.length > 0) ||
+        const hasSizes =
+          (updateData.sizes && updateData.sizes.length > 0) ||
           (product.sizes && product.sizes.length > 0 && !updateData.sizes);
-        const hasColors = (updateData.colors && updateData.colors.length > 0) ||
+        const hasColors =
+          (updateData.colors && updateData.colors.length > 0) ||
           (product.colors && product.colors.length > 0 && !updateData.colors);
 
         if (updateData.hasVariation && !hasSizes && !hasColors) {

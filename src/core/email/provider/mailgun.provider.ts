@@ -1,6 +1,6 @@
-import { EmailProvider } from "../interfaces/mail.interfaces";
-import formData from "form-data";
-import Mailgun from "mailgun.js";
+import { EmailProvider } from '../interfaces/mail.interfaces';
+import formData from 'form-data';
+import Mailgun from 'mailgun.js';
 
 export class MailgunProvider implements EmailProvider {
   private mg;
@@ -8,7 +8,7 @@ export class MailgunProvider implements EmailProvider {
 
   constructor(apiKey: string, domain: string) {
     const mailgun = new Mailgun(formData);
-    this.mg = mailgun.client({ username: "api", key: apiKey });
+    this.mg = mailgun.client({ username: 'api', key: apiKey });
     this.domain = domain;
   }
 

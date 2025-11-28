@@ -15,13 +15,7 @@ import {
   Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-  ApiBearerAuth,
-  ApiConsumes,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { BusinessesService } from './businesses.service';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import {
@@ -32,6 +26,7 @@ import {
   UpdateBusinessDto,
   BusinessResponseDto,
 } from '../../common/dto/responses.dto';
+import { RequestWithUser } from '../../common/interfaces';
 
 @ApiTags('business')
 @Controller('business')
@@ -66,9 +61,7 @@ export class BusinessesController {
   async createBusinessType(
     @Body(ValidationPipe) createBusinessTypeDto: CreateBusinessTypeDto,
   ): Promise<BusinessTypeResponseDto> {
-    const businessType = await this.businessesService.createBusinessType(
-      createBusinessTypeDto,
-    );
+    const businessType = await this.businessesService.createBusinessType(createBusinessTypeDto);
     return {
       id: businessType.id,
       name: businessType.name,
@@ -105,9 +98,7 @@ export class BusinessesController {
     status: 404,
     description: 'Business type not found',
   })
-  async getBusinessTypeById(
-    @Param('id') id: number,
-  ): Promise<BusinessTypeResponseDto> {
+  async getBusinessTypeById(@Param('id') id: number): Promise<BusinessTypeResponseDto> {
     const businessType = await this.businessesService.findBusinessTypeById(id);
     return {
       id: businessType.id,
@@ -143,10 +134,7 @@ export class BusinessesController {
     @Param('id') id: number,
     @Body(ValidationPipe) updateBusinessTypeDto: UpdateBusinessTypeDto,
   ): Promise<BusinessTypeResponseDto> {
-    const businessType = await this.businessesService.updateBusinessType(
-      id,
-      updateBusinessTypeDto,
-    );
+    const businessType = await this.businessesService.updateBusinessType(id, updateBusinessTypeDto);
     return {
       id: businessType.id,
       name: businessType.name,
@@ -168,32 +156,44 @@ export class BusinessesController {
     status: 404,
     description: 'Business type not found',
   })
-  async deleteBusinessType(
-    @Param('id') id: number,
-  ): Promise<{ message: string }> {
+  async deleteBusinessType(@Param('id') id: number): Promise<{ message: string }> {
     await this.businessesService.deleteBusinessType(id);
     return { message: 'Business type deleted successfully' };
   }
 
   // Business endpoints
   @Post()
-  @UseInterceptors(FileInterceptor('logo', {
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
-      }
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+          'image/bmp',
+          'image/tiff',
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'),
+            false,
+          );
+        }
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create a new business',
-    description: 'Creates a new business with the provided information. User must be on business information onboarding step. Successfully creating a business advances the user to KYC verification step.',
+    description:
+      'Creates a new business with the provided information. User must be on business information onboarding step. Successfully creating a business advances the user to KYC verification step.',
   })
   @ApiResponse({
     status: 201,
@@ -219,7 +219,7 @@ export class BusinessesController {
   async createBusiness(
     @Body(ValidationPipe) createBusinessDto: CreateBusinessDto,
     @UploadedFile() logo: Express.Multer.File,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ): Promise<BusinessResponseDto> {
     // Validate that logo is provided
     if (!logo) {
@@ -320,8 +320,7 @@ export class BusinessesController {
   @Get(':id')
   @ApiOperation({
     summary: 'Get business by ID',
-    description:
-      'Retrieves a business by its ID with business type information',
+    description: 'Retrieves a business by its ID with business type information',
   })
   @ApiResponse({
     status: 200,
@@ -352,19 +351,32 @@ export class BusinessesController {
   }
 
   @Put(':id')
-  @UseInterceptors(FileInterceptor('logo', {
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'), false);
-      }
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+          'image/bmp',
+          'image/tiff',
+        ];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(
+            new Error('Invalid file type. Supported formats: JPEG, JPG, PNG, GIF, WebP, BMP, TIFF'),
+            false,
+          );
+        }
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update business',
@@ -392,10 +404,7 @@ export class BusinessesController {
 
     // Add the uploaded file to the DTO
     const businessDto = { ...updateBusinessDto, logo };
-    const business = await this.businessesService.updateBusiness(
-      id,
-      businessDto,
-    );
+    const business = await this.businessesService.updateBusiness(id, businessDto);
     return {
       id: business.id,
       businessName: business.businessName,
@@ -431,7 +440,7 @@ export class BusinessesController {
     return { message: 'Business deleted successfully' };
   }
 
-  // settings - update business details 
+  // settings - update business details
   @Patch('settings/:id')
   @ApiBearerAuth()
   @ApiOperation({
@@ -454,10 +463,9 @@ export class BusinessesController {
     status: 500,
     description: 'Internal server error',
   })
-
   async updateBusinessDetails(
     @Body(ValidationPipe) updateBusinessDto: UpdateBusinessDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Param('id') id: number,
   ) {
     const authUserId = req.user?.userId;

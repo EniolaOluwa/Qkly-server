@@ -10,9 +10,6 @@ import { OrdersController } from './order.controller';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
 
-
-
-
 @Module({
   imports: [
     SharedRepositoryModule,
@@ -26,4 +23,4 @@ import { RefundService } from './refund.service';
   providers: [OrderService, PaymentDtoAdapter, RefundService],
   exports: [OrderService],
 })
-export class OrderModule { }
+export class OrderModule {}

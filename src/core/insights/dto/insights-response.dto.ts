@@ -38,4 +38,3 @@ export class InsightsResponseDto {
   @ApiProperty({ example: '2024-01-21T23:59:59Z' })
   endDate: Date;
 }
-

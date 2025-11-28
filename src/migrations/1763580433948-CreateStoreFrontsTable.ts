@@ -1,10 +1,9 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateStoreFrontsTable1763580433948 implements MigrationInterface {
-
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        // Create store-fronts table
-        await queryRunner.query(`
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    // Create store-fronts table
+    await queryRunner.query(`
 CREATE TABLE IF NOT EXISTS "store-fronts" (
     "id" SERIAL PRIMARY KEY,
     "businessId" integer NOT NULL UNIQUE,
@@ -19,8 +18,8 @@ CREATE TABLE IF NOT EXISTS "store-fronts" (
 );
 `);
 
-        // Add foreign key constraint
-        await queryRunner.query(`
+    // Add foreign key constraint
+    await queryRunner.query(`
         DO $$ BEGIN
             IF NOT EXISTS (
                 SELECT 1
@@ -31,14 +30,15 @@ CREATE TABLE IF NOT EXISTS "store-fronts" (
             END IF;
         END $$;
         `);
-    }
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        // Drop foreign key constraint
-        await queryRunner.query(`ALTER TABLE "store-fronts" DROP CONSTRAINT IF EXISTS "FK_store_fronts_businessId"`);
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    // Drop foreign key constraint
+    await queryRunner.query(
+      `ALTER TABLE "store-fronts" DROP CONSTRAINT IF EXISTS "FK_store_fronts_businessId"`,
+    );
 
-        // Drop table
-        await queryRunner.query(`DROP TABLE IF EXISTS "store-fronts"`);
-    }
-
+    // Drop table
+    await queryRunner.query(`DROP TABLE IF EXISTS "store-fronts"`);
+  }
 }

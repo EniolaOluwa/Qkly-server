@@ -22,7 +22,7 @@ export class OrderItem {
   @Index()
   orderId: number;
 
-  @ManyToOne(() => Order, order => order.items, { nullable: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => Order, (order) => order.items, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'orderId' })
   order: Order;
 

@@ -1,7 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
-
 export class WalletTransferRequestDto {
   @IsNumber()
   @Type(() => Number)
@@ -34,16 +33,12 @@ export class WalletTransferRequestDto {
   async?: boolean = false;
 }
 
-
 export class WalletTransferResponseDto {
   @IsIn(['SUCCESS', 'FAILED', 'PENDING'])
   status: 'SUCCESS' | 'FAILED' | 'PENDING';
 
   responseBody: any;
 }
-
-
-
 
 export class WalletTransferOtpDto {
   @IsNotEmpty()

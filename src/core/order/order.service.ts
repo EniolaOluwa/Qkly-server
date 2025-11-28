@@ -1,7 +1,13 @@
 //src/core/order/order.service.ts
 
-
-import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -13,16 +19,27 @@ import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import {
+  FindAllOrdersDto,
+  UpdateOrderItemStatusDto,
+  UpdateOrderStatusDto,
+} from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
-import { DeliveryMethod, OrderItemStatus, OrderStatus, PaymentDetails, PaymentMethod, PaymentStatus, SettlementDetails } from './interfaces/order.interface';
+import {
+  DeliveryMethod,
+  OrderItemStatus,
+  OrderStatus,
+  PaymentDetails,
+  PaymentMethod,
+  PaymentStatus,
+  SettlementDetails,
+} from './interfaces/order.interface';
 
-const SETTLEMENT_PERCENTAGE = 0.00;
+const SETTLEMENT_PERCENTAGE = 0.0;
 const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
-const PLATFORM_FEE_PERCENTAGE = 0
-
+const PLATFORM_FEE_PERCENTAGE = 0;
 
 @Injectable()
 export class OrderService {
@@ -42,8 +59,7 @@ export class OrderService {
     private readonly configService: ConfigService,
     private readonly dataSource: DataSource,
     private readonly paymentService: PaymentService, // CHANGED: Use PaymentService
-  ) { }
-
+  ) {}
 
   async createOrder(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -344,9 +360,7 @@ export class OrderService {
     });
   }
 
-  async findAllOrders(
-    query: FindAllOrdersDto
-  ): Promise<PaginationResultDto<Order>> {
+  async findAllOrders(query: FindAllOrdersDto): Promise<PaginationResultDto<Order>> {
     try {
       const {
         userId,
@@ -386,21 +400,18 @@ export class OrderService {
       if (userId) qb.andWhere('order.userId = :userId', { userId });
       if (businessId) qb.andWhere('order.businessId = :businessId', { businessId });
       if (status) qb.andWhere('order.status = :status', { status });
-      if (paymentStatus)
-        qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
-      if (paymentMethod)
-        qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
-      if (deliveryMethod)
-        qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
+      if (paymentStatus) qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
+      if (paymentMethod) qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
+      if (deliveryMethod) qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
       if (minTotal !== undefined) qb.andWhere('order.total >= :minTotal', { minTotal });
       if (maxTotal !== undefined) qb.andWhere('order.total <= :maxTotal', { maxTotal });
 
       if (search) {
         qb.andWhere(
           '(order.orderReference LIKE :search OR ' +
-          'order.customerName LIKE :search OR ' +
-          'order.customerEmail LIKE :search OR ' +
-          'order.customerPhoneNumber LIKE :search)',
+            'order.customerName LIKE :search OR ' +
+            'order.customerEmail LIKE :search OR ' +
+            'order.customerPhoneNumber LIKE :search)',
           { search: `%${search}%` },
         );
       }
@@ -462,13 +473,7 @@ export class OrderService {
         .leftJoinAndSelect('order.items', 'items')
         .leftJoinAndSelect('order.business', 'business')
         .where('order.userId = :userId', { userId })
-        .select([
-          'order',
-          'business.id',
-          'business.businessName',
-          'business.logo',
-          'items',
-        ]);
+        .select(['order', 'business.id', 'business.businessName', 'business.logo', 'items']);
 
       const itemCount = await qb.getCount();
       const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
@@ -537,8 +542,6 @@ export class OrderService {
     }
   }
 
-
-
   async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
     try {
       const { orderId } = initiatePaymentDto;
@@ -606,7 +609,6 @@ export class OrderService {
     }
   }
 
-
   /**
    * Verify payment using configured payment provider
    */
@@ -626,9 +628,7 @@ export class OrderService {
       // Use PaymentService to verify payment
       const transaction = await this.paymentService.verifyPayment(transactionReference);
 
-      this.logger.log(
-        `Payment verification for order ${order.id}: ${transaction.paymentStatus}`,
-      );
+      this.logger.log(`Payment verification for order ${order.id}: ${transaction.paymentStatus}`);
 
       // If payment is successful and order hasn't been marked as paid, process it
       if (transaction.paymentStatus === 'SUCCESS' && order.paymentStatus !== PaymentStatus.PAID) {
@@ -864,10 +864,7 @@ export class OrderService {
   // ORDER STATUS MANAGEMENT
   // ============================================================
 
-  async updateOrderStatus(
-    orderId: number,
-    updateStatusDto: UpdateOrderStatusDto,
-  ): Promise<Order> {
+  async updateOrderStatus(orderId: number, updateStatusDto: UpdateOrderStatusDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -953,9 +950,7 @@ export class OrderService {
       const item = order.items.find((item) => item.id === itemId);
 
       if (!item) {
-        ErrorHelper.NotFoundException(
-          `Order item with ID ${itemId} not found in order ${orderId}`,
-        );
+        ErrorHelper.NotFoundException(`Order item with ID ${itemId} not found in order ${orderId}`);
       }
 
       item.status = status;
@@ -1225,10 +1220,7 @@ export class OrderService {
     }
   }
 
-  private async returnInventoryForOrder(
-    order: Order,
-    entityManager: EntityManager,
-  ): Promise<void> {
+  private async returnInventoryForOrder(order: Order, entityManager: EntityManager): Promise<void> {
     try {
       const inventoryReservingStatuses = [
         OrderStatus.PENDING,
@@ -1391,11 +1383,7 @@ export class OrderService {
 
   private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [
-        OrderStatus.PROCESSING,
-        OrderStatus.CONFIRMED,
-        OrderStatus.CANCELLED,
-      ],
+      [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
       [OrderStatus.PROCESSING]: [OrderStatus.CONFIRMED, OrderStatus.SHIPPED, OrderStatus.CANCELLED],
       [OrderStatus.CONFIRMED]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
       [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED, OrderStatus.RETURNED],

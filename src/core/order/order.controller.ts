@@ -1,28 +1,46 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Req, Request, Res, UseGuards } from '@nestjs/common';
 import {
-  ApiBody,
-  ApiOperation,
-  ApiParam,
-  ApiQuery,
-  ApiResponse,
-  ApiTags
-} from '@nestjs/swagger';
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  Request,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
-import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common/swagger/api-decorators';
+import {
+  ApiAuth,
+  ApiFindOneDecorator,
+  ApiPaginatedResponse,
+} from '../../common/swagger/api-decorators';
 import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import {
+  FindAllOrdersDto,
+  UpdateOrderItemStatusDto,
+  UpdateOrderStatusDto,
+} from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { CreateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
-
-
+import { RequestWithUser } from '../../common/interfaces';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -48,10 +66,8 @@ export class OrdersController {
     description: 'Order created successfully',
     type: Order,
   })
-  async createOrder(
-    @Request() req,
-    @Body() createOrderDto: CreateOrderDto,
-  ): Promise<Order> {
+  async createOrder(@Request() req: RequestWithUser,
+  , @Body() createOrderDto: CreateOrderDto): Promise<Order> {
     return await this.orderService.createOrder(req.user.userId, createOrderDto);
   }
 
@@ -62,9 +78,7 @@ export class OrdersController {
     'Find all orders with filtering and pagination',
     'Retrieves all orders with optional filters and pagination',
   )
-  async findAllOrders(
-    @Query() query: FindAllOrdersDto,
-  ): Promise<PaginationResultDto<Order>> {
+  async findAllOrders(@Query() query: FindAllOrdersDto): Promise<PaginationResultDto<Order>> {
     return await this.orderService.findAllOrders(query);
   }
 
@@ -89,13 +103,10 @@ export class OrdersController {
     description: 'Orders retrieved successfully',
   })
   async findOrdersForMyBusinesses(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(
-      req.user.userId,
-      paginationDto,
-    );
+    return await this.orderService.findOrdersByUserId(req.user.userId, paginationDto);
   }
 
   @Get('user')
@@ -106,13 +117,10 @@ export class OrdersController {
     'Retrieves orders for the authenticated user using JWT token.',
   )
   async findOrdersForCurrentUser(
-    @Request() req,
+    @Request() req: RequestWithUser,
     @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByUserId(
-      req.user.userId,
-      paginationDto,
-    );
+    return await this.orderService.findOrdersByUserId(req.user.userId, paginationDto);
   }
 
   @Get('user/:userId')
@@ -139,10 +147,7 @@ export class OrdersController {
     @Param('businessId', ParseIntPipe) businessId: number,
     @Query() paginationDto: PaginationDto,
   ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findOrdersByBusinessId(
-      businessId,
-      paginationDto,
-    );
+    return await this.orderService.findOrdersByBusinessId(businessId, paginationDto);
   }
 
   @Get(':id')
@@ -160,7 +165,8 @@ export class OrdersController {
   @ApiAuth()
   @ApiOperation({
     summary: 'Initialize payment for order',
-    description: 'Initializes payment with configured payment provider (Monnify/Paystack) and returns checkout URL',
+    description:
+      'Initializes payment with configured payment provider (Monnify/Paystack) and returns checkout URL',
   })
   @ApiBody({ type: InitiatePaymentDto })
   @ApiResponse({
@@ -222,9 +228,7 @@ export class OrdersController {
     status: HttpStatus.CONFLICT,
     description: 'Payment already processed',
   })
-  async processPayment(
-    @Body() processPaymentDto: ProcessPaymentDto,
-  ): Promise<Order> {
+  async processPayment(@Body() processPaymentDto: ProcessPaymentDto): Promise<Order> {
     return await this.orderService.processPayment(processPaymentDto);
   }
 
@@ -287,11 +291,7 @@ export class OrdersController {
     @Param('itemId', ParseIntPipe) itemId: number,
     @Body() updateStatusDto: UpdateOrderItemStatusDto,
   ): Promise<OrderItem> {
-    return await this.orderService.updateOrderItemStatus(
-      orderId,
-      itemId,
-      updateStatusDto,
-    );
+    return await this.orderService.updateOrderItemStatus(orderId, itemId, updateStatusDto);
   }
 
   @Delete(':id')
@@ -317,7 +317,6 @@ export class OrdersController {
   async deleteOrder(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return await this.orderService.deleteOrder(id);
   }
-
 
   @Public()
   @Post('webhook/monnify')
@@ -349,10 +348,7 @@ export class OrdersController {
 
       // Validate webhook signature using PaymentService
       if (signature && rawBody) {
-        const isValid = this.paymentService.validateWebhookSignature(
-          webhookData,
-          signature,
-        );
+        const isValid = this.paymentService.validateWebhookSignature(webhookData, signature);
 
         if (!isValid) {
           this.logger.error('Invalid Monnify webhook signature');
@@ -370,15 +366,10 @@ export class OrdersController {
       this.orderService
         .processPaymentWebhook(webhookData)
         .then((result) => {
-          this.logger.log(
-            `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
-          );
+          this.logger.log(`Monnify webhook processed successfully: ${JSON.stringify(result)}`);
         })
         .catch((error) => {
-          this.logger.error(
-            `Error processing Monnify webhook: ${error.message}`,
-            error.stack,
-          );
+          this.logger.error(`Error processing Monnify webhook: ${error.message}`, error.stack);
         });
 
       return {
@@ -386,10 +377,7 @@ export class OrdersController {
         message: 'Webhook received',
       };
     } catch (error) {
-      this.logger.error(
-        `Error handling Monnify webhook: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error handling Monnify webhook: ${error.message}`, error.stack);
       return {
         success: false,
         message: 'Error processing webhook',
@@ -410,8 +398,6 @@ export class OrdersController {
     @Res({ passthrough: true }) response: Response,
   ) {
     try {
-
-
       this.logger.log('Received Paystack webhook');
 
       const webhookData = request.body as any;
@@ -426,14 +412,9 @@ export class OrdersController {
 
       this.logger.log(`Webhook event type: ${webhookData.event}`);
 
-
-
       // Validate webhook signature using PaymentService
       if (signature) {
-        const isValid = this.paymentService.validateWebhookSignature(
-          webhookData,
-          signature,
-        );
+        const isValid = this.paymentService.validateWebhookSignature(webhookData, signature);
 
         if (!isValid) {
           this.logger.error('Invalid Paystack webhook signature');
@@ -451,15 +432,10 @@ export class OrdersController {
       this.orderService
         .processPaymentWebhook(webhookData)
         .then((result) => {
-          this.logger.log(
-            `Paystack webhook processed successfully: ${JSON.stringify(result)}`,
-          );
+          this.logger.log(`Paystack webhook processed successfully: ${JSON.stringify(result)}`);
         })
         .catch((error) => {
-          this.logger.error(
-            `Error processing Paystack webhook: ${error.message}`,
-            error.stack,
-          );
+          this.logger.error(`Error processing Paystack webhook: ${error.message}`, error.stack);
         });
 
       return {
@@ -467,10 +443,7 @@ export class OrdersController {
         message: 'Webhook received',
       };
     } catch (error) {
-      this.logger.error(
-        `Error handling Paystack webhook: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error handling Paystack webhook: ${error.message}`, error.stack);
       return {
         success: false,
         message: 'Error processing webhook',
@@ -501,7 +474,6 @@ export class OrdersController {
     };
   }
 
-
   @Get('payment/health')
   @Public()
   @ApiOperation({
@@ -516,16 +488,11 @@ export class OrdersController {
     return await this.paymentService.healthCheck();
   }
 
-
   @Post('refund')
   @ApiOperation({ summary: 'Process a refund for an order' })
   @ApiResponse({ status: 200, description: 'Refund processed successfully' })
-  async processRefund(
-    @Body() createRefundDto: CreateRefundDto,
-    @Request() req
-  ): Promise<any> {
-
-    const userId = req.user.id
+  async processRefund(@Body() createRefundDto: CreateRefundDto, @Request() req): Promise<any> {
+    const userId = req.user.id;
     return await this.refundService.processRefund(createRefundDto, userId);
   }
 

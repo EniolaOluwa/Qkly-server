@@ -1,13 +1,10 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { firstValueFrom } from "rxjs";
-import { Repository } from "typeorm";
-import { User } from "../users/entity/user.entity";
-import { PaystackProvider } from "./providers/paystack.provider";
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+import { User } from '../users/entity/user.entity';
+import { PaystackProvider } from './providers/paystack.provider';
 import { Cron } from '@nestjs/schedule';
-
-
-
 
 @Injectable()
 export class PaystackPollingService {
@@ -17,9 +14,7 @@ export class PaystackPollingService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly paystackProvider: PaystackProvider,
-  ) { }
-
-
+  ) {}
 
   /**
    * Poll for pending DVA accounts
@@ -51,7 +46,6 @@ export class PaystackPollingService {
           this.logger.error(`Failed to poll account for user ${user.id}:`, error);
         }
       }
-
     } catch (error) {
       this.logger.error('[POLLING ERROR]', error);
     }
@@ -92,13 +86,12 @@ export class PaystackPollingService {
 
         this.logger.log(`[POLLING SUCCESS] User ${user.id} account activated`);
       }
-
     } catch (error) {
       this.logger.error(`Error checking account for user ${user.id}:`, error);
     }
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

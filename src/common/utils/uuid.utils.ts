@@ -6,4 +6,3 @@ export function shortUUID(length = 6): string {
     .replace(/[/+=]/g, '') // remove non-URL-safe chars
     .slice(0, length);
 }
-

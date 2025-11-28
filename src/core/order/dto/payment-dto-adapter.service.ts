@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { MonnifyWebhookDto, PaymentCallbackDto } from './payment.dto';
 
-
 @Injectable()
 export class PaymentDtoAdapter {
   toPaymentCallbackDto(webhookDto: MonnifyWebhookDto): PaymentCallbackDto {
@@ -13,23 +12,22 @@ export class PaymentDtoAdapter {
         paymentReference: webhookDto.eventData.paymentReference,
         amountPaid: webhookDto.eventData.amountPaid,
         totalPayment: webhookDto.eventData.totalPayable,
-        settlementAmount: typeof webhookDto.eventData.settlementAmount === 'string'
-          ? parseFloat(webhookDto.eventData.settlementAmount)
-          : webhookDto.eventData.settlementAmount,
+        settlementAmount:
+          typeof webhookDto.eventData.settlementAmount === 'string'
+            ? parseFloat(webhookDto.eventData.settlementAmount)
+            : webhookDto.eventData.settlementAmount,
         paymentStatus: webhookDto.eventData.paymentStatus,
         paymentMethod: webhookDto.eventData.paymentMethod,
         paidOn: webhookDto.eventData.paidOn,
         customer: webhookDto.eventData.customer,
-        metaData: webhookDto.eventData.metaData
-      }
+        metaData: webhookDto.eventData.metaData,
+      },
     };
   }
 
-
   processWebhookData(webhookData: MonnifyWebhookDto | PaymentCallbackDto): PaymentCallbackDto {
     // Check if it's already a PaymentCallbackDto by checking for productType
-    if ('eventData' in webhookData &&
-      'productType' in webhookData.eventData) {
+    if ('eventData' in webhookData && 'productType' in webhookData.eventData) {
       return webhookData as PaymentCallbackDto;
     }
 

@@ -1,13 +1,13 @@
-import { Controller, Post, Body, Get, Param, ParseIntPipe, Put, Delete } from "@nestjs/common";
-import { CategoryService } from "./category.service";
-import { CreateCategoryDto } from "./dto/create-category.dto";
-import { UpdateCategoryDto } from "./dto/update-category.dto";
-import { Public } from "../../common/decorators/public.decorator";
+import { Controller, Post, Body, Get, Param, ParseIntPipe, Put, Delete } from '@nestjs/common';
+import { CategoryService } from './category.service';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Public()
 @Controller('categories')
 export class CategoryController {
-  constructor(private readonly categoryService: CategoryService) { }
+  constructor(private readonly categoryService: CategoryService) {}
 
   @Post()
   create(@Body() createDto: CreateCategoryDto) {

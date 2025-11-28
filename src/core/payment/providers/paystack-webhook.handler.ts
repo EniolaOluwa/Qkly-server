@@ -14,7 +14,6 @@ import {
 import { User } from '../../users/entity/user.entity';
 import { PaystackIntegrationService } from '../paystack-integration.service';
 
-
 @Injectable()
 export class PaystackWebhookHandler {
   private readonly logger = new Logger(PaystackWebhookHandler.name);
@@ -27,7 +26,7 @@ export class PaystackWebhookHandler {
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackIntegrationService: PaystackIntegrationService,
-  ) { }
+  ) {}
 
   async handleWebhook(event: string, data: any): Promise<void> {
     this.logger.log(`[WEBHOOK] ${event}`);

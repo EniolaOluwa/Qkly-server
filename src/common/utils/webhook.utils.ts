@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 export function verifyMonnifySignature(
   signature: string,
   requestBody: string,
-  clientSecret: string
+  clientSecret: string,
 ): boolean {
   try {
     const computedSignature = crypto

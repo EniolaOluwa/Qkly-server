@@ -38,4 +38,3 @@ export class InsightsQueryDto {
   @IsDateString()
   endDate?: string;
 }
-

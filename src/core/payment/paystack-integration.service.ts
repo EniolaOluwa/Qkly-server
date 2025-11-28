@@ -27,7 +27,7 @@ export class PaystackIntegrationService {
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackProvider: PaystackProvider,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // ============================================================
   // BUSINESS ONBOARDING - Create DVA + Subaccount

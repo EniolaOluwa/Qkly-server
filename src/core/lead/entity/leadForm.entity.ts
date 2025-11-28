@@ -1,4 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, OneToMany, JoinColumn, BeforeInsert } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  JoinColumn,
+  BeforeInsert,
+} from 'typeorm';
 import { Business } from '../../businesses/business.entity';
 import { User } from '../../users/entity/user.entity';
 import { Leads } from './leads.entity';
@@ -27,7 +37,6 @@ export class LeadForm {
   @Column({ default: true })
   isActive: boolean;
 
-
   @Column({ unique: true, comment: 'Unique slug for public URL access' })
   slug: string;
 
@@ -38,16 +47,18 @@ export class LeadForm {
   generatePublicIdentifiers() {
     if (!this.slug) {
       // Generate slug from title
-      this.slug = this.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '') + '-' + shortUUID(6);
+      this.slug =
+        this.title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '') +
+        '-' +
+        shortUUID(6);
     }
     if (!this.publicId) {
       this.publicId = shortUUID(12);
     }
   }
-
 
   @Column({ default: false, comment: 'Require email verification before accepting lead' })
   requireEmailVerification: boolean;
@@ -70,7 +81,11 @@ export class LeadForm {
   @Column({ default: 0, comment: 'Maximum submissions allowed (0 = unlimited)' })
   maxSubmissions: number;
 
-  @Column({ type: 'jsonb', nullable: true, comment: 'Allowed domains for CORS (for embedded forms)' })
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    comment: 'Allowed domains for CORS (for embedded forms)',
+  })
   allowedDomains: string[];
 
   @Column({ type: 'jsonb', nullable: true, comment: 'Custom styling for embedded form' })
@@ -104,7 +119,6 @@ export class LeadForm {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
 
   canAcceptSubmissions(): boolean {
     if (!this.isActive) return false;

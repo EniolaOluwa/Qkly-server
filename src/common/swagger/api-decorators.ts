@@ -7,7 +7,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiResponse,
-  getSchemaPath
+  getSchemaPath,
 } from '@nestjs/swagger';
 
 // --- Generic Standard Responses ---
@@ -18,8 +18,14 @@ import {
 export function ApiAuth() {
   return applyDecorators(
     ApiBearerAuth(),
-    ApiResponse({ status: HttpStatus.UNAUTHORIZED, description: 'Unauthorized: Missing or invalid credentials (JWT)' }),
-    ApiResponse({ status: HttpStatus.FORBIDDEN, description: 'Forbidden: Insufficient permissions' }),
+    ApiResponse({
+      status: HttpStatus.UNAUTHORIZED,
+      description: 'Unauthorized: Missing or invalid credentials (JWT)',
+    }),
+    ApiResponse({
+      status: HttpStatus.FORBIDDEN,
+      description: 'Forbidden: Insufficient permissions',
+    }),
   );
 }
 
@@ -91,7 +97,7 @@ export function ApiPaginatedResponse<T extends Type<any>>(
       },
     }),
     ApiAuth(),
-    ApiInternalErrorResponse()
+    ApiInternalErrorResponse(),
   );
 }
 
@@ -122,7 +128,7 @@ export function ApiFindOneDecorator<T extends Type<any>>(
     }),
     ApiNotFoundResponse(`${entity.name} not found`),
     ApiAuth(),
-    ApiInternalErrorResponse()
+    ApiInternalErrorResponse(),
   );
 }
 
@@ -135,7 +141,8 @@ export function ApiWebhookDecorator(summary: string) {
     ApiOperation({ summary, description: 'Handles an incoming webhook and acknowledges receipt.' }),
     ApiResponse({
       status: 200,
-      description: 'Webhook received and processing started (always returns 200 to prevent retries)',
+      description:
+        'Webhook received and processing started (always returns 200 to prevent retries)',
       schema: {
         properties: {
           success: { type: 'boolean', example: true },

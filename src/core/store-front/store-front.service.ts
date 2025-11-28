@@ -1,4 +1,3 @@
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,9 +11,8 @@ import {
   PublicBusinessInfoDto,
   PublicProductDetailDto,
   PublicProductDto,
-  StoreFrontCategoryDto
+  StoreFrontCategoryDto,
 } from './dto/store-front-response.dto';
-
 
 @Injectable()
 export class StoreFrontService {
@@ -25,7 +23,7 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-  ) { }
+  ) {}
 
   async getBusinessByUserId(userId: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
@@ -65,11 +63,11 @@ export class StoreFrontService {
 
   async getStoreProducts(
     businessId: number,
-    query: StoreFrontProductQueryDto
+    query: StoreFrontProductQueryDto,
   ): Promise<PaginatedProductsDto> {
     // Verify business exists
     const business = await this.businessRepository.findOne({
-      where: { id: businessId }
+      where: { id: businessId },
     });
 
     if (!business) {
@@ -84,7 +82,7 @@ export class StoreFrontService {
       minPrice,
       maxPrice,
       sortBy = 'createdAt',
-      sortOrder = 'DESC'
+      sortOrder = 'DESC',
     } = query;
 
     // Build query
@@ -102,7 +100,7 @@ export class StoreFrontService {
     if (search) {
       qb.andWhere(
         '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
 
@@ -127,7 +125,7 @@ export class StoreFrontService {
     const products = await qb.skip(skip).take(limit).getMany();
 
     // Transform to public DTO (remove sensitive data)
-    const data: PublicProductDto[] = products.map(product => ({
+    const data: PublicProductDto[] = products.map((product) => ({
       id: product.id,
       name: product.name,
       description: product.description,
@@ -160,10 +158,7 @@ export class StoreFrontService {
     };
   }
 
-  async getProductDetail(
-    businessId: number,
-    productId: number
-  ): Promise<PublicProductDetailDto> {
+  async getProductDetail(businessId: number, productId: number): Promise<PublicProductDetailDto> {
     const product = await this.productRepository.findOne({
       where: { id: productId, businessId },
       relations: ['category', 'business', 'sizes'],
@@ -171,7 +166,7 @@ export class StoreFrontService {
 
     if (!product) {
       ErrorHelper.NotFoundException(
-        `Product with ID ${productId} not found in store ${businessId}`
+        `Product with ID ${productId} not found in store ${businessId}`,
       );
     }
 
@@ -200,7 +195,7 @@ export class StoreFrontService {
 
   async getStoreCategories(businessId: number): Promise<StoreFrontCategoryDto[]> {
     const business = await this.businessRepository.findOne({
-      where: { id: businessId }
+      where: { id: businessId },
     });
 
     if (!business) {
@@ -220,7 +215,7 @@ export class StoreFrontService {
       .orderBy('category.name', 'ASC')
       .getRawMany();
 
-    return categoriesWithCounts.map(cat => ({
+    return categoriesWithCounts.map((cat) => ({
       id: parseInt(cat.id),
       name: cat.name,
       productCount: parseInt(cat.productCount),
@@ -230,10 +225,10 @@ export class StoreFrontService {
   async getProductsByCategory(
     businessId: number,
     categoryId: number,
-    query: StoreFrontProductQueryDto
+    query: StoreFrontProductQueryDto,
   ): Promise<PaginatedProductsDto> {
     const category = await this.categoryRepository.findOne({
-      where: { id: categoryId }
+      where: { id: categoryId },
     });
 
     if (!category) {
@@ -242,6 +237,4 @@ export class StoreFrontService {
 
     return this.getStoreProducts(businessId, { ...query, categoryId });
   }
-
-
 }

@@ -10,7 +10,7 @@ export class CategoryService {
   constructor(
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-  ) { }
+  ) {}
 
   // Auto-create or find category by name
   async findOrCreate(name: string, parentId?: number): Promise<Category> {
@@ -46,7 +46,10 @@ export class CategoryService {
   }
 
   async findOne(id: number): Promise<Category> {
-    const category = await this.categoryRepository.findOne({ where: { id }, relations: ['children', 'parent'] });
+    const category = await this.categoryRepository.findOne({
+      where: { id },
+      relations: ['children', 'parent'],
+    });
     if (!category) throw new NotFoundException('Category not found');
     return category;
   }

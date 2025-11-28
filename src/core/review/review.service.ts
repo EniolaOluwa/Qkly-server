@@ -1,5 +1,11 @@
 import { OrderItemStatus } from './../order/interfaces/order.interface';
-import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
@@ -9,10 +15,12 @@ import { Order } from '../order/entity/order.entity';
 import { OrderStatus } from '../order/interfaces/order.interface';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users';
-import { CreateReviewDto, GuestReviewVerificationDto, UpdateReviewDto } from './dto/create-review.dto';
+import {
+  CreateReviewDto,
+  GuestReviewVerificationDto,
+  UpdateReviewDto,
+} from './dto/create-review.dto';
 import { Review } from './entity/review.entity';
-
-
 
 @Injectable()
 export class ReviewService {
@@ -31,7 +39,7 @@ export class ReviewService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   async createReview(userId: number | null, reviewData: CreateReviewDto): Promise<Review> {
     try {
@@ -40,9 +48,7 @@ export class ReviewService {
 
       // Validate guest review requirements
       if (isGuestReview && (!reviewData.guestEmail || !reviewData.guestName)) {
-        throw new BadRequestException(
-          'Guest reviews require guestEmail and guestName',
-        );
+        throw new BadRequestException('Guest reviews require guestEmail and guestName');
       }
 
       // Find the order with appropriate conditions
@@ -61,9 +67,7 @@ export class ReviewService {
 
         // Verify guest email matches order
         if (order.customerEmail.toLowerCase() !== (reviewData?.guestEmail ?? '').toLowerCase()) {
-          throw new BadRequestException(
-            'Email does not match the order email',
-          );
+          throw new BadRequestException('Email does not match the order email');
         }
 
         return await this.processReviewCreation(order, reviewData, null, true);
@@ -90,12 +94,9 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to create review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to create review: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to create review: ${error.message}`);
     }
   }
-
 
   private async processReviewCreation(
     order: Order,
@@ -105,13 +106,11 @@ export class ReviewService {
   ): Promise<Review> {
     // Check if the order is delivered
     if (order.status !== OrderStatus.DELIVERED) {
-      throw new BadRequestException(
-        'Cannot review a product from an order that is not delivered',
-      );
+      throw new BadRequestException('Cannot review a product from an order that is not delivered');
     }
 
     // Find the specific order item
-    const orderItem = order.items.find(item => item.id === reviewData.orderItemId);
+    const orderItem = order.items.find((item) => item.id === reviewData.orderItemId);
     if (!orderItem) {
       throw new NotFoundException(
         `Order item with ID ${reviewData.orderItemId} not found in this order`,
@@ -132,9 +131,7 @@ export class ReviewService {
 
     // Check if order item status is delivered
     if (orderItem.status !== OrderItemStatus.DELIVERED) {
-      throw new BadRequestException(
-        'Cannot review a product that has not been delivered',
-      );
+      throw new BadRequestException('Cannot review a product that has not been delivered');
     }
 
     // Check if review already exists for this order item
@@ -151,9 +148,7 @@ export class ReviewService {
     });
 
     if (existingReview) {
-      throw new BadRequestException(
-        'You have already reviewed this product from this order',
-      );
+      throw new BadRequestException('You have already reviewed this product from this order');
     }
 
     // Create the review
@@ -183,7 +178,6 @@ export class ReviewService {
     return await this.reviewRepository.save(review);
   }
 
-
   async updateReview(
     userId: number | null,
     reviewId: number,
@@ -203,10 +197,10 @@ export class ReviewService {
         }
 
         // Find review with guest email
-        review = await this.reviewRepository.findOne({
+        review = (await this.reviewRepository.findOne({
           where: { id: reviewId, guestEmail: guestVerification.email },
           relations: ['order'],
-        }) as Review;
+        })) as Review;
 
         if (!review) {
           throw new NotFoundException(
@@ -219,9 +213,9 @@ export class ReviewService {
           throw new BadRequestException('Order reference does not match');
         }
       } else {
-        review = await this.reviewRepository.findOne({
+        review = (await this.reviewRepository.findOne({
           where: { id: reviewId, userId },
-        }) as Review;
+        })) as Review;
 
         if (!review) {
           throw new NotFoundException(
@@ -238,9 +232,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to update review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to update review: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to update review: ${error.message}`);
     }
   }
 
@@ -261,10 +253,10 @@ export class ReviewService {
           );
         }
 
-        review = await this.reviewRepository.findOne({
+        review = (await this.reviewRepository.findOne({
           where: { id: reviewId, guestEmail: guestVerification.email },
           relations: ['order'],
-        }) as Review;
+        })) as Review;
 
         if (!review) {
           throw new NotFoundException(
@@ -276,9 +268,9 @@ export class ReviewService {
           throw new BadRequestException('Order reference does not match');
         }
       } else {
-        review = await this.reviewRepository.findOne({
+        review = (await this.reviewRepository.findOne({
           where: { id: reviewId, userId },
-        }) as Review;
+        })) as Review;
 
         if (!review) {
           throw new NotFoundException(
@@ -294,13 +286,9 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to delete review: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to delete review: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to delete review: ${error.message}`);
     }
   }
-
-
 
   async findReviewsByProductId(
     productId: number,
@@ -325,11 +313,16 @@ export class ReviewService {
 
       const itemCount = await queryBuilder.getCount();
 
-      const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
+      const {
+        skip = 0,
+        limit = 10,
+        order = PaginationOrder.DESC,
+        page = 1,
+      } = paginationDto || {
         skip: 0,
         limit: 10,
         order: PaginationOrder.DESC,
-        page: 1
+        page: 1,
       };
 
       const data = await queryBuilder
@@ -348,12 +341,9 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by product id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to find reviews: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to find reviews: ${error.message}`);
     }
   }
-
 
   async findReviewsByBusinessId(
     businessId: number,
@@ -379,11 +369,16 @@ export class ReviewService {
       const itemCount = await queryBuilder.getCount();
 
       // Get pagination options or set defaults
-      const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
+      const {
+        skip = 0,
+        limit = 10,
+        order = PaginationOrder.DESC,
+        page = 1,
+      } = paginationDto || {
         skip: 0,
         limit: 10,
         order: PaginationOrder.DESC,
-        page: 1
+        page: 1,
       };
 
       const data = await queryBuilder
@@ -402,9 +397,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by business id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to find reviews: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to find reviews: ${error.message}`);
     }
   }
 
@@ -430,11 +423,16 @@ export class ReviewService {
       const itemCount = await queryBuilder.getCount();
 
       // Get pagination options or set defaults
-      const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
+      const {
+        skip = 0,
+        limit = 10,
+        order = PaginationOrder.DESC,
+        page = 1,
+      } = paginationDto || {
         skip: 0,
         limit: 10,
         order: PaginationOrder.DESC,
-        page: 1
+        page: 1,
       };
 
       const data = await queryBuilder
@@ -453,12 +451,9 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find reviews by user id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to find reviews: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to find reviews: ${error.message}`);
     }
   }
-
 
   async findReviewsByGuestEmail(
     email: string,
@@ -474,11 +469,16 @@ export class ReviewService {
 
       const itemCount = await queryBuilder.getCount();
 
-      const { skip = 0, limit = 10, order = PaginationOrder.DESC, page = 1 } = paginationDto || {
+      const {
+        skip = 0,
+        limit = 10,
+        order = PaginationOrder.DESC,
+        page = 1,
+      } = paginationDto || {
         skip: 0,
         limit: 10,
         order: PaginationOrder.DESC,
-        page: 1
+        page: 1,
       };
 
       const data = await queryBuilder
@@ -493,13 +493,9 @@ export class ReviewService {
       });
     } catch (error) {
       this.logger.error(`Failed to find reviews by guest email: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to find reviews: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to find reviews: ${error.message}`);
     }
   }
-
-
 
   async findReviewById(id: number): Promise<Review> {
     try {
@@ -519,9 +515,7 @@ export class ReviewService {
       }
 
       this.logger.error(`Failed to find review by id: ${error.message}`, error.stack);
-      throw new InternalServerErrorException(
-        `Failed to find review: ${error.message}`,
-      );
+      throw new InternalServerErrorException(`Failed to find review: ${error.message}`);
     }
   }
 
@@ -542,7 +536,7 @@ export class ReviewService {
         .andWhere('review.isVisible = :isVisible', { isVisible: true })
         .getRawOne();
 
-      return result.average ? Number((result.average).toFixed(1)) : 0;
+      return result.average ? Number(result.average.toFixed(1)) : 0;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -554,7 +548,6 @@ export class ReviewService {
       );
     }
   }
-
 
   async getProductReviewStats(productId: number): Promise<any> {
     try {
@@ -569,8 +562,8 @@ export class ReviewService {
       const totalReviews = await this.reviewRepository.count({
         where: {
           productId,
-          isVisible: true
-        }
+          isVisible: true,
+        },
       });
 
       // Get count for each rating 1-5
@@ -580,11 +573,11 @@ export class ReviewService {
             where: {
               productId,
               ratings: rating,
-              isVisible: true
-            }
+              isVisible: true,
+            },
           });
           return { rating, count };
-        })
+        }),
       );
 
       // Calculate average rating
@@ -611,7 +604,7 @@ export class ReviewService {
         authenticatedReviews: authenticatedReviewsCount,
         guestReviews: guestReviewsCount,
         ratingCounts: Object.fromEntries(
-          ratingCounts.map(({ rating, count }) => [`rating${rating}`, count])
+          ratingCounts.map(({ rating, count }) => [`rating${rating}`, count]),
         ),
         ratingDistribution: ratingCounts,
       };

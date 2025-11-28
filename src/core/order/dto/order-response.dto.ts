@@ -4,7 +4,7 @@ import {
   DeliveryMethod,
   OrderStatus,
   PaymentMethod,
-  PaymentStatus
+  PaymentStatus,
 } from '../interfaces/order.interface';
 
 /**
@@ -97,7 +97,10 @@ export class OrderItemDto {
   @Expose()
   imageUrls: string[];
 
-  @ApiProperty({ example: 'PENDING', enum: ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'] })
+  @ApiProperty({
+    example: 'PENDING',
+    enum: ['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'],
+  })
   @Expose()
   status: string;
 
@@ -184,15 +187,15 @@ export class OrderResponseDto {
   @Expose()
   subtotal: number;
 
-  @ApiProperty({ example: 0.00 })
+  @ApiProperty({ example: 0.0 })
   @Expose()
   shippingFee: number;
 
-  @ApiProperty({ example: 0.00 })
+  @ApiProperty({ example: 0.0 })
   @Expose()
   tax: number;
 
-  @ApiProperty({ example: 0.00 })
+  @ApiProperty({ example: 0.0 })
   @Expose()
   discount: number;
 

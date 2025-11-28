@@ -28,7 +28,6 @@ export class Review {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-
   @Column({ nullable: true, comment: 'Guest reviewer name (when userId is null)' })
   guestName: string;
 

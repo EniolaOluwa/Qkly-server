@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { HttpException, HttpStatus } from '@nestjs/common';
 
 export class ErrorHelper {

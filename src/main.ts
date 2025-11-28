@@ -10,18 +10,19 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import * as express from 'express';
 
-
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.use(express.json({
-    limit: '50mb',
-    verify: (req: any, res, buf, encoding) => {
-      if (req.url && req.url.includes('/webhook')) {
-        req.rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
-      }
-    }
-  }));
+  app.use(
+    express.json({
+      limit: '50mb',
+      verify: (req: any, res, buf, encoding) => {
+        if (req.url && req.url.includes('/webhook')) {
+          req.rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
+        }
+      },
+    }),
+  );
 
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 

@@ -6,15 +6,10 @@ import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { WalletsController } from './wallets.controller';
 import { WalletsService } from './wallets.service';
 
-
 @Module({
-  imports: [
-    HttpModule,
-    SharedRepositoryModule,
-    PaymentModule,
-  ],
+  imports: [HttpModule, SharedRepositoryModule, PaymentModule],
   providers: [WalletsService, WalletProvisioningUtil],
   controllers: [WalletsController],
   exports: [WalletsService, WalletProvisioningUtil],
 })
-export class WalletsModule { }
+export class WalletsModule {}

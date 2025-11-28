@@ -10,16 +10,10 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
-  ValidationPipe
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth,
-  ApiConsumes,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { UserRole } from '../../common/auth/user-role.enum';
 import { Public } from '../../common/decorators/public.decorator';
@@ -46,12 +40,12 @@ import {
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   VerifyPhoneOtpDto,
-  VerifyPhoneOtpResponseDto
+  VerifyPhoneOtpResponseDto,
 } from '../../common/dto/responses.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
-
+import { RequestWithUser } from '../../common/interfaces';
 
 @ApiTags('users')
 @UseGuards(JwtAuthGuard)
@@ -83,9 +77,7 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async registerUser(
-    @Body(ValidationPipe) registerUserDto: RegisterUserDto,
-  ) {
+  async registerUser(@Body(ValidationPipe) registerUserDto: RegisterUserDto) {
     return this.usersService.registerUser(registerUserDto);
   }
 
@@ -109,19 +101,16 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async loginUser(
-    @Body(ValidationPipe) loginDto: LoginDto,
-  ) {
+  async loginUser(@Body(ValidationPipe) loginDto: LoginDto) {
     const data = await this.usersService.loginUser(loginDto);
-    return data
+    return data;
   }
 
   @Get('profile')
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get user profile',
-    description:
-      'Retrieves the current user profile information using JWT token',
+    description: 'Retrieves the current user profile information using JWT token',
   })
   @ApiResponse({
     status: 200,
@@ -136,7 +125,7 @@ export class UsersController {
       message: 'Profile retrieved successfully',
       data: {
         user: req.user,
-      }
+      },
     };
   }
 
@@ -157,10 +146,9 @@ export class UsersController {
   async getUserById(@Param('id') id: number) {
     const data = await this.usersService.findUserById(id);
     return {
-      data
+      data,
     };
   }
-
 
   @Post('generate-phone-otp')
   @UseGuards(JwtAuthGuard)
@@ -189,7 +177,7 @@ export class UsersController {
   })
   async generatePhoneOtp(
     @Body(ValidationPipe) generatePhoneOtpDto: GeneratePhoneOtpDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ) {
     const data = await this.usersService.generatePhoneOtp(
       req.user.userId,
@@ -198,10 +186,9 @@ export class UsersController {
 
     return {
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data,
+    };
   }
-
 
   @Post('verify-phone-otp')
   @UseGuards(JwtAuthGuard)
@@ -232,10 +219,7 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async verifyPhoneOtp(
-    @Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto,
-    @Request() req,
-  ) {
+  async verifyPhoneOtp(@Body(ValidationPipe) verifyPhoneOtpDto: VerifyPhoneOtpDto, @Request() req) {
     const data = await this.usersService.verifyPhoneOtp(
       req.user.userId,
       verifyPhoneOtpDto.phone,
@@ -244,26 +228,27 @@ export class UsersController {
 
     return {
       message: 'Phone number verified successfully',
-      data
-    }
+      data,
+    };
   }
-
 
   @Post('verify-kyc')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('selfie_image', {
-    limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Only JPEG and PNG images are supported.'), false);
-      }
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('selfie_image', {
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit
+      },
+      fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (allowedMimeTypes.includes(file.mimetype)) {
+          cb(null, true);
+        } else {
+          cb(new Error('Invalid file type. Only JPEG and PNG images are supported.'), false);
+        }
+      },
+    }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiBearerAuth()
   @ApiOperation({
@@ -293,14 +278,13 @@ export class UsersController {
   })
   @ApiResponse({
     status: 500,
-    description:
-      'Internal server error - Failed to verify BVN',
+    description: 'Internal server error - Failed to verify BVN',
     type: KycErrorResponseDto,
   })
   async verifyKyc(
     @Body(ValidationPipe) verifyKycDto: VerifyKycDto,
     @UploadedFile() selfieImage: Express.Multer.File,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ) {
     if (!selfieImage) {
       throw new BadRequestException('Selfie image is required');
@@ -314,10 +298,9 @@ export class UsersController {
 
     return {
       message: 'BVN verification completed successfully',
-      data
-    }
+      data,
+    };
   }
-
 
   @Post('create-pin')
   @UseGuards(JwtAuthGuard)
@@ -334,7 +317,8 @@ export class UsersController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - PIN must be exactly 4 digits, invalid reference, or user already has a PIN',
+    description:
+      'Bad request - PIN must be exactly 4 digits, invalid reference, or user already has a PIN',
   })
   @ApiResponse({
     status: 401,
@@ -348,16 +332,17 @@ export class UsersController {
     status: 500,
     description: 'Internal server error - Failed to create PIN',
   })
-  async createPin(
-    @Body(ValidationPipe) createPinDto: CreatePinWithReferenceDto,
-    @Request() req,
-  ) {
-    const data = await this.usersService.createPinWithReference(req.user.userId, createPinDto.pin, createPinDto.reference);
+  async createPin(@Body(ValidationPipe) createPinDto: CreatePinWithReferenceDto, @Request() req) {
+    const data = await this.usersService.createPinWithReference(
+      req.user.userId,
+      createPinDto.pin,
+      createPinDto.reference,
+    );
 
     return {
       message: 'PIN created successfully',
-      data
-    }
+      data,
+    };
   }
 
   @Post('generate-create-pin-otp')
@@ -366,7 +351,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Generate OTP for PIN creation',
     description:
-      'Generates and sends an OTP to the user\'s phone number for PIN creation. Requires JWT authentication.',
+      "Generates and sends an OTP to the user's phone number for PIN creation. Requires JWT authentication.",
   })
   @ApiResponse({
     status: 200,
@@ -389,15 +374,13 @@ export class UsersController {
     status: 500,
     description: 'Internal server error - Failed to generate OTP',
   })
-  async generateCreatePinOtp(
-    @Request() req,
-  ) {
+  async generateCreatePinOtp(@Request() req) {
     const data = await this.usersService.generateCreatePinOtp(req.user.userId);
 
     return {
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data,
+    };
   }
 
   @Post('verify-create-pin-otp')
@@ -427,14 +410,17 @@ export class UsersController {
   })
   async verifyCreatePinOtp(
     @Body(ValidationPipe) verifyCreatePinOtpDto: VerifyCreatePinOtpDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ) {
-    const data = await this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
+    const data = await this.usersService.verifyCreatePinOtp(
+      req.user.userId,
+      verifyCreatePinOtpDto.otp,
+    );
 
     return {
       message: 'OTP verified successfully. You can now create your PIN.',
       data,
-    }
+    };
   }
 
   @Post('forgot-password')
@@ -460,23 +446,19 @@ export class UsersController {
     status: 500,
     description: 'Internal server error - Failed to send OTP',
   })
-  async forgotPassword(
-    @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
-  ) {
+  async forgotPassword(@Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto) {
     const data = await this.usersService.forgotPassword(forgotPasswordDto.email);
     return {
       message: 'OTP sent successfully to your phone number',
-      data
-    }
+      data,
+    };
   }
 
   @Public()
-
   @Post('verify-password-reset-otp')
   @ApiOperation({
     summary: 'Verify password reset OTP',
-    description:
-      'Verifies the OTP code for password reset and returns a reset token.',
+    description: 'Verifies the OTP code for password reset and returns a reset token.',
   })
   @ApiResponse({
     status: 200,
@@ -505,8 +487,8 @@ export class UsersController {
 
     return {
       message: 'OTP verified successfully. You can now reset your password.',
-      data
-    }
+      data,
+    };
   }
 
   @Public()
@@ -537,9 +519,7 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async resetPassword(
-    @Body(ValidationPipe) resetPasswordDto: ResetPasswordDto,
-  ) {
+  async resetPassword(@Body(ValidationPipe) resetPasswordDto: ResetPasswordDto) {
     const data = await this.usersService.resetPassword(
       resetPasswordDto.newPassword,
       resetPasswordDto.resetToken,
@@ -547,8 +527,8 @@ export class UsersController {
 
     return {
       message: 'Password reset successfully',
-      data
-    }
+      data,
+    };
   }
   // settings - change password
   @Patch('settings/change-password')
@@ -556,19 +536,20 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Change user password',
-    description: 'Allows an authenticated user to change their password by providing the current (old) password and a new password (with confirmation).',
+    description:
+      'Allows an authenticated user to change their password by providing the current (old) password and a new password (with confirmation).',
   })
   @ApiResponse({
     status: 200,
     description: 'Password changed successfully',
   })
   @ApiResponse({ status: 400, description: 'Bad request - validation error' })
-  @ApiResponse({ status: 401, description: 'Unauthorized - invalid current password or missing token' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid current password or missing token',
+  })
   @ApiResponse({ status: 500, description: 'Internal server error' })
-  async changePassword(
-    @Body(ValidationPipe) changePasswordDto: ChangePasswordDto,
-    @Request() req,
-  ) {
+  async changePassword(@Body(ValidationPipe) changePasswordDto: ChangePasswordDto, @Request() req) {
     const authUserId = req.user?.userId;
 
     if (!authUserId) {
@@ -579,12 +560,8 @@ export class UsersController {
       throw new BadRequestException('New password and confirm password do not match');
     }
 
-    return this.usersService.changePassword(
-      changePasswordDto
-    );
+    return this.usersService.changePassword(changePasswordDto);
   }
-
-
 
   // settings - update user profile
   @Patch('settings/profile')
@@ -592,7 +569,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Update user profile',
-    description: 'Allows an authenticated user to update their profile information (firstName, lastName, email, phone).',
+    description:
+      'Allows an authenticated user to update their profile information (firstName, lastName, email, phone).',
   })
   @ApiResponse({
     status: 200,
@@ -620,7 +598,7 @@ export class UsersController {
   })
   async updateUserProfile(
     @Body(ValidationPipe) updateUserProfileDto: UpdateUserProfileDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
@@ -636,7 +614,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Change user PIN',
-    description: 'Allows an authenticated user to change their PIN by providing the current (old) PIN and a new PIN (with confirmation).',
+    description:
+      'Allows an authenticated user to change their PIN by providing the current (old) PIN and a new PIN (with confirmation).',
   })
   @ApiResponse({
     status: 200,
@@ -658,10 +637,7 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async changePin(
-    @Body(ValidationPipe) changePinDto: ChangePinDto,
-    @Request() req,
-  ) {
+  async changePin(@Body(ValidationPipe) changePinDto: ChangePinDto, @Request() req) {
     const authUserId = req.user?.userId;
     if (!authUserId) {
       throw new BadRequestException('Authenticated user id not found');
@@ -672,7 +648,6 @@ export class UsersController {
 
     return this.usersService.changePin(changePinDto);
   }
-
 
   // Example admin-only endpoint demonstrating role-based access control
   @Get('admin/dashboard')
@@ -700,7 +675,7 @@ export class UsersController {
       message: 'Welcome to the admin dashboard!',
       data: {
         userRole: req.user.role,
-      }
+      },
     };
   }
 }

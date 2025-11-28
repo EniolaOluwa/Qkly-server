@@ -1,25 +1,10 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Request,
-  UseGuards,
-  ValidationPipe
-} from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags
-} from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Request, UseGuards, ValidationPipe } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
-import {
-  GenerateWalletDto,
-  GenerateWalletResponseDto
-} from './dto/wallet.dto';
+import { GenerateWalletDto, GenerateWalletResponseDto } from './dto/wallet.dto';
 import { WalletsService } from './wallets.service';
+import { RequestWithUser } from '../../common/interfaces';
 
 @ApiTags('wallets')
 @Controller('wallets')
@@ -41,8 +26,7 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 400,
-    description:
-      'Bad request - Invalid wallet data or user already has a wallet',
+    description: 'Bad request - Invalid wallet data or user already has a wallet',
   })
   @ApiResponse({
     status: 401,
@@ -58,12 +42,9 @@ export class WalletsController {
   })
   async generateWallet(
     @Body(ValidationPipe) generateWalletDto: GenerateWalletDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ): Promise<GenerateWalletResponseDto> {
-    return this.walletsService.generateWallet(
-      req.user.userId,
-      generateWalletDto,
-    );
+    return this.walletsService.generateWallet(req.user.userId, generateWalletDto);
   }
 
   @Get()
@@ -87,8 +68,7 @@ export class WalletsController {
   })
   @ApiResponse({
     status: 500,
-    description:
-      'Internal server error - Failed to retrieve wallet information',
+    description: 'Internal server error - Failed to retrieve wallet information',
   })
   async getUserWallet(@Request() req) {
     const walletInfo = await this.walletsService.getUserWallet(req.user.userId);
@@ -97,7 +77,6 @@ export class WalletsController {
       wallet: walletInfo,
     };
   }
-
 
   @Get(':userId/balance')
   async getWalletBalance(@Request() req): Promise<WalletBalanceResponseDto> {
@@ -130,7 +109,7 @@ export class WalletsController {
   // })
   // async initializePayment(
   //   @Body(ValidationPipe) initiatePaymentDto: InitiatePaymentDto,
-  //   @Request() req,
+  //      @Request() req: RequestWithUser,
   // ) {
   //   // Add user details to the payment payload
   //   const paymentPayload = {

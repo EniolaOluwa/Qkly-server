@@ -3,7 +3,7 @@ import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 
 @Injectable()
 export class CloudinaryService {
-  constructor(private readonly cloudinaryUtil: CloudinaryUtil) { }
+  constructor(private readonly cloudinaryUtil: CloudinaryUtil) {}
 
   async uploadImage(file: Express.Multer.File) {
     if (!file) {

@@ -1,7 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+  Index,
+} from 'typeorm';
 import { Product } from '../../product/entity/product.entity';
-
-
 
 @Entity('categories')
 export class Category {
@@ -15,14 +23,14 @@ export class Category {
   @Column({ nullable: true })
   parentId?: number;
 
-  @ManyToOne(() => Category, category => category.children)
+  @ManyToOne(() => Category, (category) => category.children)
   @JoinColumn({ name: 'parentId' })
   parent?: Category;
 
-  @OneToMany(() => Category, category => category.parent)
+  @OneToMany(() => Category, (category) => category.parent)
   children?: Category[];
 
-  @OneToMany(() => Product, product => product.category)
+  @OneToMany(() => Product, (product) => product.category)
   products?: Product[];
 
   @CreateDateColumn()

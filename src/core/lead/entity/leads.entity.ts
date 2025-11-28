@@ -1,9 +1,15 @@
 import { User } from '../../users/entity/user.entity';
-import { Entity, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  JoinColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { LeadForm } from './leadForm.entity';
 import { Business } from '../../businesses/business.entity';
-
-
 
 @Entity({ name: 'leads' })
 export class Leads {
@@ -35,7 +41,6 @@ export class Leads {
 
   @Column({ type: 'jsonb', nullable: true })
   formResponses: Record<string, any>;
-
 
   @Column({ nullable: true, comment: 'IP address of the submitter' })
   ipAddress: string;

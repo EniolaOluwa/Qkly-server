@@ -9,7 +9,6 @@ import { Business } from '../businesses/business.entity';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto, InsightsKPIDto, TrafficSourceDto } from './dto/insights-response.dto';
 
-
 @Injectable()
 export class InsightsService {
   constructor(
@@ -23,10 +22,7 @@ export class InsightsService {
     private readonly businessRepository: Repository<Business>,
   ) {}
 
-  async getInsights(
-    userId: number,
-    query: InsightsQueryDto,
-  ): Promise<InsightsResponseDto> {
+  async getInsights(userId: number, query: InsightsQueryDto): Promise<InsightsResponseDto> {
     // Get user's business
     const business = await this.businessRepository.findOne({
       where: { userId },
@@ -43,11 +39,7 @@ export class InsightsService {
     const kpis = await this.calculateKPIs(business.id, startDate, endDate);
 
     // Get traffic sources
-    const trafficSources = await this.calculateTrafficSources(
-      business.id,
-      startDate,
-      endDate,
-    );
+    const trafficSources = await this.calculateTrafficSources(business.id, startDate, endDate);
 
     return {
       kpis,
@@ -70,11 +62,7 @@ export class InsightsService {
     sessionId?: string,
   ): Promise<StoreVisit> {
     // Normalize traffic source
-    const normalizedSource = this.normalizeTrafficSource(
-      trafficSource,
-      referrer,
-      utmSource,
-    );
+    const normalizedSource = this.normalizeTrafficSource(trafficSource, referrer, utmSource);
 
     const visit = this.storeVisitRepository.create({
       businessId,
@@ -163,18 +151,13 @@ export class InsightsService {
       .getRawMany();
 
     // Calculate total visits
-    const totalVisits = visitsBySource.reduce(
-      (sum, item) => sum + parseInt(item.visits, 10),
-      0,
-    );
+    const totalVisits = visitsBySource.reduce((sum, item) => sum + parseInt(item.visits, 10), 0);
 
     // Calculate percentages and format
     const trafficSources: TrafficSourceDto[] = visitsBySource.map((item) => ({
       source: item.source || 'others',
       visits: parseInt(item.visits, 10),
-      percentage: totalVisits > 0 
-        ? Math.round((parseInt(item.visits, 10) / totalVisits) * 100) 
-        : 0,
+      percentage: totalVisits > 0 ? Math.round((parseInt(item.visits, 10) / totalVisits) * 100) : 0,
     }));
 
     // Sort by visits descending
@@ -259,7 +242,11 @@ export class InsightsService {
     // If traffic source is provided, use it
     if (trafficSource) {
       const normalized = trafficSource.toLowerCase();
-      if (['instagram', 'facebook', 'twitter', 'x', 'google', 'tiktok', 'direct', 'others'].includes(normalized)) {
+      if (
+        ['instagram', 'facebook', 'twitter', 'x', 'google', 'tiktok', 'direct', 'others'].includes(
+          normalized,
+        )
+      ) {
         return normalized === 'x' ? 'twitter' : normalized;
       }
     }

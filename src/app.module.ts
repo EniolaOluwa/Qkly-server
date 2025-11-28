@@ -20,7 +20,6 @@ import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, cache: true }),
@@ -51,4 +50,4 @@ import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
     TransactionService,
   ],
 })
-export class AppModule { }
+export class AppModule {}

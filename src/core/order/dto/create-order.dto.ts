@@ -90,7 +90,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.MONNIFY,
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -99,7 +99,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Delivery method',
     enum: DeliveryMethod,
-    example: DeliveryMethod.STANDARD
+    example: DeliveryMethod.STANDARD,
   })
   @IsNotEmpty()
   @IsEnum(DeliveryMethod)
@@ -108,7 +108,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Order items',
     type: [OrderItemDto],
-    example: [{ productId: 1, quantity: 2, color: 'Blue', size: 'M' }]
+    example: [{ productId: 1, quantity: 2, color: 'Blue', size: 'M' }],
   })
   @IsArray()
   @ValidateNested({ each: true })
@@ -116,7 +116,11 @@ export class CreateOrderDto {
   @ArrayMinSize(1)
   items: OrderItemDto[];
 
-  @ApiProperty({ description: 'Notes (optional)', example: 'Please leave at front door', required: false })
+  @ApiProperty({
+    description: 'Notes (optional)',
+    example: 'Please leave at front door',
+    required: false,
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

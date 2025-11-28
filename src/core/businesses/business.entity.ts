@@ -42,7 +42,6 @@ export class Business {
   @JoinColumn({ name: 'userId' })
   user: User;
 
-
   @Column({ nullable: true })
   coverImage: string;
 
@@ -55,11 +54,16 @@ export class Business {
   @Column({ nullable: true })
   storeColor: string;
 
-
   @Column({ nullable: true, comment: 'Paystack subaccount code for split payments' })
   paystackSubaccountCode: string;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 95.00, comment: 'Percentage business receives from sales (100 - platform fee)' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 95.0,
+    comment: 'Percentage business receives from sales (100 - platform fee)',
+  })
   revenueSharePercentage: number;
 
   @Column({ type: 'boolean', default: false, comment: 'Whether subaccount is verified and active' })

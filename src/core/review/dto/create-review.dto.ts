@@ -11,7 +11,7 @@ import {
   IsUrl,
   IsBoolean,
   IsEmail,
-  MaxLength
+  MaxLength,
 } from 'class-validator';
 
 export class CreateReviewDto {
@@ -206,7 +206,6 @@ export class UpdateReviewDto {
   @IsBoolean()
   isVisible?: boolean;
 }
-
 
 export class GuestReviewVerificationDto {
   @IsEmail()

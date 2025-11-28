@@ -1,48 +1,41 @@
-import { DateTime } from 'luxon';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
-  IsString,
-  IsOptional,
+  IsIn,
   IsNotEmpty,
-  MinLength,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
   MaxLength,
+  MinLength,
+  Validate,
   ValidationArguments,
   ValidatorConstraint,
-  ValidatorConstraintInterface,
-  Validate,
-  IsIn,
-  IsISO8601,
-  IsNumber,
-  IsPositive,
-  IsUUID,
+  ValidatorConstraintInterface
 } from 'class-validator';
+import { DateTime } from 'luxon';
 import { PaymentMethod } from '../../order/interfaces/order.interface';
-
 
 @ValidatorConstraint({ name: 'isIsoDateFormat', async: false })
 export class IsIsoDateFormatConstraint implements ValidatorConstraintInterface {
-  validate(value: string, args: ValidationArguments) {
+  validate(value: string) {
     if (!value) return false;
 
     const dt = DateTime.fromFormat(value, 'yyyy-MM-dd');
     return dt.isValid;
   }
 
-  defaultMessage(args: ValidationArguments) {
+  defaultMessage() {
     return 'Date of birth must be in yyyy-MM-dd format (e.g. 1990-01-31)';
   }
 }
 
-
 export function IsIsoDateFormat() {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     Validate(IsIsoDateFormatConstraint)(object, propertyName);
   };
 }
-
-
-
 
 export class GenerateWalletDto {
   @ApiProperty({
@@ -165,7 +158,7 @@ export class GenerateWalletResponseDto {
 export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Amount to pay',
-    example: 1000.50,
+    example: 1000.5,
   })
   @IsNumber()
   @IsPositive()
@@ -215,7 +208,7 @@ export class InitiatePaymentDto {
   redirectUrl?: string;
 
   @IsOptional()
-  metadata?: object
+  metadata?: object;
 }
 
 export class PaymentMethodDto {

@@ -73,9 +73,7 @@ export class CloudinaryUtil {
       };
     } catch (error) {
       console.error('Cloudinary upload error:', error);
-      throw new InternalServerErrorException(
-        'Failed to upload image to cloud storage',
-      );
+      throw new InternalServerErrorException('Failed to upload image to cloud storage');
     }
   }
 
@@ -90,9 +88,7 @@ export class CloudinaryUtil {
       return result;
     } catch (error) {
       console.error('Cloudinary delete error:', error);
-      throw new InternalServerErrorException(
-        'Failed to delete image from cloud storage',
-      );
+      throw new InternalServerErrorException('Failed to delete image from cloud storage');
     }
   }
 
@@ -102,10 +98,7 @@ export class CloudinaryUtil {
    * @param transformations - Cloudinary transformation options
    * @returns The transformed image URL
    */
-  generateUrl(
-    publicId: string,
-    transformations?: Record<string, any>,
-  ): string {
+  generateUrl(publicId: string, transformations?: Record<string, any>): string {
     return cloudinary.url(publicId, transformations);
   }
 }

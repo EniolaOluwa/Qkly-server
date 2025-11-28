@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional } from "class-validator";
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 
 export enum PaymentProviderType {
   MONNIFY = 'MONNIFY',
@@ -66,8 +66,8 @@ export interface VirtualAccountResponseDto {
   provider: PaymentProviderType;
   providerAccountId?: string;
 
-  customerCode?: string;  // For Paystack
-  status?: string;        // PENDING | ACTIVE
+  customerCode?: string; // For Paystack
+  status?: string; // PENDING | ACTIVE
 }
 
 export interface WalletBalanceDto {
@@ -75,7 +75,6 @@ export interface WalletBalanceDto {
   ledgerBalance: number;
   currencyCode: string;
 }
-
 
 export interface InitializePaymentRequestDto {
   amount: number;
@@ -110,7 +109,6 @@ export interface InitializePaymentResponseDto {
   expiresAt?: string;
 }
 
-
 export interface VerifyPaymentResponseDto {
   paymentReference: string;
   transactionReference: string;
@@ -133,7 +131,6 @@ export enum PaymentVerificationStatus {
   ABANDONED = 'ABANDONED',
   REVERSED = 'REVERSED',
 }
-
 
 export interface TransferRequestDto {
   amount: number;
@@ -177,7 +174,6 @@ export interface BankAccountDetailsDto {
   bankCode: string;
   bankName?: string;
 }
-
 
 export interface WebhookEventDto {
   eventType: string;

@@ -2,7 +2,13 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { catchError, firstValueFrom } from 'rxjs';
-import { MonnifyAuthResponseBody, MonnifyAxiosError, MonnifyPaymentInitResponseBody, MonnifySuccessResponse, MonnifyTransactionResponseBody } from '../../../common/interfaces/monnify-response.interface';
+import {
+  MonnifyAuthResponseBody,
+  MonnifyAxiosError,
+  MonnifyPaymentInitResponseBody,
+  MonnifySuccessResponse,
+  MonnifyTransactionResponseBody,
+} from '../../../common/interfaces/monnify-response.interface';
 import { verifyMonnifySignature } from '../../../common/utils/webhook.utils';
 import {
   BankAccountDetailsDto,
@@ -21,7 +27,6 @@ import {
   WebhookEventDto,
 } from '../dto/payment-provider.dto';
 import { IPaymentProvider } from '../interfaces/payment-provider.interface';
-
 
 @Injectable()
 export class MonnifyProvider extends IPaymentProvider {
@@ -54,14 +59,10 @@ export class MonnifyProvider extends IPaymentProvider {
       const monnifySecretKey = this.configService.get<string>('MONNIFY_SECRET_KEY');
 
       if (!monnifyApiKey || !monnifySecretKey) {
-        throw new InternalServerErrorException(
-          'Monnify API credentials not configured',
-        );
+        throw new InternalServerErrorException('Monnify API credentials not configured');
       }
 
-      const credentials = Buffer.from(
-        `${monnifyApiKey}:${monnifySecretKey}`,
-      ).toString('base64');
+      const credentials = Buffer.from(`${monnifyApiKey}:${monnifySecretKey}`).toString('base64');
 
       const response = await firstValueFrom(
         this.httpService
@@ -88,10 +89,7 @@ export class MonnifyProvider extends IPaymentProvider {
           ),
       );
 
-      if (
-        response.data.requestSuccessful &&
-        response.data.responseBody?.accessToken
-      ) {
+      if (response.data.requestSuccessful && response.data.responseBody?.accessToken) {
         this.accessToken = response.data.responseBody.accessToken;
         // Set token expiry to 50 minutes (Monnify tokens expire in 1 hour)
         this.tokenExpiry = new Date(Date.now() + 50 * 60 * 1000);
@@ -100,20 +98,12 @@ export class MonnifyProvider extends IPaymentProvider {
 
       throw new Error('Failed to get access token from Monnify');
     } catch (error) {
-      this.logger.error(
-        'Monnify authentication failed:',
-        error.response?.data || error.message,
-      );
-      throw new InternalServerErrorException(
-        'Failed to authenticate with Monnify',
-      );
+      this.logger.error('Monnify authentication failed:', error.response?.data || error.message);
+      throw new InternalServerErrorException('Failed to authenticate with Monnify');
     }
   }
 
-
-  async createVirtualAccount(
-    dto: CreateVirtualAccountDto,
-  ): Promise<VirtualAccountResponseDto> {
+  async createVirtualAccount(dto: CreateVirtualAccountDto): Promise<VirtualAccountResponseDto> {
     try {
       const accessToken = await this.getAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
@@ -142,9 +132,7 @@ export class MonnifyProvider extends IPaymentProvider {
           })
           .pipe(
             catchError((error: MonnifyAxiosError) => {
-              this.logger.error(
-                `Failed to create wallet: ${JSON.stringify(error.response?.data)}`,
-              );
+              this.logger.error(`Failed to create wallet: ${JSON.stringify(error.response?.data)}`);
               throw new InternalServerErrorException(
                 `Failed to create wallet: ${error.response?.data?.responseMessage || error.message}`,
               );
@@ -166,10 +154,8 @@ export class MonnifyProvider extends IPaymentProvider {
         walletReference: walletDetails.walletReference || dto.walletReference,
         accountNumber: walletDetails.accountNumber,
         accountName: walletDetails.accountName || dto.walletName,
-        bankName:
-          walletDetails.bankName || walletDetails.topUpAccountDetails?.bankName,
-        bankCode:
-          walletDetails.bankCode || walletDetails.topUpAccountDetails?.bankCode,
+        bankName: walletDetails.bankName || walletDetails.topUpAccountDetails?.bankName,
+        bankCode: walletDetails.bankCode || walletDetails.topUpAccountDetails?.bankCode,
         currencyCode: walletDetails.currencyCode || dto.currencyCode || 'NGN',
         createdOn: walletDetails.createdOn || new Date().toISOString(),
         provider: PaymentProviderType.MONNIFY,
@@ -203,8 +189,7 @@ export class MonnifyProvider extends IPaymentProvider {
                 `Failed to fetch wallet balance: ${JSON.stringify(error.response?.data || error.message)}`,
               );
               throw new InternalServerErrorException(
-                error.response?.data?.responseMessage ||
-                'Failed to fetch wallet balance',
+                error.response?.data?.responseMessage || 'Failed to fetch wallet balance',
               );
             }),
           ),
@@ -229,27 +214,20 @@ export class MonnifyProvider extends IPaymentProvider {
     }
   }
 
-  async getVirtualAccountDetails(
-    walletReference: string,
-  ): Promise<VirtualAccountResponseDto> {
+  async getVirtualAccountDetails(walletReference: string): Promise<VirtualAccountResponseDto> {
     // Monnify doesn't have a direct endpoint for this
     // We'll need to fetch from database or return basic info
     throw new Error('Method not directly supported by Monnify');
   }
 
-
-  async initializePayment(
-    dto: InitializePaymentRequestDto,
-  ): Promise<InitializePaymentResponseDto> {
+  async initializePayment(dto: InitializePaymentRequestDto): Promise<InitializePaymentResponseDto> {
     try {
       const accessToken = await this.getAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
         'MONNIFY_BASE_URL',
         'https://sandbox.monnify.com',
       );
-      const monnifyContractCode = this.configService.get<string>(
-        'MONNIFY_CONTRACT_CODE',
-      );
+      const monnifyContractCode = this.configService.get<string>('MONNIFY_CONTRACT_CODE');
 
       const payload = {
         amount: Number(dto.amount),
@@ -309,9 +287,7 @@ export class MonnifyProvider extends IPaymentProvider {
     }
   }
 
-  async verifyPayment(
-    paymentReference: string,
-  ): Promise<VerifyPaymentResponseDto> {
+  async verifyPayment(paymentReference: string): Promise<VerifyPaymentResponseDto> {
     try {
       const accessToken = await this.getAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
@@ -372,7 +348,6 @@ export class MonnifyProvider extends IPaymentProvider {
     }
   }
 
-
   async transferToBank(dto: TransferRequestDto): Promise<TransferResponseDto> {
     try {
       const accessToken = await this.getAccessToken();
@@ -382,8 +357,7 @@ export class MonnifyProvider extends IPaymentProvider {
       );
 
       const sourceAccountNumber =
-        dto.sourceWalletReference ||
-        this.configService.get<string>('MONNIFY_WALLET_ACCOUNT');
+        dto.sourceWalletReference || this.configService.get<string>('MONNIFY_WALLET_ACCOUNT');
 
       const transferPayload = {
         amount: dto.amount,
@@ -398,16 +372,12 @@ export class MonnifyProvider extends IPaymentProvider {
 
       const response = await firstValueFrom(
         this.httpService
-          .post(
-            `${monnifyBaseUrl}/api/v2/disbursements/single`,
-            transferPayload,
-            {
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
+          .post(`${monnifyBaseUrl}/api/v2/disbursements/single`, transferPayload, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
             },
-          )
+          })
           .pipe(
             catchError((error) => {
               this.logger.error(
@@ -446,9 +416,7 @@ export class MonnifyProvider extends IPaymentProvider {
   /**
    * Transfer between wallets - Monnify supports this
    */
-  async transferBetweenWallets(
-    dto: TransferRequestDto,
-  ): Promise<TransferResponseDto> {
+  async transferBetweenWallets(dto: TransferRequestDto): Promise<TransferResponseDto> {
     // Monnify supports wallet-to-wallet transfers
     // Implementation is similar to transferToBank but both source and destination are Monnify wallets
     return this.transferToBank(dto);
@@ -458,9 +426,7 @@ export class MonnifyProvider extends IPaymentProvider {
   // Bank Account Management
   // ============================================================
 
-  async resolveBankAccount(
-    dto: ResolveBankAccountDto,
-  ): Promise<BankAccountDetailsDto> {
+  async resolveBankAccount(dto: ResolveBankAccountDto): Promise<BankAccountDetailsDto> {
     try {
       const accessToken = await this.getAccessToken();
       const monnifyBaseUrl = this.configService.get<string>(
@@ -469,18 +435,15 @@ export class MonnifyProvider extends IPaymentProvider {
       );
 
       const response = await firstValueFrom(
-        this.httpService.get(
-          `${monnifyBaseUrl}/api/v1/disbursements/account/validate`,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-            params: {
-              accountNumber: dto.accountNumber,
-              bankCode: dto.bankCode,
-            },
+        this.httpService.get(`${monnifyBaseUrl}/api/v1/disbursements/account/validate`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
           },
-        ),
+          params: {
+            accountNumber: dto.accountNumber,
+            bankCode: dto.bankCode,
+          },
+        }),
       );
 
       const data = response.data.responseBody;
@@ -493,9 +456,7 @@ export class MonnifyProvider extends IPaymentProvider {
       };
     } catch (error) {
       this.logger.error('Bank account resolution failed:', error.message);
-      throw new InternalServerErrorException(
-        'Failed to resolve bank account',
-      );
+      throw new InternalServerErrorException('Failed to resolve bank account');
     }
   }
 
@@ -529,10 +490,7 @@ export class MonnifyProvider extends IPaymentProvider {
   // Webhook Processing
   // ============================================================
 
-  async processWebhook(
-    payload: any,
-    signature?: string,
-  ): Promise<WebhookEventDto> {
+  async processWebhook(payload: any, signature?: string): Promise<WebhookEventDto> {
     try {
       const eventData = payload.eventData;
 
@@ -559,12 +517,9 @@ export class MonnifyProvider extends IPaymentProvider {
     }
   }
 
-
-
-
   validateWebhookSignature(payload: any, signature: string): boolean {
     const clientSecret = this.configService.get<string>('MONNIFY_SECRET_KEY', '');
-    return verifyMonnifySignature(signature, payload, clientSecret)
+    return verifyMonnifySignature(signature, payload, clientSecret);
   }
 
   // ============================================================

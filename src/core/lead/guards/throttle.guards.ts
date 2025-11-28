@@ -4,7 +4,6 @@ import { ThrottlerException, ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
 import { User } from '../../users';
 
-
 @Injectable()
 export class LeadSubmissionThrottleGuard extends ThrottlerGuard {
   protected async getTracker(req: Request): Promise<string> {
@@ -24,9 +23,7 @@ export class LeadSubmissionThrottleGuard extends ThrottlerGuard {
     for (const header of headers) {
       const value = req.headers[header];
       if (value) {
-        const ip = typeof value === 'string'
-          ? value.split(',')[0].trim()
-          : value[0];
+        const ip = typeof value === 'string' ? value.split(',')[0].trim() : value[0];
         if (ip) return ip;
       }
     }
@@ -36,11 +33,9 @@ export class LeadSubmissionThrottleGuard extends ThrottlerGuard {
 
   protected async throwThrottlingException(
     context: ExecutionContext,
-    throttlerLimitDetail: ThrottlerLimitDetail
+    throttlerLimitDetail: ThrottlerLimitDetail,
   ): Promise<void> {
-    throw new ThrottlerException(
-      'Too many submissions. Please try again in a few minutes.'
-    );
+    throw new ThrottlerException('Too many submissions. Please try again in a few minutes.');
   }
 }
 
@@ -70,11 +65,9 @@ export class AuthenticatedThrottleGuard extends ThrottlerGuard {
 
   protected async throwThrottlingException(
     context: ExecutionContext,
-    throttlerLimitDetail: ThrottlerLimitDetail
+    throttlerLimitDetail: ThrottlerLimitDetail,
   ): Promise<void> {
-    throw new ThrottlerException(
-      'Too many requests. Please slow down.'
-    );
+    throw new ThrottlerException('Too many requests. Please slow down.');
   }
 }
 
@@ -101,9 +94,7 @@ export class IpThrottleGuard extends ThrottlerGuard {
     for (const header of headers) {
       const value = req.headers[header];
       if (value) {
-        const ip = typeof value === 'string'
-          ? value.split(',')[0].trim()
-          : value[0];
+        const ip = typeof value === 'string' ? value.split(',')[0].trim() : value[0];
         if (ip) return ip;
       }
     }
@@ -124,19 +115,12 @@ export class FormAccessThrottleGuard extends ThrottlerGuard {
   }
 
   protected getClientIp(req: Request): string {
-    const headers = [
-      'x-forwarded-for',
-      'x-real-ip',
-      'cf-connecting-ip',
-      'x-client-ip',
-    ];
+    const headers = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'x-client-ip'];
 
     for (const header of headers) {
       const value = req.headers[header];
       if (value) {
-        const ip = typeof value === 'string'
-          ? value.split(',')[0].trim()
-          : value[0];
+        const ip = typeof value === 'string' ? value.split(',')[0].trim() : value[0];
         if (ip) return ip;
       }
     }

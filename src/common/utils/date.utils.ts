@@ -86,12 +86,12 @@ export class DateHelper {
   }): number {
     const startDateTime = DateTime.fromFormat(
       `${eventData.date} ${eventData.startTime}`,
-      'yyyy-MM-dd HH:mm'
+      'yyyy-MM-dd HH:mm',
     );
 
     const endDateTime = DateTime.fromFormat(
       `${eventData.date} ${eventData.endTime}`,
-      'yyyy-MM-dd HH:mm'
+      'yyyy-MM-dd HH:mm',
     );
 
     if (endDateTime < startDateTime) {
@@ -181,7 +181,6 @@ export class DateHelper {
     });
     return dt.toMillis();
   }
-
 
   static formatBvnDate(dateStr: string): string | null {
     const dt = DateTime.fromFormat(dateStr, 'dd-MMM-yyyy');

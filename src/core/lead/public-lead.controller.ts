@@ -1,14 +1,5 @@
 import { Public } from '@app/common/decorators/public.decorator';
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-  ValidationPipe
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiCreatedResponse,
@@ -28,8 +19,7 @@ import { LeadService } from './lead.service';
 @ApiTags('Public Forms')
 @Controller('forms')
 export class PublicLeadController {
-  constructor(private readonly leadService: LeadService) { }
-
+  constructor(private readonly leadService: LeadService) {}
 
   @Public()
   @Get(':publicId')
@@ -63,14 +53,14 @@ export class PublicLeadController {
     });
   }
 
-
   @Public()
   @Post(':publicId/submit')
   @UseGuards(LeadSubmissionThrottleGuard)
   @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Submit a lead (Public)',
-    description: 'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address.',
+    description:
+      'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address.',
   })
   @ApiCreatedResponse({ description: 'Lead submitted successfully' })
   @ApiBadRequestResponse({ description: 'Invalid input or form inactive' })
@@ -81,17 +71,20 @@ export class PublicLeadController {
       example: {
         statusCode: 429,
         message: 'Too many submissions. Please try again later.',
-        error: 'Too Many Requests'
-      }
-    }
+        error: 'Too Many Requests',
+      },
+    },
   })
   async submitPublicLead(
     @Param('publicId') publicId: string,
-    @Body(new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true
-    })) dto: CreateLeadDto,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: CreateLeadDto,
     @Req() req: Request,
   ) {
     // Extract tracking information from request
@@ -124,9 +117,6 @@ export class PublicLeadController {
     });
   }
 
-
-
-
   private getClientIp(req: Request): string {
     // Check multiple headers for real IP
     const headers = [
@@ -140,9 +130,7 @@ export class PublicLeadController {
     for (const header of headers) {
       const value = req.headers[header];
       if (value) {
-        const ip = typeof value === 'string'
-          ? value.split(',')[0].trim()
-          : value[0];
+        const ip = typeof value === 'string' ? value.split(',')[0].trim() : value[0];
         if (ip) return ip;
       }
     }
@@ -171,7 +159,8 @@ export class PublicLeadController {
     if (userAgent.includes('Mac OS X')) return 'macOS';
     if (userAgent.includes('Linux')) return 'Linux';
     if (userAgent.includes('Android')) return 'Android';
-    if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad')) return 'iOS';
+    if (userAgent.includes('iOS') || userAgent.includes('iPhone') || userAgent.includes('iPad'))
+      return 'iOS';
     return 'Unknown';
   }
 

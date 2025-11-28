@@ -16,9 +16,7 @@ export class ColumnNumericTransformer {
 }
 
 export function removeEmpty(obj: object) {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([_, v]) => v != null && v !== '')
-  );
+  return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v != null && v !== ''));
 }
 export function getDateQuery({ from, to }: { from?: string; to?: string }) {
   if (from && to) {

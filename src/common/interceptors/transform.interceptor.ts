@@ -56,7 +56,7 @@ export class TransformInterceptor<T> implements NestInterceptor<T, any> {
       }),
       finalize(() => {
         Logger.log(`Execution time... ${Date.now() - now}ms`);
-      })
+      }),
     );
   }
 }

@@ -24,12 +24,12 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { InsightsService } from './insights.service';
 import { InsightsQueryDto, TimePeriod } from './dto/insights-query.dto';
 import { InsightsResponseDto } from './dto/insights-response.dto';
-
+import { RequestWithUser } from '../../common/interfaces';
 
 @ApiTags('insights')
 @Controller('insights')
 export class InsightsController {
-  constructor(private readonly insightsService: InsightsService) {}
+  constructor(private readonly insightsService: InsightsService) { }
 
   @Get()
   @UseGuards(JwtAuthGuard)
@@ -37,7 +37,7 @@ export class InsightsController {
   @ApiOperation({
     summary: 'Get store insights and analytics',
     description:
-      'Retrieves key performance indicators (KPIs) and traffic source breakdown for the authenticated user\'s store. Supports time period filtering.',
+      "Retrieves key performance indicators (KPIs) and traffic source breakdown for the authenticated user's store. Supports time period filtering.",
   })
   @ApiQuery({
     name: 'period',
@@ -75,7 +75,7 @@ export class InsightsController {
   })
   async getInsights(
     @Query(ValidationPipe) query: InsightsQueryDto,
-    @Request() req,
+    @Request() req: RequestWithUser,
   ): Promise<InsightsResponseDto> {
     const userId = req.user?.userId;
     if (!userId) {
@@ -142,9 +142,7 @@ export class InsightsController {
   ): Promise<{ message: string; success: boolean }> {
     // Get IP address from request
     const ipAddress =
-      req?.ip ||
-      req?.headers?.['x-forwarded-for']?.split(',')[0] ||
-      req?.connection?.remoteAddress;
+      req?.ip || req?.headers?.['x-forwarded-for']?.split(',')[0] || req?.connection?.remoteAddress;
 
     // Generate or get session ID (could be from cookie or generate new)
     const sessionId = req?.cookies?.sessionId || `session_${Date.now()}_${Math.random()}`;
@@ -167,4 +165,3 @@ export class InsightsController {
     };
   }
 }
-

@@ -7,7 +7,7 @@ export class StoreFrontProductQueryDto {
     description: 'Page number for pagination',
     required: false,
     default: 1,
-    example: 1
+    example: 1,
   })
   @IsOptional()
   @Type(() => Number)
@@ -19,7 +19,7 @@ export class StoreFrontProductQueryDto {
     description: 'Number of items per page',
     required: false,
     default: 20,
-    example: 20
+    example: 20,
   })
   @IsOptional()
   @Type(() => Number)
@@ -30,7 +30,7 @@ export class StoreFrontProductQueryDto {
   @ApiProperty({
     description: 'Category ID to filter products',
     required: false,
-    example: 5
+    example: 5,
   })
   @IsOptional()
   @Type(() => Number)
@@ -40,7 +40,7 @@ export class StoreFrontProductQueryDto {
   @ApiProperty({
     description: 'Search term for product name or description',
     required: false,
-    example: 'wireless'
+    example: 'wireless',
   })
   @IsOptional()
   @IsString()
@@ -49,7 +49,7 @@ export class StoreFrontProductQueryDto {
   @ApiProperty({
     description: 'Minimum price filter',
     required: false,
-    example: 10
+    example: 10,
   })
   @IsOptional()
   @Type(() => Number)
@@ -59,7 +59,7 @@ export class StoreFrontProductQueryDto {
   @ApiProperty({
     description: 'Maximum price filter',
     required: false,
-    example: 1000
+    example: 1000,
   })
   @IsOptional()
   @Type(() => Number)
@@ -71,7 +71,7 @@ export class StoreFrontProductQueryDto {
     required: false,
     enum: ['name', 'price', 'createdAt'],
     default: 'createdAt',
-    example: 'price'
+    example: 'price',
   })
   @IsOptional()
   @IsString()
@@ -82,7 +82,7 @@ export class StoreFrontProductQueryDto {
     required: false,
     enum: ['ASC', 'DESC'],
     default: 'DESC',
-    example: 'ASC'
+    example: 'ASC',
   })
   @IsOptional()
   @IsString()

@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  UnauthorizedException
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -17,7 +17,7 @@ import {
   CreatePinResponseDto,
   LoginDto,
   RegisterUserDto,
-  RegisterUserResponseDto
+  RegisterUserResponseDto,
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
@@ -29,12 +29,10 @@ import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/use
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User } from './entity/user.entity';
 
-
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
 
 @Injectable()
 export class UsersService {
-
   private readonly logger = new Logger(UsersService.name);
 
   constructor(
@@ -46,12 +44,9 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
-  ) { }
+  ) {}
 
-
-  async registerUser(
-    registerUserDto: RegisterUserDto,
-  ): Promise<RegisterUserResponseDto> {
+  async registerUser(registerUserDto: RegisterUserDto): Promise<RegisterUserResponseDto> {
     try {
       // Check if user with email already exists
       const existingUserByEmail = await this.userRepository.findOne({
@@ -101,7 +96,7 @@ export class UsersService {
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
 
-      // email service 
+      // email service
       const emailDispatcherPayload: MailDispatcherDto = {
         to: user.email,
         from: 'onboarding@resend.dev',
@@ -109,10 +104,8 @@ export class UsersService {
         html: signup(user.firstName),
       };
 
-
       // send mail to user
       // this.emailService.emailDispatcher(emailDispatcherPayload);
-
 
       // Return user information with token
       return {
@@ -129,14 +122,12 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-
       if (error instanceof ConflictException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to register user');
     }
   }
-
 
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
@@ -165,7 +156,7 @@ export class UsersService {
       ErrorHelper.NotFoundException('User Not Found');
     }
 
-    return user
+    return user;
   }
 
   async loginUser(loginDto: LoginDto) {
@@ -236,19 +227,14 @@ export class UsersService {
     }
   }
 
-  async generatePhoneOtp(
-    userId: number,
-    phone: string,
-  ) {
+  async generatePhoneOtp(userId: number, phone: string) {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId, phone },
       });
 
       if (!user) {
-        ErrorHelper.NotFoundException(
-          'User with this ID and phone number not found',
-        );
+        ErrorHelper.NotFoundException('User with this ID and phone number not found');
       }
 
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -269,7 +255,6 @@ export class UsersService {
 
       await this.otpRepository.save(otp);
 
-
       // Send OTP via Termii SMS
       await this.sendOtpViaTermii(phone, otpCode);
 
@@ -285,11 +270,7 @@ export class UsersService {
     }
   }
 
-  async verifyPhoneOtp(
-    userId: number,
-    phone: string,
-    otpCode: string,
-  ) {
+  async verifyPhoneOtp(userId: number, phone: string, otpCode: string) {
     try {
       // Find user by ID and phone number
       const user = await this.userRepository.findOne({
@@ -297,9 +278,7 @@ export class UsersService {
       });
 
       if (!user) {
-        ErrorHelper.NotFoundException(
-          'User with this ID and phone number not found',
-        );
+        ErrorHelper.NotFoundException('User with this ID and phone number not found');
       }
 
       // Find the most recent unused OTP for this user and phone
@@ -315,16 +294,12 @@ export class UsersService {
       });
 
       if (!otp) {
-        ErrorHelper.BadRequestException(
-          'Invalid OTP or OTP not found. Please generate a new OTP.',
-        );
+        ErrorHelper.BadRequestException('Invalid OTP or OTP not found. Please generate a new OTP.');
       }
 
       // Check if OTP has expired
       if (otp.expiresAt < new Date()) {
-        ErrorHelper.BadRequestException(
-          'OTP has expired. Please generate a new OTP.',
-        );
+        ErrorHelper.BadRequestException('OTP has expired. Please generate a new OTP.');
       }
 
       // Mark OTP as used
@@ -340,34 +315,22 @@ export class UsersService {
         verified: true,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to verify OTP');
     }
   }
 
-  async verifyBvnWithSelfie(
-    userId: number,
-    bvn: string,
-    selfieImageFile: Express.Multer.File,
-  ) {
+  async verifyBvnWithSelfie(userId: number, bvn: string, selfieImageFile: Express.Multer.File) {
     try {
       // Get Dojah API configuration
-      const dojahBaseUrl = this.configService.get<string>(
-        'DOJAH_BASE_URL',
-        'https://api.dojah.io',
-      );
+      const dojahBaseUrl = this.configService.get<string>('DOJAH_BASE_URL', 'https://api.dojah.io');
       const dojahAppId = this.configService.get<string>('DOJAH_APP_ID');
       const dojahPublicKey = this.configService.get<string>('DOJAH_PUBLIC_KEY');
 
       if (!dojahAppId || !dojahPublicKey) {
-        ErrorHelper.InternalServerErrorException(
-          'Dojah API credentials not configured',
-        );
+        ErrorHelper.InternalServerErrorException('Dojah API credentials not configured');
       }
 
       // Find user by ID
@@ -391,16 +354,14 @@ export class UsersService {
       // Check file size (max 5MB)
       const maxSizeInBytes = 5 * 1024 * 1024; // 5MB
       if (selfieImageFile.size > maxSizeInBytes) {
-        ErrorHelper.BadRequestException(
-          'File size too large. Maximum size allowed is 5MB.',
-        );
+        ErrorHelper.BadRequestException('File size too large. Maximum size allowed is 5MB.');
       }
 
       // Convert file buffer to base64
       const base64Image = selfieImageFile.buffer.toString('base64');
 
       // Format according to Dojah docs - ensure it starts with /9 for JPEG
-      let formattedSelfieImage = base64Image;
+      const formattedSelfieImage = base64Image;
 
       // For non-JPEG images, we might need to convert or validate differently
       if (selfieImageFile.mimetype === 'image/png') {
@@ -426,8 +387,8 @@ export class UsersService {
           },
           {
             headers: {
-              'AppId': dojahAppId,
-              'Authorization': dojahPublicKey,
+              AppId: dojahAppId,
+              Authorization: dojahPublicKey,
               'Content-Type': 'application/json',
             },
           },
@@ -469,7 +430,10 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            this.logger.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            this.logger.log(
+              `Wallet provisioned successfully for user ${userId}:`,
+              walletResult.walletData,
+            );
           } else {
             console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
           }
@@ -492,10 +456,7 @@ export class UsersService {
         };
       }
     } catch (error) {
-      console.error(
-        'Dojah BVN verification failed:',
-        error.response?.data || error.message,
-      );
+      console.error('Dojah BVN verification failed:', error.response?.data || error.message);
 
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
@@ -509,12 +470,9 @@ export class UsersService {
         ErrorHelper.UnauthorizedException('Insufficient permissions for Dojah API');
       }
 
-      ErrorHelper.InternalServerErrorException(
-        'Failed to verify BVN with selfie',
-      );
+      ErrorHelper.InternalServerErrorException('Failed to verify BVN with selfie');
     }
   }
-
 
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
@@ -542,10 +500,7 @@ export class UsersService {
         success: true,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to create PIN');
@@ -599,17 +554,17 @@ export class UsersService {
         expiryInMinutes: 5,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to generate PIN creation OTP');
     }
   }
 
-  async verifyCreatePinOtp(userId: number, otpCode: string): Promise<{
+  async verifyCreatePinOtp(
+    userId: number,
+    otpCode: string,
+  ): Promise<{
     verified: boolean;
     reference: string;
   }> {
@@ -722,10 +677,7 @@ export class UsersService {
         success: true,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to create PIN');
@@ -778,15 +730,10 @@ export class UsersService {
         expiryInMinutes: 5,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      ErrorHelper.InternalServerErrorException(
-        'Failed to send forgot password OTP',
-      );
+      ErrorHelper.InternalServerErrorException('Failed to send forgot password OTP');
     }
   }
 
@@ -797,19 +744,11 @@ export class UsersService {
         'https://api.ng.termii.com',
       );
       const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
-      const senderId = this.configService.get<string>(
-        'TERMII_SENDER_ID',
-        'NQkly',
-      );
-      const channel = this.configService.get<string>(
-        'TERMII_CHANNEL',
-        'generic',
-      );
+      const senderId = this.configService.get<string>('TERMII_SENDER_ID', 'NQkly');
+      const channel = this.configService.get<string>('TERMII_CHANNEL', 'generic');
 
       if (!termiiApiKey) {
-        ErrorHelper.InternalServerErrorException(
-          'Termii SMS API key not configured',
-        );
+        ErrorHelper.InternalServerErrorException('Termii SMS API key not configured');
       }
 
       const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
@@ -824,7 +763,6 @@ export class UsersService {
         api_key: termiiApiKey,
       };
 
-
       const response = await firstValueFrom(
         this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
           headers: {
@@ -834,15 +772,10 @@ export class UsersService {
       );
 
       if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
-        ErrorHelper.InternalServerErrorException(
-          'Failed to send SMS via Termii API',
-        );
+        ErrorHelper.InternalServerErrorException('Failed to send SMS via Termii API');
       }
     } catch (error) {
-      console.error(
-        'Failed to send SMS via Termii:',
-        error.response?.data || error.message,
-      );
+      console.error('Failed to send SMS via Termii:', error.response?.data || error.message);
       // In development, don't fail the request if SMS sending fails
       if (this.configService.get<string>('NODE_ENV') === 'production') {
         ErrorHelper.InternalServerErrorException('Failed to send SMS');
@@ -899,9 +832,7 @@ export class UsersService {
 
       // Check if OTP has expired
       if (otp.expiresAt < new Date()) {
-        ErrorHelper.BadRequestException(
-          'OTP has expired. Please request a new password reset.',
-        );
+        ErrorHelper.BadRequestException('OTP has expired. Please request a new password reset.');
       }
 
       // Mark OTP as used
@@ -927,23 +858,14 @@ export class UsersService {
         resetToken,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      ErrorHelper.InternalServerErrorException(
-        'Failed to verify password reset OTP',
-      );
+      ErrorHelper.InternalServerErrorException('Failed to verify password reset OTP');
     }
   }
 
-
-  async resetPassword(
-    newPassword: string,
-    resetToken: string,
-  ): Promise<{ success: boolean }> {
+  async resetPassword(newPassword: string, resetToken: string): Promise<{ success: boolean }> {
     try {
       // Find the reset token in the database
       const tokenRecord = await this.otpRepository.findOne({
@@ -999,19 +921,15 @@ export class UsersService {
         success: true,
       };
     } catch (error) {
-      if (
-        error instanceof UnauthorizedException ||
-        error instanceof NotFoundException
-      ) {
+      if (error instanceof UnauthorizedException || error instanceof NotFoundException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to reset password');
     }
   }
 
-
   async changePassword(
-    changePassword: ChangePasswordDto
+    changePassword: ChangePasswordDto,
   ): Promise<{ message: string; success: boolean }> {
     try {
       // Validate inputs
@@ -1024,11 +942,13 @@ export class UsersService {
       }
 
       if (changePassword.newPassword !== changePassword.confirmPassword) {
-        ErrorHelper.BadRequestException('password must match')
+        ErrorHelper.BadRequestException('password must match');
       }
 
       // Find user by ID
-      const user = await this.userRepository.findOne({ where: { id: Number(changePassword.userId) } });
+      const user = await this.userRepository.findOne({
+        where: { id: Number(changePassword.userId) },
+      });
       if (!user) {
         ErrorHelper.NotFoundException('User not found');
       }
@@ -1055,7 +975,6 @@ export class UsersService {
       ErrorHelper.InternalServerErrorException('Failed to change password');
     }
   }
-
 
   async updateUserProfile(
     userId: number,
@@ -1121,10 +1040,7 @@ export class UsersService {
         user: userWithoutSensitiveData,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
+      if (error instanceof NotFoundException || error instanceof ConflictException) {
         throw error;
       }
       this.logger.error(`Failed to update user profile for user ${userId}:`, error);
@@ -1132,10 +1048,7 @@ export class UsersService {
     }
   }
 
-
-  async changePin(
-    changePinDto: ChangePinDto,
-  ): Promise<{ message: string; success: boolean }> {
+  async changePin(changePinDto: ChangePinDto): Promise<{ message: string; success: boolean }> {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(changePinDto.newPin)) {
@@ -1191,10 +1104,7 @@ export class UsersService {
       ) {
         throw error;
       }
-      this.logger.error(
-        `Failed to change PIN for user ${changePinDto.userId}:`,
-        error,
-      );
+      this.logger.error(`Failed to change PIN for user ${changePinDto.userId}:`, error);
       throw new InternalServerErrorException('Failed to change PIN');
     }
   }

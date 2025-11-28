@@ -1,4 +1,4 @@
-import { PaymentEventCustomer } from "../dto/payment.dto";
+import { PaymentEventCustomer } from '../dto/payment.dto';
 
 export enum OrderItemStatus {
   PENDING = 'PENDING',
@@ -10,8 +10,6 @@ export enum OrderItemStatus {
   REFUNDED = 'REFUNDED',
 }
 
-
-
 export enum PaymentMethod {
   MONNIFY = 'MONNIFY',
   BANK_TRANSFER = 'BANK_TRANSFER',
@@ -20,7 +18,6 @@ export enum PaymentMethod {
   CASH_ON_DELIVERY = 'CASH_ON_DELIVERY',
   USSD = 'USSD',
 }
-
 
 export enum DeliveryMethod {
   STANDARD = 'STANDARD',
@@ -44,7 +41,6 @@ export interface DeliveryDetails {
   deliveryProof?: string;
   signedBy?: string;
   meta?: any;
-
 }
 
 export interface SettlementDetails {
@@ -103,8 +99,6 @@ export interface MonnifyTransaction {
   meta?: any;
 }
 
-
-
 export interface PaymentEventData {
   productType: string;
   transactionReference: string;
@@ -118,8 +112,6 @@ export interface PaymentEventData {
   customer: PaymentEventCustomer;
   metaData?: Record<string, any>;
 }
-
-
 
 export interface PaymentDetails {
   paymentMethod: PaymentMethod;
@@ -176,8 +168,6 @@ export interface PaymentDetails {
   invoiceReference?: string;
 }
 
-
-
 export interface RefundDetails {
   amount: number;
   reason: string;
@@ -195,8 +185,6 @@ export interface RefundDetails {
   }>;
 }
 
-
-
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -208,7 +196,6 @@ export enum OrderStatus {
   REFUNDED = 'REFUNDED', // Add this
   COMPLETED = 'COMPLETED',
 }
-
 
 export enum PaymentStatus {
   PENDING = 'PENDING',

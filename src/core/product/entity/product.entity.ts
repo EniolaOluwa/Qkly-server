@@ -54,7 +54,7 @@ export class Product {
   categoryId: number;
 
   @Column('text', { nullable: false })
-  description: string
+  description: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   @Index()
@@ -64,13 +64,17 @@ export class Product {
   @Index()
   quantityInStock: number;
 
-  @Column({ type: 'boolean', default: false, comment: 'Does this product include size or color variations?' })
+  @Column({
+    type: 'boolean',
+    default: false,
+    comment: 'Does this product include size or color variations?',
+  })
   hasVariation: boolean;
 
   @Column('simple-array', { nullable: true })
   colors: string[];
 
-  @OneToMany(() => ProductSize, size => size.product, { cascade: true })
+  @OneToMany(() => ProductSize, (size) => size.product, { cascade: true })
   sizes: ProductSize[];
 
   @CreateDateColumn()

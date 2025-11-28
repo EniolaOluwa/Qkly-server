@@ -32,4 +32,4 @@ import { UsersService } from './users.service';
   providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
   exports: [UsersService, RoleGuard, JwtStrategy, JwtModule, PassportModule],
 })
-export class UsersModule { }
+export class UsersModule {}

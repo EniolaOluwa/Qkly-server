@@ -29,12 +29,10 @@ export class BusinessesService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private cloudinaryUtil: CloudinaryUtil,
-  ) { }
+  ) {}
 
   // Business Type methods
-  async createBusinessType(
-    createBusinessTypeDto: CreateBusinessTypeDto,
-  ): Promise<BusinessType> {
+  async createBusinessType(createBusinessTypeDto: CreateBusinessTypeDto): Promise<BusinessType> {
     try {
       // Check if business type already exists
       const existingBusinessType = await this.businessTypeRepository.findOne({
@@ -42,9 +40,7 @@ export class BusinessesService {
       });
 
       if (existingBusinessType) {
-        throw new ConflictException(
-          'Business type with this name already exists',
-        );
+        throw new ConflictException('Business type with this name already exists');
       }
 
       // Create new business type
@@ -87,18 +83,13 @@ export class BusinessesService {
       const businessType = await this.findBusinessTypeById(id);
 
       // Check if the new name conflicts with existing business types
-      if (
-        updateBusinessTypeDto.name &&
-        updateBusinessTypeDto.name !== businessType.name
-      ) {
+      if (updateBusinessTypeDto.name && updateBusinessTypeDto.name !== businessType.name) {
         const existingBusinessType = await this.businessTypeRepository.findOne({
           where: { name: updateBusinessTypeDto.name },
         });
 
         if (existingBusinessType) {
-          throw new ConflictException(
-            'Business type with this name already exists',
-          );
+          throw new ConflictException('Business type with this name already exists');
         }
       }
 
@@ -106,10 +97,7 @@ export class BusinessesService {
       Object.assign(businessType, updateBusinessTypeDto);
       return await this.businessTypeRepository.save(businessType);
     } catch (error) {
-      if (
-        error instanceof ConflictException ||
-        error instanceof NotFoundException
-      ) {
+      if (error instanceof ConflictException || error instanceof NotFoundException) {
         throw error;
       }
       throw new InternalServerErrorException('Failed to update business type');
@@ -122,10 +110,7 @@ export class BusinessesService {
   }
 
   // Business methods
-  async createBusiness(
-    createBusinessDto: CreateBusinessDto,
-    userId: number,
-  ): Promise<Business> {
+  async createBusiness(createBusinessDto: CreateBusinessDto, userId: number): Promise<Business> {
     try {
       // Check if user already has a business
       const existingBusiness = await this.businessRepository.findOne({
@@ -161,9 +146,7 @@ export class BusinessesService {
         throw new Error('Logo is required for business creation');
       }
 
-      const uploadResult = await this.cloudinaryUtil.uploadImage(
-        createBusinessDto.logo.buffer,
-      );
+      const uploadResult = await this.cloudinaryUtil.uploadImage(createBusinessDto.logo.buffer);
       const logoUrl = uploadResult.secure_url;
 
       // Create new business
@@ -220,10 +203,7 @@ export class BusinessesService {
     });
   }
 
-  async updateBusiness(
-    id: number,
-    updateBusinessDto: UpdateBusinessDto,
-  ): Promise<Business> {
+  async updateBusiness(id: number, updateBusinessDto: UpdateBusinessDto): Promise<Business> {
     try {
       const business = await this.findBusinessById(id);
 
@@ -250,19 +230,15 @@ export class BusinessesService {
         }
 
         // Upload new logo
-        const uploadResult = await this.cloudinaryUtil.uploadImage(
-          updateBusinessDto.logo.buffer,
-        );
+        const uploadResult = await this.cloudinaryUtil.uploadImage(updateBusinessDto.logo.buffer);
         business.logo = uploadResult.secure_url;
       }
 
       // Update other fields
-      if (updateBusinessDto.businessName)
-        business.businessName = updateBusinessDto.businessName;
+      if (updateBusinessDto.businessName) business.businessName = updateBusinessDto.businessName;
       if (updateBusinessDto.businessDescription)
         business.businessDescription = updateBusinessDto.businessDescription;
-      if (updateBusinessDto.location)
-        business.location = updateBusinessDto.location;
+      if (updateBusinessDto.location) business.location = updateBusinessDto.location;
 
       await this.businessRepository.save(business);
 
@@ -281,12 +257,10 @@ export class BusinessesService {
     await this.businessRepository.remove(business);
   }
 
-
-
   async updateBusinessDetails(
     updateBusiness: UpdateBusinessDto,
     userId: number,
-    businessId: number
+    businessId: number,
   ) {
     try {
       const business = await this.businessRepository.findOne({

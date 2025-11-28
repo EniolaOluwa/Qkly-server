@@ -40,15 +40,9 @@ export class PaystackProvider extends IPaymentProvider {
     private readonly configService: ConfigService,
   ) {
     super();
-    this.baseUrl = this.configService.get<string>(
-      'PAYSTACK_BASE_URL',
-      'https://api.paystack.co',
-    );
+    this.baseUrl = this.configService.get<string>('PAYSTACK_BASE_URL', 'https://api.paystack.co');
     this.secretKey = this.configService.get<string>('PAYSTACK_SECRET_KEY', '');
-    this.preferredBank = this.configService.get<string>(
-      'PAYSTACK_PREFERRED_BANK',
-      'test-bank',
-    );
+    this.preferredBank = this.configService.get<string>('PAYSTACK_PREFERRED_BANK', 'test-bank');
 
     if (!this.secretKey) {
       throw new InternalServerErrorException('Paystack secret key not configured');
@@ -82,9 +76,7 @@ export class PaystackProvider extends IPaymentProvider {
         country: 'NG',
       };
 
-
-      console.log({ payload })
-
+      console.log({ payload });
 
       this.logger.log(`Creating Paystack DVA for ${dto.customerEmail}`);
 
@@ -173,14 +165,14 @@ export class PaystackProvider extends IPaymentProvider {
   /**
    * Handle DVA creation response
    */
-  private handleDVAResponse(response: any, dto: CreateVirtualAccountDto): VirtualAccountResponseDto {
+  private handleDVAResponse(
+    response: any,
+    dto: CreateVirtualAccountDto,
+  ): VirtualAccountResponseDto {
     const data = response.data.data;
 
     // Check if DVA is pending
-    if (
-      response.data.message === 'Assign dedicated account in progress' ||
-      !data.account_number
-    ) {
+    if (response.data.message === 'Assign dedicated account in progress' || !data.account_number) {
       this.logger.warn('Paystack DVA creation in progress');
 
       return {
@@ -528,7 +520,8 @@ export class PaystackProvider extends IPaymentProvider {
           paymentReference: data.reference,
           amount: data.amount / 100,
           amountPaid: data.amount / 100,
-          customerName: `${data.customer?.first_name || ''} ${data.customer?.last_name || ''}`.trim(),
+          customerName:
+            `${data.customer?.first_name || ''} ${data.customer?.last_name || ''}`.trim(),
           customerEmail: data.customer?.email || '',
           paymentStatus: data.status,
           paymentMethod: data.channel || data.authorization?.channel || 'unknown',

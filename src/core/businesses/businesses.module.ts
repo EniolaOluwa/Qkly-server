@@ -9,10 +9,7 @@ import { BusinessesService } from './businesses.service';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Business, BusinessType, User]),
-    ConfigModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Business, BusinessType, User]), ConfigModule],
   controllers: [BusinessesController],
   providers: [BusinessesService, CloudinaryUtil],
   exports: [BusinessesService],

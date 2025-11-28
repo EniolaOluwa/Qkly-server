@@ -11,8 +11,7 @@ export class AppController {
   @Get()
   @ApiOperation({
     summary: 'Get welcome message',
-    description:
-      'Returns a welcome message indicating the NestJS application is running',
+    description: 'Returns a welcome message indicating the NestJS application is running',
   })
   @ApiResponse({
     status: 200,
@@ -27,8 +26,7 @@ export class AppController {
   @ApiTags('health')
   @ApiOperation({
     summary: 'Health check',
-    description:
-      'Returns the health status of the application and database connection',
+    description: 'Returns the health status of the application and database connection',
   })
   @ApiResponse({
     status: 200,

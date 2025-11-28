@@ -19,7 +19,7 @@ export class PublicBusinessInfoDto {
 
   @ApiProperty({
     example: { id: 1, name: 'Electronics' },
-    description: 'Business type information'
+    description: 'Business type information',
   })
   businessType: {
     id: number;
@@ -60,7 +60,7 @@ export class PublicProductDto {
 
   @ApiProperty({
     example: { id: 5, name: 'Electronics' },
-    description: 'Product category'
+    description: 'Product category',
   })
   category: {
     id: number;
@@ -76,9 +76,9 @@ export class PublicProductDetailDto extends PublicProductDto {
     example: {
       id: 1,
       businessName: 'TechStore Inc.',
-      logo: 'https://cloudinary.com/logo.jpg'
+      logo: 'https://cloudinary.com/logo.jpg',
     },
-    description: 'Basic business information'
+    description: 'Basic business information',
   })
   business: {
     id: number;
@@ -109,8 +109,8 @@ export class PaginatedProductsDto {
       totalItems: 100,
       totalPages: 5,
       hasNextPage: true,
-      hasPreviousPage: false
-    }
+      hasPreviousPage: false,
+    },
   })
   meta: {
     page: number;
@@ -144,7 +144,10 @@ export class StoreFrontResponseDto {
   @ApiProperty({ example: ['Joggers', 'Dress'], required: false })
   categoryName?: string[];
 
-  @ApiProperty({ example: ['https://cloudinary.com/cat1.jpg', 'https://cloudinary.com/cat2.jpg'], required: false })
+  @ApiProperty({
+    example: ['https://cloudinary.com/cat1.jpg', 'https://cloudinary.com/cat2.jpg'],
+    required: false,
+  })
   categoryImage?: string[];
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })

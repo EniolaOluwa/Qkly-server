@@ -9,13 +9,10 @@ export class OrderAuthorizationGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private orderService: OrderService,
-  ) { }
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const action = this.reflector.get<OrderAction>(
-      ORDER_ACTION_KEY,
-      context.getHandler(),
-    );
+    const action = this.reflector.get<OrderAction>(ORDER_ACTION_KEY, context.getHandler());
 
     if (!action) {
       return true; // No specific authorization required

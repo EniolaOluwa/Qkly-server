@@ -36,10 +36,9 @@ export class PaymentService {
     private readonly paystackProvider: PaystackProvider,
   ) {
     // Get configured provider from environment
-    const configuredProvider = this.configService.get<string>(
-      'PAYMENT_PROVIDER',
-      PaymentProviderType.PAYSTACK,
-    ).toUpperCase();
+    const configuredProvider = this.configService
+      .get<string>('PAYMENT_PROVIDER', PaymentProviderType.PAYSTACK)
+      .toUpperCase();
 
     this.providerType = configuredProvider as PaymentProviderType;
 
@@ -78,9 +77,7 @@ export class PaymentService {
   /**
    * Create a virtual account/wallet for a customer
    */
-  async createVirtualAccount(
-    dto: CreateVirtualAccountDto,
-  ): Promise<VirtualAccountResponseDto> {
+  async createVirtualAccount(dto: CreateVirtualAccountDto): Promise<VirtualAccountResponseDto> {
     try {
       this.logger.log(
         `Creating virtual account for ${dto.customerEmail} using ${this.providerType}`,
@@ -107,9 +104,7 @@ export class PaymentService {
   /**
    * Get virtual account details
    */
-  async getVirtualAccountDetails(
-    walletReference: string,
-  ): Promise<VirtualAccountResponseDto> {
+  async getVirtualAccountDetails(walletReference: string): Promise<VirtualAccountResponseDto> {
     try {
       return await this.provider.getVirtualAccountDetails(walletReference);
     } catch (error) {
@@ -125,13 +120,9 @@ export class PaymentService {
   /**
    * Initialize a payment transaction
    */
-  async initializePayment(
-    dto: InitializePaymentRequestDto,
-  ): Promise<InitializePaymentResponseDto> {
+  async initializePayment(dto: InitializePaymentRequestDto): Promise<InitializePaymentResponseDto> {
     try {
-      this.logger.log(
-        `Initializing payment for ${dto.customerEmail}, amount: ${dto.amount}`,
-      );
+      this.logger.log(`Initializing payment for ${dto.customerEmail}, amount: ${dto.amount}`);
       return await this.provider.initializePayment(dto);
     } catch (error) {
       this.logger.error('Failed to initialize payment:', error.message);
@@ -142,9 +133,7 @@ export class PaymentService {
   /**
    * Verify a payment transaction
    */
-  async verifyPayment(
-    paymentReference: string,
-  ): Promise<VerifyPaymentResponseDto> {
+  async verifyPayment(paymentReference: string): Promise<VerifyPaymentResponseDto> {
     try {
       this.logger.log(`Verifying payment: ${paymentReference}`);
       return await this.provider.verifyPayment(paymentReference);
@@ -163,9 +152,7 @@ export class PaymentService {
    */
   async transferToBank(dto: TransferRequestDto): Promise<TransferResponseDto> {
     try {
-      this.logger.log(
-        `Initiating transfer: ${dto.amount} to ${dto.destinationAccountNumber}`,
-      );
+      this.logger.log(`Initiating transfer: ${dto.amount} to ${dto.destinationAccountNumber}`);
       return await this.provider.transferToBank(dto);
     } catch (error) {
       this.logger.error('Failed to transfer to bank:', error.message);
@@ -176,9 +163,7 @@ export class PaymentService {
   /**
    * Transfer funds between virtual wallets (if supported by provider)
    */
-  async transferBetweenWallets(
-    dto: TransferRequestDto,
-  ): Promise<TransferResponseDto> {
+  async transferBetweenWallets(dto: TransferRequestDto): Promise<TransferResponseDto> {
     try {
       if (!this.provider.transferBetweenWallets) {
         throw new InternalServerErrorException(
@@ -199,9 +184,7 @@ export class PaymentService {
   /**
    * Resolve bank account details
    */
-  async resolveBankAccount(
-    dto: ResolveBankAccountDto,
-  ): Promise<BankAccountDetailsDto> {
+  async resolveBankAccount(dto: ResolveBankAccountDto): Promise<BankAccountDetailsDto> {
     try {
       return await this.provider.resolveBankAccount(dto);
     } catch (error) {
@@ -229,10 +212,7 @@ export class PaymentService {
   /**
    * Process webhook event from provider
    */
-  async processWebhook(
-    payload: any,
-    signature?: string,
-  ): Promise<WebhookEventDto> {
+  async processWebhook(payload: any, signature?: string): Promise<WebhookEventDto> {
     try {
       // Validate signature if provided
       if (signature) {
@@ -271,9 +251,7 @@ export class PaymentService {
   getPaymentMethodsForProvider(paymentMethod: string): string[] {
     switch (paymentMethod) {
       case 'CARD':
-        return this.providerType === PaymentProviderType.PAYSTACK
-          ? ['card']
-          : ['CARD'];
+        return this.providerType === PaymentProviderType.PAYSTACK ? ['card'] : ['CARD'];
       case 'BANK_TRANSFER':
         return this.providerType === PaymentProviderType.PAYSTACK
           ? ['bank_transfer']
@@ -292,11 +270,8 @@ export class PaymentService {
     if (this.provider.getAccessToken) {
       return await this.provider.getAccessToken();
     }
-    throw new InternalServerErrorException(
-      'Access token not supported by current provider',
-    );
+    throw new InternalServerErrorException('Access token not supported by current provider');
   }
-
 
   /**
    * Health check for payment provider

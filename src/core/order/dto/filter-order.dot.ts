@@ -10,7 +10,13 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, OrderItemStatus } from '../interfaces/order.interface';
+import {
+  OrderStatus,
+  PaymentStatus,
+  PaymentMethod,
+  DeliveryMethod,
+  OrderItemStatus,
+} from '../interfaces/order.interface';
 import { PaginationDto } from '../../../common/queries/dto';
 
 export class FindAllOrdersDto extends PaginationDto {
@@ -142,7 +148,7 @@ export class UpdateOrderStatusDto {
   @ApiProperty({
     description: 'New order status',
     enum: OrderStatus,
-    example: OrderStatus.PROCESSING
+    example: OrderStatus.PROCESSING,
   })
   @IsEnum(OrderStatus)
   status: OrderStatus;
@@ -150,7 +156,7 @@ export class UpdateOrderStatusDto {
   @ApiProperty({
     description: 'Notes or reason for status change',
     example: 'Order confirmed and processing started',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()
@@ -159,7 +165,7 @@ export class UpdateOrderStatusDto {
   @ApiProperty({
     description: 'Additional metadata for status change',
     example: { changedBy: 'admin', reason: 'customer request' },
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsObject()
@@ -170,7 +176,7 @@ export class UpdateOrderItemStatusDto {
   @ApiProperty({
     description: 'New order item status',
     enum: OrderItemStatus,
-    example: OrderItemStatus.PROCESSING
+    example: OrderItemStatus.PROCESSING,
   })
   @IsEnum(OrderItemStatus)
   status: OrderItemStatus;
@@ -178,7 +184,7 @@ export class UpdateOrderItemStatusDto {
   @ApiProperty({
     description: 'Notes or reason for status change',
     example: 'Product shipped separately',
-    required: false
+    required: false,
   })
   @IsOptional()
   @IsString()

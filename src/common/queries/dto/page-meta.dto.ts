@@ -2,8 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PageMetaDtoParameters } from '../../interfaces/pagination.interface';
 
 export class PaginationMetadataDto {
-
-
   @ApiProperty()
   readonly page: number;
 
@@ -21,7 +19,6 @@ export class PaginationMetadataDto {
 
   @ApiProperty()
   readonly hasNextPage: boolean;
-
 
   constructor({ pageOptionsDto, itemCount }: PageMetaDtoParameters) {
     const { page, limit } = pageOptionsDto;
