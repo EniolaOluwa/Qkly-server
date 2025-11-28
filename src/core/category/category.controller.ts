@@ -119,8 +119,8 @@ export class CategoryController {
   }
 
 
+  @Public()
   @Get('business/:businessId')
-  @ApiBearerAuth()
   @ApiOperation({
     summary: 'Fetch all categories for a business',
     description: 'Returns a list of all categories belonging to the specified business.',

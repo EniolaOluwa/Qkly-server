@@ -144,73 +144,67 @@ export class UsersService {
   }
 
   async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
-    try {
-      // Find user by email
-      const user = await this.userRepository.findOne({
-        where: { email: loginDto.email },
-      });
 
-      if (!user) {
-        ErrorHelper.UnauthorizedException('Invalid email or password');
-      }
+    // Find user by email
+    const user = await this.userRepository.findOne({
+      where: { email: loginDto.email },
+    });
 
-      // Verify password
-      if (!CryptoUtil.verifyPassword(loginDto.password, user.password)) {
-        ErrorHelper.UnauthorizedException('Invalid email or password');
-      }
 
-      // Update user's device ID and location if provided
-      const updateData: Partial<User> = {};
-      if (loginDto.deviceid) {
-        updateData.deviceId = loginDto.deviceid;
-      }
-      if (loginDto.longitude !== undefined) {
-        updateData.longitude = loginDto.longitude;
-      }
-      if (loginDto.latitude !== undefined) {
-        updateData.latitude = loginDto.latitude;
-      }
-
-      // Update user if there's data to update
-      if (Object.keys(updateData).length > 0) {
-        await this.userRepository.update(user.id, updateData);
-      }
-
-      // Generate JWT payload
-      const payload = {
-        sub: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        deviceId: loginDto.deviceid,
-        role: user.role,
-      };
-
-      // Generate JWT token
-      const accessToken = this.jwtService.sign(payload);
-
-      // Return user information with token
-      return {
-        message: 'User logged in successfully',
-        accessToken,
-        tokenType: 'Bearer',
-        expiresIn: 3600, // 1 hour in seconds
-        userId: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phone: user.phone,
-        isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
-        onboardingStep: user.onboardingStep,
-      };
-    } catch (error) {
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-
-      ErrorHelper.InternalServerErrorException('Failed to login user');
+    if (!user) {
+      ErrorHelper.UnauthorizedException('Invalid email or password');
     }
+
+    // Verify password
+    if (!CryptoUtil.verifyPassword(loginDto.password, user.password)) {
+      ErrorHelper.UnauthorizedException('Invalid email or password');
+    }
+
+    // Update user's device ID and location if provided
+    const updateData: Partial<User> = {};
+    if (loginDto.deviceid) {
+      updateData.deviceId = loginDto.deviceid;
+    }
+    if (loginDto.longitude !== undefined) {
+      updateData.longitude = loginDto.longitude;
+    }
+    if (loginDto.latitude !== undefined) {
+      updateData.latitude = loginDto.latitude;
+    }
+
+    // Update user if there's data to update
+    if (Object.keys(updateData).length > 0) {
+      await this.userRepository.update(user.id, updateData);
+    }
+
+    // Generate JWT payload
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      deviceId: loginDto.deviceid,
+      role: user.role,
+    };
+
+    // Generate JWT token
+    const accessToken = this.jwtService.sign(payload);
+
+    // Return user information with token
+    return {
+      message: 'User logged in successfully',
+      accessToken,
+      tokenType: 'Bearer',
+      expiresIn: 3600, // 1 hour in seconds
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
+      onboardingStep: user.onboardingStep,
+    };
   }
 
   // Termii sms otp
@@ -218,50 +212,44 @@ export class UsersService {
     userId: number,
     phone: string,
   ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
-    try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId, phone },
-      });
+    const user = await this.userRepository.findOne({
+      where: { id: userId, phone },
+    });
 
-      if (!user) {
-        ErrorHelper.NotFoundException(
-          'User with this ID and phone number not found',
-        );
-      }
-
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-      // Set OTP expiry to 5 minutes from now
-      const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + 5);
-
-      // Create new OTP record
-      const otp = this.otpRepository.create({
-        userId,
-        otp: otpCode,
-        otpType: OtpType.PHONE,
-        purpose: OtpPurpose.PHONE_VERIFICATION,
-        expiresAt,
-        isUsed: false,
-      });
-
-      await this.otpRepository.save(otp);
-
-
-      // Send OTP via Termii SMS
-      await this.sendOtpViaTermii(phone, otpCode);
-
-      return {
-        message: 'OTP sent successfully to your phone number',
-        expiryInMinutes: 5,
-        expiryTimestamp: expiresAt,
-      };
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException('Failed to generate OTP');
+    if (!user) {
+      ErrorHelper.NotFoundException(
+        'User with this ID and phone number not found',
+      );
     }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Set OTP expiry to 5 minutes from now
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 5);
+
+    // Create new OTP record
+    const otp = this.otpRepository.create({
+      userId,
+      otp: otpCode,
+      otpType: OtpType.PHONE,
+      purpose: OtpPurpose.PHONE_VERIFICATION,
+      expiresAt,
+      isUsed: false,
+    });
+
+    await this.otpRepository.save(otp);
+
+
+    // Send OTP via Termii SMS
+    await this.sendOtpViaTermii(phone, otpCode);
+
+    return {
+      message: 'OTP sent successfully to your phone number',
+      expiryInMinutes: 5,
+      expiryTimestamp: expiresAt,
+    };
+
   }
 
   async verifyPhoneOtp(
