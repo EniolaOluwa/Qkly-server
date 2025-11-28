@@ -1,9 +1,9 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import type { ThrottlerLimitDetail } from '@nestjs/throttler';
-import { ThrottlerException, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
-import { User } from '../../users';
 import { ErrorHelper } from '../../../common/utils';
+import { User } from '../../users';
 
 
 @Injectable()
@@ -17,7 +17,7 @@ export class LeadSubmissionThrottleGuard extends ThrottlerGuard {
     const headers = [
       'x-forwarded-for',
       'x-real-ip',
-      'cf-connecting-ip', // Cloudflare
+      'cf-connecting-ip',
       'x-client-ip',
       'true-client-ip',
     ];

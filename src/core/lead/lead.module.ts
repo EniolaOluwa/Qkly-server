@@ -1,15 +1,22 @@
 import { Module } from '@nestjs/common';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { LeadService } from './lead.service';
 import { LeadForm } from './entity/leadForm.entity';
-import { LeadController } from './lead.controller';
 import { Leads } from './entity/leads.entity';
+import { LeadController } from './lead.controller';
+import { LeadService } from './lead.service';
+import { PublicLeadController } from './public-lead.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LeadForm, Leads])],
-  controllers: [LeadController],
+  imports: [
+    TypeOrmModule.forFeature([LeadForm, Leads]),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }]),
+  ],
+  controllers: [LeadController, PublicLeadController],
   providers: [LeadService],
   exports: [LeadService],
 })
-
-export class LeadModule {}
+export class LeadModule { }

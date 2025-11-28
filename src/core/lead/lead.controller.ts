@@ -1,6 +1,4 @@
-import { Public } from '@app/common/decorators/public.decorator';
 import {
-    BadRequestException,
     Body,
     Controller,
     Delete,
@@ -11,7 +9,7 @@ import {
     Patch,
     Post,
     Request,
-    UseGuards,
+    UseGuards
 } from '@nestjs/common';
 import {
     ApiBadRequestResponse,
@@ -22,17 +20,16 @@ import {
     ApiOperation,
     ApiTags
 } from '@nestjs/swagger';
+import { ErrorHelper } from '../../common/utils';
 import { HttpResponse } from '../../common/utils/http-response.utils';
 import { JwtAuthGuard } from '../users';
-import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
+import { CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
 import { LeadService } from './lead.service';
-import { ErrorHelper } from '../../common/utils';
 
 @ApiTags('Lead Forms')
 @Controller('lead-forms')
 export class LeadController {
     constructor(private readonly leadService: LeadService) { }
-
     @Post()
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
