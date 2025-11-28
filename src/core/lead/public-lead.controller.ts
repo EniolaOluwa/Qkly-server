@@ -88,7 +88,7 @@ export class PublicLeadController {
 
 
   @Public()
-  @Post(':publicId/submit')
+  @Post('submit/:publicId')
  // @UseGuards(LeadSubmissionThrottleGuard)
 //  @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
   @ApiOperation({
@@ -148,6 +148,8 @@ export class PublicLeadController {
     })) dto: CreateLeadDto,
     @Req() req: Request,
   ) {
+
+
     // Extract tracking information from request
     const trackingData = {
       ipAddress: this.getClientIp(req),
@@ -169,7 +171,6 @@ export class PublicLeadController {
     );
 
     
-
     return HttpResponse.success({
       data: {
         id: data.id,
