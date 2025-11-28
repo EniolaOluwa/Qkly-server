@@ -240,9 +240,10 @@ export class CreateLeadFormDto {
   customStyling?: CustomStylingDto;
 
   // These will be set from auth context
-  businessId?: number;
+  businessId: number;
   createdBy?: number;
 }
+
 
 export class UpdateLeadFormDto extends PartialType(CreateLeadFormDto) {
   @ApiPropertyOptional()

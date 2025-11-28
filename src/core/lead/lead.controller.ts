@@ -41,14 +41,9 @@ export class LeadController {
     @ApiCreatedResponse({ description: 'Lead form created successfully' })
     @ApiBadRequestResponse({ description: 'Invalid input data' })
     async createLeadForm(@Body() dto: CreateLeadFormDto, @Request() req) {
-        const userId = req.user.id;
-        const businessId = req.user.businessId;
-
-        if (!businessId) {
-            ErrorHelper.BadRequestException('User must have a business to create lead forms');
-        }
-
-        const data = await this.leadService.createLeadForm(dto, userId, businessId);
+        const userId = req.user.userId;
+  
+        const data = await this.leadService.createLeadForm(dto, userId);
         return HttpResponse.success({
             data,
             message: 'Lead form created successfully',

@@ -82,6 +82,8 @@ export class ProductService {
         userId
       });
 
+      console.log(product)
+
       return await this.productRepository.save(product);
     } catch (error) {
       ErrorHelper.InternalServerErrorException(`Error creating product: ${error.message}`, error);
@@ -238,7 +240,7 @@ export class ProductService {
     try {
       const product = await this.productRepository.findOne({
         where: { id },
-        relations: ['user', 'category', 'business'],
+        relations: ['user', 'category', 'business', 'sizes'],
       });
 
       if (!product) {

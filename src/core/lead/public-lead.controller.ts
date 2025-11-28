@@ -89,8 +89,8 @@ export class PublicLeadController {
 
   @Public()
   @Post(':publicId/submit')
-  @UseGuards(LeadSubmissionThrottleGuard)
-  @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
+ // @UseGuards(LeadSubmissionThrottleGuard)
+//  @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Submit a lead (Public)',
     description: 'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address. Collects tracking information including IP, device type, browser, referrer, and UTM parameters.',
@@ -167,6 +167,8 @@ export class PublicLeadController {
       trackingData,
       utmParameters,
     );
+
+    
 
     return HttpResponse.success({
       data: {

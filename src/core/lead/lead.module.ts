@@ -6,10 +6,11 @@ import { Leads } from './entity/leads.entity';
 import { LeadController } from './lead.controller';
 import { LeadService } from './lead.service';
 import { PublicLeadController } from './public-lead.controller';
+import { Business } from '../businesses/business.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([LeadForm, Leads]),
+    TypeOrmModule.forFeature([LeadForm, Leads, Business]),
     ThrottlerModule.forRoot([{
       ttl: 60000,
       limit: 10,
@@ -19,4 +20,6 @@ import { PublicLeadController } from './public-lead.controller';
   providers: [LeadService],
   exports: [LeadService],
 })
+
+
 export class LeadModule { }
