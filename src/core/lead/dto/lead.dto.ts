@@ -2,7 +2,7 @@ import { IsString, IsOptional, IsArray, IsBoolean, ValidateNested, IsObject, IsU
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
-class InputField {
+export class InputField {
   @ApiProperty({
     description: 'Input field type (e.g., text, email, phone, textarea)',
     example: 'email',

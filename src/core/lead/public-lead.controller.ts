@@ -24,6 +24,8 @@ import { HttpResponse } from '../../common/utils/http-response.utils';
 import { CreateLeadDto } from './dto/lead.dto';
 import { LeadSubmissionThrottleGuard } from './guards/throttle.guards';
 import { LeadService } from './lead.service';
+import { FormResponseDto, LeadSubmissionResponseDto } from './dto/lead-response';
+
 
 @ApiTags('Public Forms')
 @Controller('forms')
@@ -38,9 +40,30 @@ export class PublicLeadController {
     summary: 'Get public form details',
     description: 'Retrieves form configuration for public display. No authentication required.',
   })
-  @ApiOkResponse({ description: 'Form details retrieved successfully' })
-  @ApiNotFoundResponse({ description: 'Form not found or inactive' })
-  @ApiTooManyRequestsResponse({ description: 'Too many requests' })
+  @ApiOkResponse({
+    description: 'Form details retrieved successfully',
+    type: FormResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Form not found or inactive',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Form not found',
+        error: 'Not Found'
+      }
+    }
+  })
+  @ApiTooManyRequestsResponse({
+    description: 'Too many requests',
+    schema: {
+      example: {
+        statusCode: 429,
+        message: 'Too many requests',
+        error: 'Too Many Requests'
+      }
+    }
+  })
   async getPublicForm(@Param('publicId') publicId: string) {
     const form = await this.leadService.getFormByPublicId(publicId);
 
@@ -70,17 +93,48 @@ export class PublicLeadController {
   @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Submit a lead (Public)',
-    description: 'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address.',
+    description: 'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address. Collects tracking information including IP, device type, browser, referrer, and UTM parameters.',
   })
-  @ApiCreatedResponse({ description: 'Lead submitted successfully' })
-  @ApiBadRequestResponse({ description: 'Invalid input or form inactive' })
-  @ApiNotFoundResponse({ description: 'Form not found' })
+  @ApiCreatedResponse({
+    description: 'Lead submitted successfully',
+    type: LeadSubmissionResponseDto,
+    schema: {
+      example: {
+        data: {
+          id: 123,
+          message: 'Thank you! Your submission has been received.',
+          redirectUrl: 'https://example.com/thank-you'
+        },
+        message: 'Lead submitted successfully'
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input, missing required fields, or form inactive',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Email is required',
+        error: 'Bad Request'
+      }
+    }
+  })
+  @ApiNotFoundResponse({
+    description: 'Form not found',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Form not found',
+        error: 'Not Found'
+      }
+    }
+  })
   @ApiTooManyRequestsResponse({
     description: 'Too many submissions. Please try again later.',
     schema: {
       example: {
         statusCode: 429,
-        message: 'Too many submissions. Please try again later.',
+        message: 'Too many submissions. Please try again in a few minutes.',
         error: 'Too Many Requests'
       }
     }
