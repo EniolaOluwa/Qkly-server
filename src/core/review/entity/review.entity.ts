@@ -13,7 +13,7 @@ import { Product } from '../../product/entity/product.entity';
 import { Business } from '../../businesses/business.entity';
 import { OrderItem } from '../../order/entity/order-items.entity';
 import { Order } from '../../order/entity/order.entity';
-import { User } from '../../users';
+import { User } from '../../users/entity/user.entity';
 
 @Entity('reviews')
 export class Review {

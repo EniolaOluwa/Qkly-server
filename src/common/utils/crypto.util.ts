@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { ErrorHelper } from './error.utils';
 
 export class CryptoUtil {
   // Encryption key for PIN - In production, this should be from environment variables
@@ -61,7 +62,7 @@ export class CryptoUtil {
       const [ivHex, authTagHex, encrypted] = encryptedPin.split(':');
 
       if (!ivHex || !authTagHex || !encrypted) {
-        throw new Error('Invalid encrypted PIN format');
+        ErrorHelper.BadRequestException('Invalid encrypted PIN format');
       }
 
       const iv = Buffer.from(ivHex, 'hex');
@@ -80,7 +81,7 @@ export class CryptoUtil {
 
       return decrypted;
     } catch (error) {
-      throw new Error('Failed to decrypt PIN');
+      ErrorHelper.UnprocessableEntityException('Failed to decrypt PIN');
     }
   }
 

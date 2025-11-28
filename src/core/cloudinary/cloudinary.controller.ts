@@ -1,11 +1,8 @@
 import {
-  BadRequestException,
   Controller,
-  Delete,
-  Param,
   Post,
   UploadedFile,
-  UseInterceptors,
+  UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -17,8 +14,9 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { CloudinaryService } from './cloudinary.service';
+import { ErrorHelper } from '../../common/utils';
 import { HttpResponse } from '../../common/utils/http-response.utils';
+import { CloudinaryService } from './cloudinary.service';
 
 @ApiTags('Media Upload')
 @ApiBearerAuth()
@@ -62,7 +60,7 @@ export class CloudinaryController {
     },
   }))
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('File is required');
+    if (!file) ErrorHelper.BadRequestException('File is required');
 
     const data = await this.cloudinaryService.uploadImage(file);
 
@@ -71,19 +69,4 @@ export class CloudinaryController {
       message: 'Image Uploaded Successfully',
     });
   }
-
-  // @Delete(':publicId')
-  // @ApiOperation({ summary: 'Delete image from Cloudinary' })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Image deleted successfully',
-  // })
-  // @ApiBadRequestResponse({ description: 'Invalid publicId or delete failed' })
-  // async deleteImage(@Param('publicId') publicId: string) {
-  //   await this.cloudinaryService.deleteImage(publicId);
-  //   return HttpResponse.success({
-  //     data: null,
-  //     message: 'Image Uploaded Successfully',
-  //   });
-  // }
 }

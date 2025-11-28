@@ -1,15 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
+
+import { Repository, In } from 'typeorm';
+import { PaginationDto, PaginationMetadataDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CategoryService } from '../category/category.service';
-import { User } from '../users';
+import { User } from '../users/entity/user.entity';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
 import { generateRandomProduct } from '../../common/utils/product-generator';
+
 
 
 
@@ -223,13 +225,15 @@ export class ProductService {
         pageOptionsDto: query,
       });
     } catch (error) {
-      console.log(error);
+   
       ErrorHelper.InternalServerErrorException(
         `Error finding products: ${error.message}`,
         error
       );
     }
   }
+
+  
   async findProductById(id: number): Promise<Product> {
     try {
       const product = await this.productRepository.findOne({
@@ -364,4 +368,11 @@ export class ProductService {
       ErrorHelper.InternalServerErrorException(`Error deleting product: ${error.message}`, error);
     }
   }
+
+
+
+
+
+
+  
 }

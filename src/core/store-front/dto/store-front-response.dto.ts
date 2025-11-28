@@ -38,7 +38,7 @@ export class PublicProductDto {
   name: string;
 
   @ApiProperty({ example: 'Ergonomic wireless mouse with USB receiver' })
-  description: string;
+  description?: string;
 
   @ApiProperty({ example: 29.99 })
   price: number;

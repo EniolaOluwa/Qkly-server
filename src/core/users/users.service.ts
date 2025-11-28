@@ -3,7 +3,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
   UnauthorizedException
@@ -15,19 +14,21 @@ import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import {
   CreatePinResponseDto,
+  KycVerificationResponseDto,
   LoginDto,
+  LoginResponseDto,
   RegisterUserDto,
   RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
-import { MailDispatcherDto } from '../email/dto/sendMail.dto';
-import { signup } from '../email/templates/register.template';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { OnboardingStep } from './dto/onboarding-step.enum';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User } from './entity/user.entity';
+
+
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -45,6 +46,9 @@ export class UsersService {
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
+
+
+
     private walletProvisioningUtil: WalletProvisioningUtil,
   ) { }
 
@@ -57,6 +61,7 @@ export class UsersService {
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
+
       if (existingUserByEmail) {
         ErrorHelper.ConflictException('User with this email already exists');
       }
@@ -98,24 +103,17 @@ export class UsersService {
         role: savedUser.role,
       };
 
+
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
 
-      // email service 
-      const emailDispatcherPayload: MailDispatcherDto = {
-        to: user.email,
-        from: 'onboarding@resend.dev',
-        subject: 'Welcome message',
-        html: signup(user.firstName),
-      };
-
-
-      // send mail to user
-      // this.emailService.emailDispatcher(emailDispatcherPayload);
-
+      /**
+       * TODO: Send Email to user
+      */
 
       // Return user information with token
       return {
+        message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
         expiresIn: EXPIRATION_TIME_SECONDS,
@@ -137,38 +135,15 @@ export class UsersService {
     }
   }
 
-
   async findUserByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({ where: { email } });
   }
-  async findUserById(id: number) {
-    const user = await this.userRepository.findOne({
-      where: { id },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        isEmailVerified: true,
-        isPhoneVerified: true,
-        onboardingStep: true,
-        isOnboardingCompleted: true,
-        deviceId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
 
-    if (!user) {
-      ErrorHelper.NotFoundException('User Not Found');
-    }
-
-    return user
+  async findUserById(id: number): Promise<User | null> {
+    return this.userRepository.findOne({ where: { id } });
   }
 
-  async loginUser(loginDto: LoginDto) {
+  async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
     try {
       // Find user by email
       const user = await this.userRepository.findOne({
@@ -216,9 +191,10 @@ export class UsersService {
 
       // Return user information with token
       return {
+        message: 'User logged in successfully',
         accessToken,
         tokenType: 'Bearer',
-        expiresIn: 3600,
+        expiresIn: 3600, // 1 hour in seconds
         userId: user.id,
         email: user.email,
         firstName: user.firstName,
@@ -232,14 +208,16 @@ export class UsersService {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
+
       ErrorHelper.InternalServerErrorException('Failed to login user');
     }
   }
 
+  // Termii sms otp
   async generatePhoneOtp(
     userId: number,
     phone: string,
-  ) {
+  ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId, phone },
@@ -274,6 +252,7 @@ export class UsersService {
       await this.sendOtpViaTermii(phone, otpCode);
 
       return {
+        message: 'OTP sent successfully to your phone number',
         expiryInMinutes: 5,
         expiryTimestamp: expiresAt,
       };
@@ -289,7 +268,7 @@ export class UsersService {
     userId: number,
     phone: string,
     otpCode: string,
-  ) {
+  ): Promise<{ message: string; verified: boolean }> {
     try {
       // Find user by ID and phone number
       const user = await this.userRepository.findOne({
@@ -337,6 +316,7 @@ export class UsersService {
       });
 
       return {
+        message: 'Phone number verified successfully',
         verified: true,
       };
     } catch (error) {
@@ -350,11 +330,12 @@ export class UsersService {
     }
   }
 
+  // KYC - dojah
   async verifyBvnWithSelfie(
     userId: number,
     bvn: string,
     selfieImageFile: Express.Multer.File,
-  ) {
+  ): Promise<KycVerificationResponseDto> {
     try {
       // Get Dojah API configuration
       const dojahBaseUrl = this.configService.get<string>(
@@ -469,7 +450,7 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            this.logger.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
           } else {
             console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
           }
@@ -482,6 +463,7 @@ export class UsersService {
       // Return response based on verification result
       if (isVerified) {
         return {
+          message: 'BVN verification completed successfully',
           first_name: verificationData.first_name,
           middle_name: verificationData.middle_name,
           last_name: verificationData.last_name,
@@ -516,6 +498,7 @@ export class UsersService {
   }
 
 
+  // Pin creation
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
       // Validate PIN format (4 digits only)
@@ -539,6 +522,7 @@ export class UsersService {
       });
 
       return {
+        message: 'PIN created successfully',
         success: true,
       };
     } catch (error) {
@@ -553,6 +537,7 @@ export class UsersService {
   }
 
   async generateCreatePinOtp(userId: number): Promise<{
+    message: string;
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
@@ -595,6 +580,7 @@ export class UsersService {
       await this.sendOtpViaTermii(user.phone, otpCode);
 
       return {
+        message: 'OTP sent successfully to your phone number',
         maskedPhone: this.maskPhoneNumber(user.phone),
         expiryInMinutes: 5,
       };
@@ -610,6 +596,7 @@ export class UsersService {
   }
 
   async verifyCreatePinOtp(userId: number, otpCode: string): Promise<{
+    message: string;
     verified: boolean;
     reference: string;
   }> {
@@ -654,6 +641,7 @@ export class UsersService {
       await this.otpRepository.save(referenceOtp);
 
       return {
+        message: 'OTP verified successfully. You can now create your PIN.',
         verified: true,
         reference,
       };
@@ -665,7 +653,10 @@ export class UsersService {
     }
   }
 
-  async createPinWithReference(userId: number, pin: string, reference: string) {
+  async createPinWithReference(userId: number, pin: string, reference: string): Promise<{
+    message: string;
+    success: boolean;
+  }> {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(pin)) {
@@ -719,6 +710,7 @@ export class UsersService {
       });
 
       return {
+        message: 'PIN created successfully',
         success: true,
       };
     } catch (error) {
@@ -732,7 +724,9 @@ export class UsersService {
     }
   }
 
+  // Password api
   async forgotPassword(email: string): Promise<{
+    message: string;
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
@@ -774,6 +768,7 @@ export class UsersService {
       const maskedPhone = this.maskPhoneNumber(user.phone);
 
       return {
+        message: 'OTP sent successfully to your phone number',
         maskedPhone,
         expiryInMinutes: 5,
       };
@@ -943,7 +938,7 @@ export class UsersService {
   async resetPassword(
     newPassword: string,
     resetToken: string,
-  ): Promise<{ success: boolean }> {
+  ): Promise<{ message: string; success: boolean }> {
     try {
       // Find the reset token in the database
       const tokenRecord = await this.otpRepository.findOne({
@@ -996,6 +991,7 @@ export class UsersService {
       );
 
       return {
+        message: 'Password reset successfully',
         success: true,
       };
     } catch (error) {
@@ -1012,8 +1008,9 @@ export class UsersService {
 
   async changePassword(
     changePassword: ChangePasswordDto
-  ): Promise<{ message: string; success: boolean }> {
+  ): Promise<any> {
     try {
+
       // Validate inputs
       if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
         ErrorHelper.BadRequestException('User ID, old password, and new password are required');
@@ -1046,10 +1043,7 @@ export class UsersService {
 
       this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
 
-      return {
-        message: 'Password changed successfully',
-        success: true,
-      };
+      return
     } catch (error) {
       this.logger.error(`Failed to change password for user ${changePassword.userId}:`, error);
       ErrorHelper.InternalServerErrorException('Failed to change password');
@@ -1139,15 +1133,15 @@ export class UsersService {
     try {
       // Validate PIN format (4 digits only)
       if (!/^\d{4}$/.test(changePinDto.newPin)) {
-        throw new BadRequestException('New PIN must be exactly 4 digits');
+        ErrorHelper.BadRequestException('New PIN must be exactly 4 digits');
       }
 
       if (changePinDto.newPin !== changePinDto.confirmPin) {
-        throw new BadRequestException('New PIN and confirm PIN do not match');
+        ErrorHelper.BadRequestException('New PIN and confirm PIN do not match');
       }
 
       if (changePinDto.oldPin === changePinDto.newPin) {
-        throw new BadRequestException('New PIN must be different from old PIN');
+        ErrorHelper.BadRequestException('New PIN must be different from old PIN');
       }
 
       // Find user by ID
@@ -1156,17 +1150,17 @@ export class UsersService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (!user.pin) {
-        throw new BadRequestException('User does not have a PIN set. Please create a PIN first.');
+        ErrorHelper.BadRequestException('User does not have a PIN set. Please create a PIN first.');
       }
 
       // Verify old PIN
       const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
       if (!isOldPinValid) {
-        throw new UnauthorizedException('Invalid current PIN');
+        ErrorHelper.UnauthorizedException('Invalid current PIN');
       }
 
       // Encrypt the new PIN
@@ -1195,7 +1189,53 @@ export class UsersService {
         `Failed to change PIN for user ${changePinDto.userId}:`,
         error,
       );
-      throw new InternalServerErrorException('Failed to change PIN');
+      ErrorHelper.InternalServerErrorException('Failed to change PIN');
     }
   }
+
+
+
+
+  async checkUser(
+    identifier: string | number,
+    identifierType: 'id' | 'email' | 'phone' = 'id',
+  ): Promise<User> {
+    try {
+      // Build where clause based on identifier type
+      let whereClause: any;
+
+      if (identifierType === 'id') {
+        whereClause = { id: Number(identifier) };
+      } else if (identifierType === 'email') {
+        whereClause = { email: identifier };
+      } else if (identifierType === 'phone') {
+        whereClause = { phone: identifier };
+      } else {
+        ErrorHelper.BadRequestException(`Invalid identifier type: ${identifierType}`);
+      }
+
+      // Find user
+      const user = await this.userRepository.findOne({ where: whereClause });
+
+      if (!user) {
+        ErrorHelper.NotFoundException(
+          `User not found with ${identifierType}: ${identifier}`,
+        );
+      }
+
+      return user;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error checking user with ${identifierType}: ${identifier}`,
+        error,
+      );
+      ErrorHelper.InternalServerErrorException('Failed to check user');
+    }
+  }
+
+
+
 }

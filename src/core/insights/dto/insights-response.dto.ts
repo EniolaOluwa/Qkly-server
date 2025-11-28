@@ -11,6 +11,7 @@ export class TrafficSourceDto {
   visits: number;
 }
 
+
 export class InsightsKPIDto {
   @ApiProperty({ example: 1000, description: 'Total visits to store' })
   totalVisits: number;
@@ -21,6 +22,7 @@ export class InsightsKPIDto {
   @ApiProperty({ example: 5000000, description: 'Total revenue in Naira' })
   revenue: number;
 }
+
 
 export class InsightsResponseDto {
   @ApiProperty({ type: InsightsKPIDto })

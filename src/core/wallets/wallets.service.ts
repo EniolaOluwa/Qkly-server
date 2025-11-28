@@ -21,6 +21,7 @@ import {
   WalletTransferResponseDto,
 } from './dto/wallet-transfer.dto';
 import { PaymentService } from '../payment/payment.service';
+import { ErrorHelper } from '../../common/utils';
 
 @Injectable()
 export class WalletsService {
@@ -43,11 +44,11 @@ export class WalletsService {
       const user = await this.userRepository.findOne({ where: { id: userId } });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (user.walletReference) {
-        throw new BadRequestException('User already has a wallet');
+        ErrorHelper.BadRequestException('User already has a wallet');
       }
 
       // Use PaymentService to create virtual account
@@ -97,7 +98,7 @@ export class WalletsService {
         error.response?.data || error.message,
       );
 
-      throw new InternalServerErrorException('Failed to create wallet');
+      ErrorHelper.InternalServerErrorException('Failed to create wallet');
     }
   }
 
@@ -119,11 +120,11 @@ export class WalletsService {
       });
 
       if (!user) {
-        throw new NotFoundException('User not found');
+        ErrorHelper.NotFoundException('User not found');
       }
 
       if (!user.walletReference) {
-        throw new NotFoundException('User does not have a wallet');
+        ErrorHelper.NotFoundException('User does not have a wallet');
       }
 
       return {
@@ -137,7 +138,7 @@ export class WalletsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException(
+      ErrorHelper.InternalServerErrorException(
         'Failed to retrieve wallet information',
       );
     }
@@ -162,9 +163,9 @@ export class WalletsService {
         ],
       });
 
-      if (!user) throw new NotFoundException('User not found');
+      if (!user) ErrorHelper.NotFoundException('User not found');
       if (!user.walletReference)
-        throw new BadRequestException('User does not have a wallet');
+        ErrorHelper.BadRequestException('User does not have a wallet');
 
       // Use PaymentService to get balance
       const balance = await this.paymentService.getWalletBalance(
@@ -219,7 +220,7 @@ export class WalletsService {
       });
     } catch (error) {
       this.logger.error('Transfer to wallet/bank failed', error.stack);
-      throw new InternalServerErrorException('Transfer failed');
+      ErrorHelper.InternalServerErrorException('Transfer failed');
     }
   }
 
@@ -237,15 +238,15 @@ export class WalletsService {
       if (activeProvider === 'MONNIFY') {
         // Get Monnify provider instance and call OTP validation
         // This would require additional implementation
-        throw new Error('OTP validation not yet implemented for current provider');
+        ErrorHelper.InternalServerErrorException('OTP validation not yet implemented for current provider');
       }
 
-      throw new BadRequestException(
+      ErrorHelper.BadRequestException(
         'OTP validation not supported by current payment provider',
       );
     } catch (error) {
       this.logger.error('OTP validation failed', error.stack);
-      throw new InternalServerErrorException('OTP validation failed');
+      ErrorHelper.InternalServerErrorException('OTP validation failed');
     }
   }
 
