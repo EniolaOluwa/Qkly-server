@@ -1,14 +1,22 @@
 import 'reflect-metadata';
 import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { finalize, map, Observable } from 'rxjs';
 
 export const IgnoredPropertyName = Symbol('IgnoredPropertyName');
+
+export interface HttpResponseWrapper {
+  data?: any;
+  message?: string;
+  meta?: any;
+  statusCode?: number;
+}
 
 @Injectable()
 export class TransformInterceptor<T> implements NestInterceptor<T, any> {
   intercept(context: ExecutionContext, next: CallHandler<any>): Observable<any> {
     const request = context.switchToHttp().getRequest<Request>();
+    const response = context.switchToHttp().getResponse<Response>();
     const { method, ip, url } = request;
     const now = Date.now();
     const timestamp = new Date().toISOString();
@@ -26,25 +34,22 @@ export class TransformInterceptor<T> implements NestInterceptor<T, any> {
     }
 
     return next.handle().pipe(
-      map((response: any) => {
-        let responseData: any = null;
-        let responseMessage: string = 'Success';
-        let responseMeta: any = null;
+      map((res: any) => {
+        // If response is already a wrapper object, use it
+        const wrapper: HttpResponseWrapper = typeof res === 'object' && ('data' in res || 'message' in res || 'meta' in res || 'statusCode' in res)
+          ? res
+          : { data: res };
 
-        if (response === null || response === undefined) {
-          responseData = null;
-        } else if (typeof response === 'object') {
-          // Check if already has data/message/meta structure
-          if ('data' in response || 'message' in response || 'meta' in response) {
-            responseData = response.data ?? null;
-            responseMessage = response.message ?? 'Success';
-            responseMeta = response.meta ?? null;
-          } else {
-            responseData = response; // preserve objects/arrays
-          }
-        } else {
-          // Primitive types (string, number, boolean)
-          responseData = response;
+        const responseData = wrapper.data ?? null;
+        const responseMessage = wrapper.message ?? 'Success';
+        const responseMeta = wrapper.meta ?? null;
+        const statusCode = wrapper.statusCode;
+
+        if (statusCode) {
+          response.status(statusCode);
+        } else if (method === 'DELETE' && (res === null || res === undefined)) {
+          response.status(204);
+          return null;
         }
 
         return {

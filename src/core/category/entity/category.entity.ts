@@ -12,16 +12,6 @@ export class Category {
   @Index()
   name: string;
 
-  @Column({ nullable: true })
-  parentId?: number;
-
-  @ManyToOne(() => Category, category => category.children)
-  @JoinColumn({ name: 'parentId' })
-  parent?: Category;
-
-  @OneToMany(() => Category, category => category.parent)
-  children?: Category[];
-
   @OneToMany(() => Product, product => product.category)
   products?: Product[];
 
