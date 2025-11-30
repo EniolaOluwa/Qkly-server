@@ -1,6 +1,3 @@
-//src/core/order/order.service.ts
-
-
 import { BadRequestException, ConflictException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,7 +14,7 @@ import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
-import { DeliveryMethod, OrderItemStatus, OrderStatus, PaymentDetails, PaymentMethod, PaymentStatus, SettlementDetails } from './interfaces/order.interface';
+import { DeliveryMethod, OrderItemStatus, OrderStatus, OrderStatusHistory, PaymentDetails, PaymentMethod, PaymentStatus, SettlementDetails } from './interfaces/order.interface';
 
 const SETTLEMENT_PERCENTAGE = 0.00;
 const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
@@ -44,166 +41,70 @@ export class OrderService {
     private readonly paymentService: PaymentService, // CHANGED: Use PaymentService
   ) { }
 
-
+  /**
+ * Create order for authenticated user
+ */
   async createOrder(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    return this.createOrderInternal(createOrderDto, userId);
+  }
 
+  /**
+   * Create order for guest (unauthenticated) user
+   */
+  async createGuestOrder(createOrderDto: CreateOrderDto): Promise<Order> {
+    return this.createOrderInternal(createOrderDto, null);
+  }
+
+  async findOrdersByCustomerEmail(
+    customerEmail: string,
+    query?: PaginationDto,
+  ): Promise<PaginationResultDto<Order>> {
     try {
-      const { businessId, items, ...orderData } = createOrderDto;
+      const qb = this.orderRepository
+        .createQueryBuilder('order')
+        .leftJoinAndSelect('order.items', 'items')
+        .leftJoinAndSelect('order.business', 'business')
+        .where('LOWER(order.customerEmail) = LOWER(:customerEmail)', { customerEmail })
+        .select([
+          'order',
+          'business.id',
+          'business.businessName',
+          'business.logo',
+          'items',
+        ]);
 
-      const user = await this.userRepository.findOne({ where: { id: userId } });
-      if (!user) {
-        ErrorHelper.NotFoundException('User not found');
-      }
+      const itemCount = await qb.getCount();
+      const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
 
-      // Verify business exists
-      const business = await this.businessRepository.findOne({
-        where: { id: businessId },
+      const data = await qb.skip(skip).take(limit).orderBy('order.createdAt', order).getMany();
+
+      const paginationDto: PaginationDto = query || {
+        skip,
+        limit,
+        order,
+        page: Math.floor(skip / limit) + 1,
+      };
+
+      return new PaginationResultDto(data, {
+        itemCount,
+        pageOptionsDto: paginationDto,
       });
-      if (!business) {
-        ErrorHelper.NotFoundException('Business not found');
-      }
-
-      if (business.userId !== userId) {
-        ErrorHelper.BadRequestException('You do not have access to this business');
-      }
-
-      const productIds = items.map((item) => item.productId);
-      const products = await this.productRepository.find({
-        where: { id: In(productIds) },
-        relations: ['sizes'],
-      });
-
-      const productsMap = new Map(products.map((product) => [product.id, product]));
-
-      const orderItems: OrderItem[] = [];
-      let subtotal = 0;
-
-      for (const item of items) {
-        const { productId, quantity, color, size } = item;
-        const product = productsMap.get(productId);
-
-        if (!product) {
-          ErrorHelper.NotFoundException(`Product with ID ${productId} not found`);
-        }
-
-        if (product.businessId !== businessId) {
-          ErrorHelper.BadRequestException(
-            `Product with ID ${productId} does not belong to the specified business`,
-          );
-        }
-
-        if (product.quantityInStock < quantity) {
-          ErrorHelper.BadRequestException(
-            `Insufficient inventory for product "${product.name}". Requested: ${quantity}, Available: ${product.quantityInStock}`,
-          );
-        }
-
-        if (product.hasVariation && color && !product.colors.includes(color)) {
-          ErrorHelper.BadRequestException(
-            `Invalid color "${color}" for product "${product.name}". Available colors: ${product.colors.join(', ')}`,
-          );
-        }
-
-        if (product.hasVariation && size) {
-          const validSizes: string[] = [];
-          for (const productSize of product.sizes) {
-            if (typeof productSize.value === 'string') {
-              validSizes.push(productSize.value);
-            } else if (Array.isArray(productSize.value)) {
-              validSizes.push(...productSize.value);
-            }
-          }
-
-          if (!validSizes.includes(size)) {
-            ErrorHelper.BadRequestException(
-              `Invalid size "${size}" for product "${product.name}". Available sizes: ${validSizes.join(', ')}`,
-            );
-          }
-        }
-
-        const itemSubtotal = product.price * quantity;
-        subtotal += itemSubtotal;
-
-        const orderItem = this.orderItemRepository.create({
-          productId,
-          productName: product.name,
-          productDescription: product.description,
-          price: product.price,
-          quantity,
-          subtotal: itemSubtotal,
-          color,
-          size,
-          imageUrls: product.images ? [...product.images].slice(0, 3) : [],
-        });
-
-        orderItems.push(orderItem);
-
-        product.quantityInStock -= quantity;
-        await queryRunner.manager.save(product);
-      }
-
-      // Calculate order totals
-      const shippingFee = this.calculateShippingFee(createOrderDto.deliveryMethod);
-      const tax = this.calculateTax(subtotal);
-      const discount = 0;
-      const total = subtotal + shippingFee + tax - discount;
-
-      // Generate order reference
-      const orderReference = `ORD-${uuidv4().substring(0, 8).toUpperCase()}`;
-      const transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
-
-      // Create order
-      const order = this.orderRepository.create({
-        ...orderData,
-        userId,
-        businessId,
-        orderReference,
-        transactionReference,
-        subtotal,
-        shippingFee,
-        tax,
-        discount,
-        total,
-        status: OrderStatus.PENDING,
-        paymentStatus: PaymentStatus.PENDING,
-      });
-
-      // Save order
-      const savedOrder = await queryRunner.manager.save(order);
-
-      // Associate order items with the saved order
-      for (const item of orderItems) {
-        item.orderId = savedOrder.id;
-        await queryRunner.manager.save(item);
-      }
-
-      // If payment method is Cash on Delivery, change status to confirmed
-      if (createOrderDto.paymentMethod === PaymentMethod.CASH_ON_DELIVERY) {
-        savedOrder.status = OrderStatus.CONFIRMED;
-        await queryRunner.manager.save(savedOrder);
-      }
-
-      // Commit transaction
-      await queryRunner.commitTransaction();
-
-      // Reload order with items
-      const completeOrder = await this.findOrderById(savedOrder.id);
-
-      return completeOrder;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Failed to create order: ${error.message}`, error.stack);
+      this.logger.error(`Failed to find orders by customer email: ${error.message}`, error.stack);
+      ErrorHelper.InternalServerErrorException(`Failed to find orders: ${error.message}`);
+    }
+  }
 
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+  async getOrderStatusHistory(orderId: number): Promise<OrderStatusHistory[]> {
+    try {
+      const order = await this.findOrderById(orderId);
+      return order.statusHistory || [];
+    } catch (error) {
+      if (error instanceof NotFoundException) {
         throw error;
       }
-
-      ErrorHelper.InternalServerErrorException(`Failed to create order: ${error.message}`);
-    } finally {
-      await queryRunner.release();
+      this.logger.error(`Failed to get order status history: ${error.message}`, error.stack);
+      ErrorHelper.InternalServerErrorException(`Failed to get status history: ${error.message}`);
     }
   }
 
@@ -537,18 +438,94 @@ export class OrderService {
     }
   }
 
+  // async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
+  //   try {
+  //     const { orderId } = initiatePaymentDto;
+
+  //     const order = await this.findOrderById(orderId);
+
+  //     if (order.paymentStatus === PaymentStatus.PAID) {
+  //       ErrorHelper.ConflictException('Payment already processed');
+  //     }
+
+  //     const business = await this.businessRepository.findOne({
+  //       where: { id: order.businessId },
+  //     });
+
+  //     if (!business) {
+  //       ErrorHelper.ConflictException('Business not found');
+  //     }
+
+  //     if (!business.paystackSubaccountCode) {
+  //       ErrorHelper.BadRequestException(
+  //         'Business subaccount not configured. Please contact support.',
+  //       );
+  //     }
+
+  //     // Calculate platform fee
+  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
+  //     const platformFee = order.total * (platformFeePercentage / 100);
+
+  //     // Initialize payment WITH SPLIT
+  //     const paymentResponse = await this.paymentService.initializePayment({
+  //       amount: Number(order.total),
+  //       customerName: order.customerName,
+  //       customerEmail: order.customerEmail,
+  //       paymentReference: order.transactionReference,
+  //       description: `Payment for Order ${order.orderReference}`,
+  //       currencyCode: 'NGN',
+  //       redirectUrl: initiatePaymentDto.redirectUrl ?? '',
+  //       paymentMethods: ['card', 'bank_transfer'],
+  //       metadata: {
+  //         orderId: order.id,
+  //         orderReference: order.orderReference,
+  //         businessId: business.id,
+  //         split: {
+  //           type: 'percentage',
+  //           platformFee: platformFeePercentage,
+  //           businessShare: 100 - platformFeePercentage,
+  //         },
+  //       },
+  //       // ADD SPLIT CONFIGURATION
+  //       subaccount: business.paystackSubaccountCode, // Auto-settle to business
+  //       transaction_charge: platformFee * 100,
+  //       bearer: 'account',
+  //     });
+
+  //     // Update order
+  //     await this.orderRepository.update(order.id, {
+  //       paymentStatus: PaymentStatus.INITIATED,
+  //     });
+
+  //     this.logger.log(`Payment with split initialized for order ${order.id}`);
+
+  //     return paymentResponse;
+  //   } catch (error) {
+  //     this.logger.error('Payment initialization failed:', error);
+  //     throw error;
+  //   }
+  // }
 
 
-  async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
+
+  async initializePayment(initiatePaymentDto: InitiatePaymentDto) {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
       const { orderId } = initiatePaymentDto;
-      const order = await this.findOrderById(orderId);
 
-      if (order.paymentStatus === PaymentStatus.PAID) {
-        ErrorHelper.ConflictException('Payment already processed');
+      // Load order inside transaction
+      const order = await queryRunner.manager.findOne(Order, {
+        where: { id: orderId },
+      });
+
+      if (!order) {
+        ErrorHelper.NotFoundException('Order not found');
       }
 
-      const business = await this.businessRepository.findOne({
+      const business = await queryRunner.manager.findOne(Business, {
         where: { id: order.businessId },
       });
 
@@ -556,55 +533,47 @@ export class OrderService {
         ErrorHelper.ConflictException('Business not found');
       }
 
-      if (!business.paystackSubaccountCode) {
-        ErrorHelper.BadRequestException(
-          'Business subaccount not configured. Please contact support.',
-        );
-      }
-
-      // Calculate platform fee
+      // Platform fee calc
       const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
-      const platformFee = order.total * (platformFeePercentage / 100);
+      const platformFee = Number(order.total) * (platformFeePercentage / 100);
 
-      // Initialize payment WITH SPLIT
-      const paymentResponse = await this.paymentService.initializePayment({
-        amount: Number(order.total),
-        customerName: order.customerName,
-        customerEmail: order.customerEmail,
-        paymentReference: order.transactionReference,
-        description: `Payment for Order ${order.orderReference}`,
-        currencyCode: 'NGN',
-        redirectUrl: initiatePaymentDto.redirectUrl ?? '',
-        paymentMethods: ['card', 'bank_transfer'],
-        metadata: {
-          orderId: order.id,
-          orderReference: order.orderReference,
-          businessId: business.id,
-          split: {
-            type: 'percentage',
-            platformFee: platformFeePercentage,
-            businessShare: 100 - platformFeePercentage,
-          },
-        },
-        // ADD SPLIT CONFIGURATION
-        subaccount: business.paystackSubaccountCode, // Auto-settle to business
-        transaction_charge: platformFee * 100,
-        bearer: 'account',
+      // Update order: paid + processing
+      order.paymentStatus = PaymentStatus.PAID;
+      order.status = OrderStatus.PROCESSING;
+      order.paymentDate = new Date();
+
+      // Add history entry
+      this.addStatusToHistory(
+        order,
+        OrderStatus.CONFIRMED,
+        null,
+        'Payment method: Payment Confirmed'
+      );
+
+      // Set confirmed status
+      order.status = OrderStatus.CONFIRMED;
+
+      // Save once, not twice
+      await queryRunner.manager.save(order);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Mock payment confirmed for order ${order.id}`);
+
+      // Fetch fresh order for return
+      return await this.orderRepository.findOne({
+        where: { id: order.id },
       });
 
-      // Update order
-      await this.orderRepository.update(order.id, {
-        paymentStatus: PaymentStatus.INITIATED,
-      });
-
-      this.logger.log(`Payment with split initialized for order ${order.id}`);
-
-      return paymentResponse;
     } catch (error) {
+      await queryRunner.rollbackTransaction();
       this.logger.error('Payment initialization failed:', error);
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
+
 
 
   /**
@@ -864,9 +833,11 @@ export class OrderService {
   // ORDER STATUS MANAGEMENT
   // ============================================================
 
+
   async updateOrderStatus(
     orderId: number,
     updateStatusDto: UpdateOrderStatusDto,
+    userId?: number,
   ): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -884,6 +855,9 @@ export class OrderService {
       if (notes) {
         order.notes = notes;
       }
+
+      // Add to status history
+      this.addStatusToHistory(order, status, userId, notes);
 
       // Update order items status based on order status
       let itemStatus: OrderItemStatus;
@@ -1027,6 +1001,195 @@ export class OrderService {
   // ============================================================
   // PRIVATE HELPER METHODS
   // ============================================================
+
+
+  private async createOrderInternal(
+    createOrderDto: CreateOrderDto,
+    userId: number | null,
+  ): Promise<Order> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const { businessId, items, ...orderData } = createOrderDto;
+      const isGuestOrder = userId === null;
+
+      // Verify business exists
+      const business = await this.businessRepository.findOne({
+        where: { id: businessId },
+      });
+
+      if (!business) {
+        ErrorHelper.NotFoundException('Business not found');
+      }
+
+      // For authenticated users, verify they own the business
+      if (!isGuestOrder) {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+
+        if (!user) {
+          ErrorHelper.NotFoundException('User not found');
+        }
+      }
+
+      // Fetch products
+      const productIds = items.map((item) => item.productId);
+      const products = await this.productRepository.find({
+        where: { id: In(productIds) },
+        relations: ['sizes'],
+      });
+
+      const productsMap = new Map(products.map((product) => [product.id, product]));
+
+      const orderItems: OrderItem[] = [];
+      let subtotal = 0;
+
+      // Process order items
+      for (const item of items) {
+        const { productId, quantity, color, size } = item;
+        const product = productsMap.get(productId);
+
+        if (!product) {
+          ErrorHelper.NotFoundException(`Product with ID ${productId} not found`);
+        }
+
+        if (product.businessId !== businessId) {
+          ErrorHelper.BadRequestException(
+            `Product with ID ${productId} does not belong to the specified business`,
+          );
+        }
+
+        if (product.quantityInStock < quantity) {
+          ErrorHelper.BadRequestException(
+            `Insufficient inventory for product "${product.name}". Requested: ${quantity}, Available: ${product.quantityInStock}`,
+          );
+        }
+
+        if (product.hasVariation && color && !product.colors.includes(color)) {
+          ErrorHelper.BadRequestException(
+            `Invalid color "${color}" for product "${product.name}". Available colors: ${product.colors.join(', ')}`,
+          );
+        }
+
+        if (product.hasVariation && size) {
+          const validSizes: string[] = [];
+          for (const productSize of product.sizes) {
+            if (typeof productSize.value === 'string') {
+              validSizes.push(productSize.value);
+            } else if (Array.isArray(productSize.value)) {
+              validSizes.push(...productSize.value);
+            }
+          }
+
+          if (!validSizes.includes(size)) {
+            ErrorHelper.BadRequestException(
+              `Invalid size "${size}" for product "${product.name}". Available sizes: ${validSizes.join(', ')}`,
+            );
+          }
+        }
+
+        const itemSubtotal = product.price * quantity;
+        subtotal += itemSubtotal;
+
+        const orderItem = this.orderItemRepository.create({
+          productId,
+          productName: product.name,
+          productDescription: product.description,
+          price: product.price,
+          quantity,
+          subtotal: itemSubtotal,
+          color,
+          size,
+          imageUrls: product.images ? [...product.images].slice(0, 3) : [],
+        });
+
+        orderItems.push(orderItem);
+
+        // Update inventory
+        product.quantityInStock -= quantity;
+        await queryRunner.manager.save(Product, product);
+      }
+
+      // Calculate order totals
+      const shippingFee = this.calculateShippingFee(createOrderDto.deliveryMethod);
+      const tax = this.calculateTax(subtotal);
+      const discount = 0;
+      const total = subtotal + shippingFee + tax - discount;
+
+      // Generate order reference
+      const orderReference = `ORD-${uuidv4().substring(0, 8).toUpperCase()}`;
+      const transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+      // Create initial status history
+      const initialStatusHistory: OrderStatusHistory[] = [
+        {
+          status: OrderStatus.PENDING,
+          timestamp: new Date(),
+          updatedBy: userId,
+          notes: isGuestOrder ? 'Order created by guest user' : 'Order created',
+        },
+      ];
+
+      // Create order
+      const order = this.orderRepository.create({
+        ...orderData,
+        userId,
+        businessId,
+        orderReference,
+        transactionReference,
+        subtotal,
+        shippingFee,
+        tax,
+        discount,
+        total,
+        status: OrderStatus.PENDING,
+        paymentStatus: PaymentStatus.PENDING,
+        isGuestOrder,
+        statusHistory: initialStatusHistory,
+      });
+
+      // Save order
+      const savedOrder = await queryRunner.manager.save(Order, order);
+
+      // Associate order items with the saved order
+      for (const item of orderItems) {
+        item.orderId = savedOrder.id;
+        await queryRunner.manager.save(OrderItem, item);
+      }
+
+      // If payment method is Cash on Delivery, change status to confirmed
+      if (createOrderDto.paymentMethod === PaymentMethod.CASH_ON_DELIVERY) {
+        savedOrder.status = OrderStatus.CONFIRMED;
+        this.addStatusToHistory(
+          savedOrder,
+          OrderStatus.CONFIRMED,
+          userId,
+          'Payment method: Cash on Delivery',
+        );
+        await queryRunner.manager.save(Order, savedOrder);
+      }
+
+      // Commit transaction
+      await queryRunner.commitTransaction();
+
+      // Reload order with items
+      const completeOrder = await this.findOrderById(savedOrder.id);
+
+      return completeOrder;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to create order: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      ErrorHelper.InternalServerErrorException(`Failed to create order: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
 
   /**
    * Process verified payment and update order
@@ -1413,5 +1576,28 @@ export class OrderService {
         `Invalid status transition from ${currentStatus} to ${newStatus}. Valid transitions: ${validTransitions[currentStatus].join(', ')}`,
       );
     }
+  }
+
+
+  private addStatusToHistory(
+    order: Order,
+    newStatus: OrderStatus,
+    userId?: number | null,
+    notes?: string,
+    metadata?: Record<string, any>,
+  ): void {
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+
+    const historyEntry: OrderStatusHistory = {
+      status: newStatus,
+      timestamp: new Date(),
+      updatedBy: userId,
+      notes,
+      metadata,
+    };
+
+    order.statusHistory.push(historyEntry);
   }
 }

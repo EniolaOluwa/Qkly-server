@@ -36,8 +36,9 @@ export class OrdersController {
     private readonly refundService: RefundService,
   ) { }
 
+
+  @Public()
   @Post()
-  @ApiAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Create a new order',
@@ -52,8 +53,93 @@ export class OrdersController {
     @Request() req,
     @Body() createOrderDto: CreateOrderDto,
   ): Promise<Order> {
-    return await this.orderService.createOrder(req.user.userId, createOrderDto);
+    return await this.orderService.createGuestOrder(createOrderDto);
   }
+
+
+
+  @Public()
+  @Get('customer/email/:email')
+  @ApiOperation({
+    summary: 'Get orders by customer email',
+    description: 'Retrieves all orders for a given customer email. Useful for order tracking without authentication.',
+  })
+  @ApiParam({
+    name: 'email',
+    required: true,
+    description: 'Customer email address',
+    example: 'customer@example.com',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (starts from 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Number of items per page',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Orders retrieved successfully',
+  })
+  async findOrdersByCustomerEmail(
+    @Param('email') email: string,
+    @Query() paginationDto: PaginationDto,
+  ): Promise<PaginationResultDto<Order>> {
+    return await this.orderService.findOrdersByCustomerEmail(email, paginationDto);
+  }
+
+
+  @Public()
+  @Get(':id/status-history')
+  @ApiOperation({
+    summary: 'Get order status history',
+    description: 'Retrieves the complete status history for an order, showing all status changes.',
+  })
+  @ApiParam({
+    name: 'id',
+    required: true,
+    description: 'Order ID',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Status history retrieved successfully',
+    schema: {
+      example: [
+        {
+          status: 'PENDING',
+          timestamp: '2024-01-15T10:30:00Z',
+          updatedBy: 1,
+          notes: 'Order created',
+        },
+        {
+          status: 'CONFIRMED',
+          timestamp: '2024-01-15T10:35:00Z',
+          updatedBy: 1,
+          notes: 'Payment received',
+        },
+        {
+          status: 'PROCESSING',
+          timestamp: '2024-01-15T11:00:00Z',
+          updatedBy: 2,
+          notes: 'Order being prepared',
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Order not found',
+  })
+  async getOrderStatusHistory(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return await this.orderService.getOrderStatusHistory(id);
+  }
+
+
 
   @Get()
   @ApiAuth()
@@ -157,7 +243,7 @@ export class OrdersController {
   // ============================================================
 
   @Post('payment/initialize')
-  @ApiAuth()
+  @Public()
   @ApiOperation({
     summary: 'Initialize payment for order',
     description: 'Initializes payment with configured payment provider (Monnify/Paystack) and returns checkout URL',
@@ -250,10 +336,11 @@ export class OrdersController {
     description: 'Order not found',
   })
   async updateOrderStatus(
+    @Request() req,
     @Param('id', ParseIntPipe) id: number,
     @Body() updateStatusDto: UpdateOrderStatusDto,
   ): Promise<Order> {
-    return await this.orderService.updateOrderStatus(id, updateStatusDto);
+    return await this.orderService.updateOrderStatus(id, updateStatusDto, req.user.userId);
   }
 
   @Patch(':orderId/items/:itemId/status')
@@ -319,202 +406,202 @@ export class OrdersController {
   }
 
 
-  @Public()
-  @Post('webhook/monnify')
-  @HttpCode(200)
-  @ApiOperation({
-    summary: 'Monnify webhook handler',
-    description: 'Receives and processes payment webhooks from Monnify',
-  })
-  async handleMonnifyWebhook(
-    @Headers('monnify-signature') signature: string,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    try {
-      this.logger.log('Received Monnify webhook');
+  // @Public()
+  // @Post('webhook/monnify')
+  // @HttpCode(200)
+  // @ApiOperation({
+  //   summary: 'Monnify webhook handler',
+  //   description: 'Receives and processes payment webhooks from Monnify',
+  // })
+  // async handleMonnifyWebhook(
+  //   @Headers('monnify-signature') signature: string,
+  //   @Req() request: Request,
+  //   @Res({ passthrough: true }) response: Response,
+  // ) {
+  //   try {
+  //     this.logger.log('Received Monnify webhook');
 
-      const webhookData = request.body as any;
-      const rawBody = (request as any).rawBody;
+  //     const webhookData = request.body as any;
+  //     const rawBody = (request as any).rawBody;
 
-      if (!webhookData) {
-        this.logger.error('Webhook data is missing from request body');
-        return {
-          success: false,
-          message: 'Invalid webhook data',
-        };
-      }
+  //     if (!webhookData) {
+  //       this.logger.error('Webhook data is missing from request body');
+  //       return {
+  //         success: false,
+  //         message: 'Invalid webhook data',
+  //       };
+  //     }
 
-      this.logger.log(`Webhook event type: ${webhookData.eventType}`);
+  //     this.logger.log(`Webhook event type: ${webhookData.eventType}`);
 
-      // Validate webhook signature using PaymentService
-      if (signature && rawBody) {
-        const isValid = this.paymentService.validateWebhookSignature(
-          webhookData,
-          signature,
-        );
+  //     // Validate webhook signature using PaymentService
+  //     if (signature && rawBody) {
+  //       const isValid = this.paymentService.validateWebhookSignature(
+  //         webhookData,
+  //         signature,
+  //       );
 
-        if (!isValid) {
-          this.logger.error('Invalid Monnify webhook signature');
-          return {
-            success: false,
-            message: 'Invalid signature',
-          };
-        }
-        this.logger.log('Monnify webhook signature validated successfully');
-      } else {
-        this.logger.warn('Monnify signature verification skipped - missing signature or body');
-      }
+  //       if (!isValid) {
+  //         this.logger.error('Invalid Monnify webhook signature');
+  //         return {
+  //           success: false,
+  //           message: 'Invalid signature',
+  //         };
+  //       }
+  //       this.logger.log('Monnify webhook signature validated successfully');
+  //     } else {
+  //       this.logger.warn('Monnify signature verification skipped - missing signature or body');
+  //     }
 
-      // Process webhook asynchronously
-      this.orderService
-        .processPaymentWebhook(webhookData)
-        .then((result) => {
-          this.logger.log(
-            `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Error processing Monnify webhook: ${error.message}`,
-            error.stack,
-          );
-        });
+  //     // Process webhook asynchronously
+  //     this.orderService
+  //       .processPaymentWebhook(webhookData)
+  //       .then((result) => {
+  //         this.logger.log(
+  //           `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
+  //         );
+  //       })
+  //       .catch((error) => {
+  //         this.logger.error(
+  //           `Error processing Monnify webhook: ${error.message}`,
+  //           error.stack,
+  //         );
+  //       });
 
-      return {
-        success: true,
-        message: 'Webhook received',
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error handling Monnify webhook: ${error.message}`,
-        error.stack,
-      );
-      return {
-        success: false,
-        message: 'Error processing webhook',
-      };
-    }
-  }
+  //     return {
+  //       success: true,
+  //       message: 'Webhook received',
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error handling Monnify webhook: ${error.message}`,
+  //       error.stack,
+  //     );
+  //     return {
+  //       success: false,
+  //       message: 'Error processing webhook',
+  //     };
+  //   }
+  // }
 
-  @Public()
-  @Post('webhook/paystack')
-  @HttpCode(200)
-  @ApiOperation({
-    summary: 'Paystack webhook handler',
-    description: 'Receives and processes payment webhooks from Paystack',
-  })
-  async handlePaystackWebhook(
-    @Headers('x-paystack-signature') signature: string,
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    try {
-
-
-      this.logger.log('Received Paystack webhook');
-
-      const webhookData = request.body as any;
-
-      if (!webhookData) {
-        this.logger.error('Webhook data is missing from request body');
-        return {
-          success: false,
-          message: 'Invalid webhook data',
-        };
-      }
-
-      this.logger.log(`Webhook event type: ${webhookData.event}`);
+  // @Public()
+  // @Post('webhook/paystack')
+  // @HttpCode(200)
+  // @ApiOperation({
+  //   summary: 'Paystack webhook handler',
+  //   description: 'Receives and processes payment webhooks from Paystack',
+  // })
+  // async handlePaystackWebhook(
+  //   @Headers('x-paystack-signature') signature: string,
+  //   @Req() request: Request,
+  //   @Res({ passthrough: true }) response: Response,
+  // ) {
+  //   try {
 
 
+  //     this.logger.log('Received Paystack webhook');
 
-      // Validate webhook signature using PaymentService
-      if (signature) {
-        const isValid = this.paymentService.validateWebhookSignature(
-          webhookData,
-          signature,
-        );
+  //     const webhookData = request.body as any;
 
-        if (!isValid) {
-          this.logger.error('Invalid Paystack webhook signature');
-          return {
-            success: false,
-            message: 'Invalid signature',
-          };
-        }
-        this.logger.log('Paystack webhook signature validated successfully');
-      } else {
-        this.logger.warn('Paystack signature verification skipped - missing signature');
-      }
+  //     if (!webhookData) {
+  //       this.logger.error('Webhook data is missing from request body');
+  //       return {
+  //         success: false,
+  //         message: 'Invalid webhook data',
+  //       };
+  //     }
 
-      // Process webhook asynchronously
-      this.orderService
-        .processPaymentWebhook(webhookData)
-        .then((result) => {
-          this.logger.log(
-            `Paystack webhook processed successfully: ${JSON.stringify(result)}`,
-          );
-        })
-        .catch((error) => {
-          this.logger.error(
-            `Error processing Paystack webhook: ${error.message}`,
-            error.stack,
-          );
-        });
-
-      return {
-        success: true,
-        message: 'Webhook received',
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error handling Paystack webhook: ${error.message}`,
-        error.stack,
-      );
-      return {
-        success: false,
-        message: 'Error processing webhook',
-      };
-    }
-  }
-
-  @Get('payment/provider')
-  @ApiAuth()
-  @ApiOperation({
-    summary: 'Get active payment provider',
-    description: 'Returns the currently configured payment provider (MONNIFY or PAYSTACK)',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Payment provider retrieved successfully',
-    schema: {
-      example: {
-        provider: 'PAYSTACK',
-        status: 'active',
-      },
-    },
-  })
-  async getPaymentProvider() {
-    return {
-      provider: this.paymentService.getActiveProvider(),
-      status: 'active',
-    };
-  }
+  //     this.logger.log(`Webhook event type: ${webhookData.event}`);
 
 
-  @Get('payment/health')
-  @Public()
-  @ApiOperation({
-    summary: 'Check payment system health',
-    description: 'Verifies connectivity with the configured payment provider',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Payment system is healthy',
-  })
-  async checkPaymentHealth() {
-    return await this.paymentService.healthCheck();
-  }
+
+  //     // Validate webhook signature using PaymentService
+  //     if (signature) {
+  //       const isValid = this.paymentService.validateWebhookSignature(
+  //         webhookData,
+  //         signature,
+  //       );
+
+  //       if (!isValid) {
+  //         this.logger.error('Invalid Paystack webhook signature');
+  //         return {
+  //           success: false,
+  //           message: 'Invalid signature',
+  //         };
+  //       }
+  //       this.logger.log('Paystack webhook signature validated successfully');
+  //     } else {
+  //       this.logger.warn('Paystack signature verification skipped - missing signature');
+  //     }
+
+  //     // Process webhook asynchronously
+  //     this.orderService
+  //       .processPaymentWebhook(webhookData)
+  //       .then((result) => {
+  //         this.logger.log(
+  //           `Paystack webhook processed successfully: ${JSON.stringify(result)}`,
+  //         );
+  //       })
+  //       .catch((error) => {
+  //         this.logger.error(
+  //           `Error processing Paystack webhook: ${error.message}`,
+  //           error.stack,
+  //         );
+  //       });
+
+  //     return {
+  //       success: true,
+  //       message: 'Webhook received',
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error handling Paystack webhook: ${error.message}`,
+  //       error.stack,
+  //     );
+  //     return {
+  //       success: false,
+  //       message: 'Error processing webhook',
+  //     };
+  //   }
+  // }
+
+  // @Get('payment/provider')
+  // @ApiAuth()
+  // @ApiOperation({
+  //   summary: 'Get active payment provider',
+  //   description: 'Returns the currently configured payment provider (MONNIFY or PAYSTACK)',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Payment provider retrieved successfully',
+  //   schema: {
+  //     example: {
+  //       provider: 'PAYSTACK',
+  //       status: 'active',
+  //     },
+  //   },
+  // })
+  // async getPaymentProvider() {
+  //   return {
+  //     provider: this.paymentService.getActiveProvider(),
+  //     status: 'active',
+  //   };
+  // }
+
+
+  // @Get('payment/health')
+  // @Public()
+  // @ApiOperation({
+  //   summary: 'Check payment system health',
+  //   description: 'Verifies connectivity with the configured payment provider',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Payment system is healthy',
+  // })
+  // async checkPaymentHealth() {
+  //   return await this.paymentService.healthCheck();
+  // }
 
 
   @Post('refund')
