@@ -9,7 +9,7 @@ import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
-import { CreateRefundDto, RefundType } from './dto/refund.dto';
+import { InitiateRefundDto, RefundType } from './dto/refund.dto';
 import { Order } from './entity/order.entity';
 import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
 
@@ -33,7 +33,7 @@ export class RefundService {
    * Process a refund for an order
    */
   async processRefund(
-    createRefundDto: CreateRefundDto,
+    createRefundDto: InitiateRefundDto,
     refundedByUserId: number,
   ): Promise<any> {
     const queryRunner = this.dataSource.createQueryRunner();
