@@ -286,3 +286,11 @@ export enum PaymentStatus {
   PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
   PARTIALLY_PAID = 'PARTIALLY_PAID',
 }
+
+export interface OrderStatusHistory {
+  status: OrderStatus;
+  timestamp: Date;
+  updatedBy?: number | null;
+  notes?: string;
+  metadata?: Record<string, any>;
+}
