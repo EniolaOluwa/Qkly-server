@@ -340,43 +340,6 @@ export class LeadFormResponseDto {
   updatedAt: Date;
 }
 
-
-// Lead DTOs
-// export class CreateLeadDto {
-//   @ApiProperty({
-//     description: 'Name of the lead',
-//     example: 'John Doe',
-//     required: false,
-//   })
-//   @IsOptional()
-//   @IsString()
-//   name?: string;
-
-//   @ApiProperty({
-//     description: 'Email address of the lead',
-//     example: 'john@example.com',
-//   })
-//   @IsEmail()
-//   email: string;
-
-//   @ApiProperty({
-//     description: 'Phone number of the lead',
-//     example: '+234812345678',
-//     required: false,
-//   })
-//   @IsOptional()
-//   @IsString()
-//   phone?: string;
-
-//   @ApiProperty({
-//     description: 'ID of the lead form this lead belongs to',
-//     example: '123e4567-e89b-12d3-a456-426614174000',
-//   })
-//   @IsUUID()
-//   formId: string;
-// }
-
-
 export class CreateLeadDto {
   @ApiPropertyOptional({
     example: 'John Doe',

@@ -22,6 +22,7 @@ import {
   DeliveryDetails,
   SettlementDetails,
   RefundDetails,
+  OrderStatusHistory,
 } from '../interfaces/order.interface';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,6 +30,7 @@ import { v4 as uuidv4 } from 'uuid';
 @Entity('orders')
 @Index(['userId', 'businessId'])
 @Index(['createdAt'])
+@Index(['customerEmail'])
 @Index(['status'])
 @Index(['paymentStatus'])
 export class Order {
@@ -38,9 +40,10 @@ export class Order {
   @Column({ unique: true, nullable: false })
   orderReference: string;
 
+
   @Column({ nullable: true })
   @Index()
-  userId: number;
+  userId: number | null;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
@@ -66,10 +69,13 @@ export class Order {
   @Column({ nullable: false })
   state: string;
 
+
+
   @Column({ nullable: true })
   city: string;
 
   @Column({ nullable: false })
+  @Index()
   customerEmail: string;
 
   @Column({ nullable: false })
@@ -176,6 +182,15 @@ export class Order {
   @Column({ type: 'json', nullable: true })
   refundDetails: RefundDetails;
 
+
+  @Column({ type: 'boolean', default: false })
+  isGuestOrder: boolean;
+
+
+  @Column({ type: 'json', nullable: true, default: '[]' })
+  statusHistory: OrderStatusHistory[];
+
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -192,6 +207,10 @@ export class Order {
     }
     if (!this.transactionReference) {
       this.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+    }
+
+    if (!this.statusHistory) {
+      this.statusHistory = [];
     }
   }
 }
