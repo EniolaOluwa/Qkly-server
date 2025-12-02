@@ -121,7 +121,6 @@ export function ApiFindOneDecorator<T extends Type<any>>(
       type: entity,
     }),
     ApiNotFoundResponse(`${entity.name} not found`),
-    ApiAuth(),
     ApiInternalErrorResponse()
   );
 }
