@@ -13,7 +13,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common/swagger/api-decorators';
 import { PaymentService } from '../payment/payment.service';
-import { JwtAuthGuard } from '../users';
+import { JwtAuthGuard, RoleGuard, Roles, UserRole } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AcceptOrderDto, FindAllOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
@@ -143,6 +143,8 @@ export class OrdersController {
 
 
   @Get()
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(UserRole.ADMIN)
   @ApiAuth()
   @ApiPaginatedResponse(
     Order,
@@ -256,9 +258,8 @@ export class OrdersController {
   }
 
 
+  @Public()
   @Get('reference/:reference')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get order by reference' })
   @ApiParam({
     name: 'reference',

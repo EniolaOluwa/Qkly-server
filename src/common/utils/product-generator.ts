@@ -2,7 +2,7 @@ import { CreateProductDto, MeasurementType, SizeDto } from "../../core/product/d
 
 export interface RandomProductOptions {
   businessId: number;
-  userId: number;
+userId: number;
   hasVariation?: boolean;
 }
 
