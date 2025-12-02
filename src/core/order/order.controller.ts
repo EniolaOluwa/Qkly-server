@@ -436,6 +436,7 @@ export class OrdersController {
 
   @Delete(':id')
   @ApiAuth()
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete order',
