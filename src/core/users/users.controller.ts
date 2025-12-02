@@ -163,7 +163,7 @@ export class UsersController {
   })
   async getUserById(@Param('id') id: number) {
     const data = await this.usersService.findUserById(id);
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: "User retrieved successfully",
       data: data
     });
@@ -320,7 +320,7 @@ export class UsersController {
       selfieImage,
     );
 
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: 'BVN verification completed successfully',
       data: data
     })
@@ -402,7 +402,7 @@ export class UsersController {
   ) {
     const data = await this.usersService.generateCreatePinOtp(req.user.userId);
 
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: 'OTP sent successfully to your phone number',
       data: data
     })
@@ -439,7 +439,7 @@ export class UsersController {
   ) {
     const data = await this.usersService.verifyCreatePinOtp(req.user.userId, verifyCreatePinOtpDto.otp);
 
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: 'OTP verified successfully. You can now create your PIN.',
       data: data,
     })
@@ -472,7 +472,7 @@ export class UsersController {
     @Body(ValidationPipe) forgotPasswordDto: ForgotPasswordDto,
   ) {
     const data = await this.usersService.forgotPassword(forgotPasswordDto.email);
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: 'forget password request successful',
       data: data
     })
@@ -511,7 +511,7 @@ export class UsersController {
       verifyPasswordResetOtpDto.otp,
     );
 
-    return HttpResponse.success( {
+    return HttpResponse.success({
       message: 'Verify password reset otp successful',
       data: data
     })

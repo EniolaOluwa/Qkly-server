@@ -141,7 +141,7 @@ export class OrdersController {
   }
 
 
-
+  @Public()
   @Get()
   @UseGuards(JwtAuthGuard, RoleGuard)
   @Roles(UserRole.ADMIN)
@@ -272,12 +272,13 @@ export class OrdersController {
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getOrderByReference(@Param('reference') reference: string) {
+    console.log({ reference })
     return this.orderService.findOrderByReference(reference);
   }
 
 
+  @Public()
   @Get(':id')
-  @ApiAuth()
   @ApiFindOneDecorator(Order)
   async findOrderById(@Param('id', ParseIntPipe) id: number): Promise<Order> {
     return await this.orderService.findOrderById(id);
@@ -455,6 +456,27 @@ export class OrdersController {
   })
   async deleteOrder(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return await this.orderService.deleteOrder(id);
+  }
+
+
+
+  @Post('refund')
+  @ApiOperation({ summary: 'Process a refund for an order' })
+  @ApiResponse({ status: 200, description: 'Refund processed successfully' })
+  async processRefund(
+    @Body() createRefundDto: InitiateRefundDto,
+    @Request() req
+  ): Promise<any> {
+
+    const userId = req.user.id
+    return await this.refundService.processRefund(createRefundDto, userId);
+  }
+
+  @Get(':orderId/refunds')
+  @ApiOperation({ summary: 'Get refund history for an order' })
+  @ApiResponse({ status: 200, description: 'Refund history retrieved' })
+  async getOrderRefunds(@Param('orderId') orderId: number): Promise<any> {
+    return await this.refundService.getOrderRefunds(orderId);
   }
 
 
@@ -655,26 +677,4 @@ export class OrdersController {
   //   return await this.paymentService.healthCheck();
   // }
 
-
-  @Post('refund')
-  @ApiOperation({ summary: 'Process a refund for an order' })
-  @ApiResponse({ status: 200, description: 'Refund processed successfully' })
-  async processRefund(
-    @Body() createRefundDto: InitiateRefundDto,
-    @Request() req
-  ): Promise<any> {
-
-    const userId = req.user.id
-    return await this.refundService.processRefund(createRefundDto, userId);
-  }
-
-  /**
-   * Get refund history for an order
-   */
-  @Get(':orderId/refunds')
-  @ApiOperation({ summary: 'Get refund history for an order' })
-  @ApiResponse({ status: 200, description: 'Refund history retrieved' })
-  async getOrderRefunds(@Param('orderId') orderId: number): Promise<any> {
-    return await this.refundService.getOrderRefunds(orderId);
-  }
 }
