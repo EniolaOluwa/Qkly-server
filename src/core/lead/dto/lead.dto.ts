@@ -135,6 +135,7 @@ export class CreateLeadFormDto {
     description: 'Array of form input fields',
     type: [FormInputDto]
   })
+  @IsOptional()
   @IsArray()
   @ArrayMinSize(1, { message: 'At least one input field is required' })
   @ValidateNested({ each: true })
@@ -155,7 +156,6 @@ export class CreateLeadFormDto {
     default: true,
     description: 'Whether the form is active'
   })
-  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
