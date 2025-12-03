@@ -60,13 +60,16 @@ export class CategoryService {
   }
 
   async getCategoriesForBusiness(businessId: number) {
-    const categories = await this.categoryRepository
+    return this.categoryRepository
       .createQueryBuilder('category')
-      .innerJoin('category.products', 'product', 'product.businessId = :businessId', { businessId })
+      .select(['category.id', 'category.name'])
+      .innerJoin(
+        'category.products',
+        'product',
+        'product.businessId = :businessId',
+        { businessId }
+      )
       .getMany();
-
-
-    return categories
   }
 
   async getBusinessProductsGroupedByCategory(businessId: number) {

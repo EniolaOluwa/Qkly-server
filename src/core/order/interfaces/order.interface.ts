@@ -243,26 +243,6 @@ export interface RefundDetails {
 
 
 
-// export interface RefundDetails {
-//   amount: number;
-//   reason: string;
-//   refundType: RefundType;
-//   refundMethod: RefundMethod;
-//   customerNote?: string;
-//   merchantNote?: string;
-//   refundedBy: number;
-//   refundedAt: Date | null;
-//   requestedAt: Date | null;
-//   transactions: Array<{
-//     type: 'PLATFORM_REFUND' | 'BUSINESS_REFUND';
-//     amount: number;
-//     reference: string;
-//     status: string;
-//   }>;
-// }
-
-
-
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
