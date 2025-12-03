@@ -1,0 +1,475 @@
+
+  // async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
+  //   try {
+  //     const { orderId } = initiatePaymentDto;
+
+  //     const order = await this.findOrderById(orderId);
+
+  //     if (order.paymentStatus === PaymentStatus.PAID) {
+  //       ErrorHelper.ConflictException('Payment already processed');
+  //     }
+
+  //     const business = await this.businessRepository.findOne({
+  //       where: { id: order.businessId },
+  //     });
+
+  //     if (!business) {
+  //       ErrorHelper.ConflictException('Business not found');
+  //     }
+
+  //     if (!business.paystackSubaccountCode) {
+  //       ErrorHelper.BadRequestException(
+  //         'Business subaccount not configured. Please contact support.',
+  //       );
+  //     }
+
+  //     // Calculate platform fee
+  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
+  //     const platformFee = order.total * (platformFeePercentage / 100);
+
+  //     // Initialize payment WITH SPLIT
+  //     const paymentResponse = await this.paymentService.initializePayment({
+  //       amount: Number(order.total),
+  //       customerName: order.customerName,
+  //       customerEmail: order.customerEmail,
+  //       paymentReference: order.transactionReference,
+  //       description: `Payment for Order ${order.orderReference}`,
+  //       currencyCode: 'NGN',
+  //       redirectUrl: initiatePaymentDto.redirectUrl ?? '',
+  //       paymentMethods: ['card', 'bank_transfer'],
+  //       metadata: {
+  //         orderId: order.id,
+  //         orderReference: order.orderReference,
+  //         businessId: business.id,
+  //         split: {
+  //           type: 'percentage',
+  //           platformFee: platformFeePercentage,
+  //           businessShare: 100 - platformFeePercentage,
+  //         },
+  //       },
+  //       // ADD SPLIT CONFIGURATION
+  //       subaccount: business.paystackSubaccountCode, // Auto-settle to business
+  //       transaction_charge: platformFee * 100,
+  //       bearer: 'account',
+  //     });
+
+  //     // Update order
+  //     await this.orderRepository.update(order.id, {
+  //       paymentStatus: PaymentStatus.INITIATED,
+  //     });
+
+  //     this.logger.log(`Payment with split initialized for order ${order.id}`);
+
+  //     return paymentResponse;
+  //   } catch (error) {
+  //     this.logger.error('Payment initialization failed:', error);
+  //     throw error;
+  //   }
+  // }
+
+  async acceptOrder(orderId: number, businessId: number, notes?: string): Promise<Order> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const order = await this.findOrderById(orderId);
+
+      // Verify business ownership
+      if (order.businessId !== businessId) {
+        ErrorHelper.BadRequestException('You do not have permission to accept this order');
+      }
+
+      // Verify payment status
+      if (order.paymentStatus !== PaymentStatus.PAID) {
+        ErrorHelper.BadRequestException('Only paid orders can be accepted');
+      }
+
+      // Verify current status allows acceptance
+      if (![OrderStatus.PROCESSING].includes(order.status)) {
+        ErrorHelper.BadRequestException(
+          `Order cannot be accepted from status: ${order.status}. Order must be in PROCESSING status.`
+        );
+      }
+
+      // Update order status to CONFIRMED
+      order.status = OrderStatus.CONFIRMED;
+      if (notes) {
+        order.notes = notes;
+      }
+
+      // Update all items to PROCESSING
+      for (const item of order.items) {
+        item.status = OrderItemStatus.PROCESSING;
+        await queryRunner.manager.save(OrderItem, item);
+      }
+
+      await queryRunner.manager.save(Order, order);
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Order ${orderId} accepted by business ${businessId}`);
+
+      return await this.findOrderById(orderId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to accept order: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      ErrorHelper.InternalServerErrorException(`Failed to accept order: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+
+  // async rejectOrder(orderId: number, businessId: number, reason: string): Promise<Order> {
+  //   const queryRunner = this.dataSource.createQueryRunner();
+  //   await queryRunner.connect();
+  //   await queryRunner.startTransaction();
+
+  //   try {
+  //     const order = await this.findOrderById(orderId);
+
+  //     // Verify business ownership
+  //     if (order.businessId !== businessId) {
+  //       ErrorHelper.BadRequestException('You do not have permission to reject this order');
+  //     }
+
+  //     // Verify payment status
+  //     if (order.paymentStatus !== PaymentStatus.PAID) {
+  //       ErrorHelper.BadRequestException('Only paid orders can be rejected');
+  //     }
+
+  //     // Can only reject orders in PROCESSING or CONFIRMED status
+  //     if (![OrderStatus.PROCESSING, OrderStatus.CONFIRMED].includes(order.status)) {
+  //       ErrorHelper.BadRequestException(
+  //         `Order cannot be rejected from status: ${order.status}. Order must be in PROCESSING or CONFIRMED status.`
+  //       );
+  //     }
+
+  //     // Update order status to CANCELLED
+  //     order.status = OrderStatus.CANCELLED;
+  //     order.notes = `REJECTED BY BUSINESS: ${reason}`;
+
+  //     // Update all items to CANCELLED
+  //     for (const item of order.items) {
+  //       item.status = OrderItemStatus.CANCELLED;
+  //       await queryRunner.manager.save(OrderItem, item);
+  //     }
+
+  //     // Return inventory
+  //     await this.returnInventoryForOrder(order, queryRunner.manager);
+
+  //     // Initiate refund process
+  //     order.isRefunded = false;
+  //     order.refundDetails = {
+  //       amount: order.total,
+  //       reason: `Order rejected by business: ${reason}`,
+  //       refundType: RefundType.FULL,
+  //       refundMethod: RefundMethod.ORIGINAL_PAYMENT,
+  //       merchantNote: reason,
+  //       refundedBy: businessId,
+  //       refundedAt: null,
+  //       requestedAt: new Date(),
+  //       transactions: [],
+  //     };
+
+  //     await queryRunner.manager.save(Order, order);
+  //     await queryRunner.commitTransaction();
+
+  //     this.logger.log(`Order ${orderId} rejected by business ${businessId}. Reason: ${reason}`);
+
+  //     // TODO: Trigger refund process asynchronously
+  //     this.initiateRefund(orderId).catch((err) => {
+  //       this.logger.error(`Failed to initiate refund for order ${orderId}: ${err.message}`);
+  //     });
+
+
+
+  //     return await this.findOrderById(orderId);
+  //   } catch (error) {
+  //     await queryRunner.rollbackTransaction();
+  //     this.logger.error(`Failed to reject order: ${error.message}`, error.stack);
+
+  //     if (error instanceof NotFoundException || error instanceof BadRequestException) {
+  //       throw error;
+  //     }
+
+  //     ErrorHelper.InternalServerErrorException(`Failed to reject order: ${error.message}`);
+  //   } finally {
+  //     await queryRunner.release();
+  //   }
+  // }
+
+
+
+  // async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
+  //   try {
+  //     const { orderId } = initiatePaymentDto;
+  //     const order = await this.findOrderById(orderId);
+
+  //     if (order.paymentStatus === PaymentStatus.PAID) {
+  //       ErrorHelper.ConflictException('Payment already processed');
+  //     }
+
+  //     const business = await this.businessRepository.findOne({
+  //       where: { id: order.businessId },
+  //     });
+
+  //     if (!business) {
+  //       ErrorHelper.ConflictException('Business not found');
+  //     }
+
+  //     if (!business.paystackSubaccountCode) {
+  //       ErrorHelper.BadRequestException(
+  //         'Business subaccount not configured. Please contact support.',
+  //       );
+  //     }
+
+  //     // Calculate platform fee
+  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
+  //     const platformFee = order.total * (platformFeePercentage / 100);
+
+  //     // Initialize payment WITH SPLIT
+  //     const paymentResponse = await this.paymentService.initializePayment({
+  //       amount: Number(order.total),
+  //       customerName: order.customerName,
+  //       customerEmail: order.customerEmail,
+  //       paymentReference: order.transactionReference,
+  //       description: `Payment for Order ${order.orderReference}`,
+  //       currencyCode: 'NGN',
+  //       redirectUrl: initiatePaymentDto.redirectUrl ?? '',
+  //       paymentMethods: ['card', 'bank_transfer'],
+  //       metadata: {
+  //         orderId: order.id,
+  //         orderReference: order.orderReference,
+  //         businessId: business.id,
+  //         split: {
+  //           type: 'percentage',
+  //           platformFee: platformFeePercentage,
+  //           businessShare: 100 - platformFeePercentage,
+  //         },
+  //       },
+  //       // ADD SPLIT CONFIGURATION
+  //       subaccount: business.paystackSubaccountCode, // Auto-settle to business
+  //       transaction_charge: platformFee * 100,
+  //       bearer: 'account',
+  //     });
+
+  //     // Update order
+  //     await this.orderRepository.update(order.id, {
+  //       paymentStatus: PaymentStatus.INITIATED,
+  //     });
+
+  //     this.logger.log(`Payment with split initialized for order ${order.id}`);
+
+  //     return paymentResponse;
+  //   } catch (error) {
+  //     this.logger.error('Payment initialization failed:', error);
+  //     throw error;
+  //   }
+  // }
+
+
+
+
+
+  // @Public()
+  // @Post('webhook/monnify')
+  // @HttpCode(200)
+  // @ApiOperation({
+  //   summary: 'Monnify webhook handler',
+  //   description: 'Receives and processes payment webhooks from Monnify',
+  // })
+  // async handleMonnifyWebhook(
+  //   @Headers('monnify-signature') signature: string,
+  //   @Req() request: Request,
+  //   @Res({ passthrough: true }) response: Response,
+  // ) {
+  //   try {
+  //     this.logger.log('Received Monnify webhook');
+
+  //     const webhookData = request.body as any;
+  //     const rawBody = (request as any).rawBody;
+
+  //     if (!webhookData) {
+  //       this.logger.error('Webhook data is missing from request body');
+  //       return {
+  //         success: false,
+  //         message: 'Invalid webhook data',
+  //       };
+  //     }
+
+  //     this.logger.log(`Webhook event type: ${webhookData.eventType}`);
+
+  //     // Validate webhook signature using PaymentService
+  //     if (signature && rawBody) {
+  //       const isValid = this.paymentService.validateWebhookSignature(
+  //         webhookData,
+  //         signature,
+  //       );
+
+  //       if (!isValid) {
+  //         this.logger.error('Invalid Monnify webhook signature');
+  //         return {
+  //           success: false,
+  //           message: 'Invalid signature',
+  //         };
+  //       }
+  //       this.logger.log('Monnify webhook signature validated successfully');
+  //     } else {
+  //       this.logger.warn('Monnify signature verification skipped - missing signature or body');
+  //     }
+
+  //     // Process webhook asynchronously
+  //     this.orderService
+  //       .processPaymentWebhook(webhookData)
+  //       .then((result) => {
+  //         this.logger.log(
+  //           `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
+  //         );
+  //       })
+  //       .catch((error) => {
+  //         this.logger.error(
+  //           `Error processing Monnify webhook: ${error.message}`,
+  //           error.stack,
+  //         );
+  //       });
+
+  //     return {
+  //       success: true,
+  //       message: 'Webhook received',
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error handling Monnify webhook: ${error.message}`,
+  //       error.stack,
+  //     );
+  //     return {
+  //       success: false,
+  //       message: 'Error processing webhook',
+  //     };
+  //   }
+  // }
+
+  // @Public()
+  // @Post('webhook/paystack')
+  // @HttpCode(200)
+  // @ApiOperation({
+  //   summary: 'Paystack webhook handler',
+  //   description: 'Receives and processes payment webhooks from Paystack',
+  // })
+  // async handlePaystackWebhook(
+  //   @Headers('x-paystack-signature') signature: string,
+  //   @Req() request: Request,
+  //   @Res({ passthrough: true }) response: Response,
+  // ) {
+  //   try {
+
+
+  //     this.logger.log('Received Paystack webhook');
+
+  //     const webhookData = request.body as any;
+
+  //     if (!webhookData) {
+  //       this.logger.error('Webhook data is missing from request body');
+  //       return {
+  //         success: false,
+  //         message: 'Invalid webhook data',
+  //       };
+  //     }
+
+  //     this.logger.log(`Webhook event type: ${webhookData.event}`);
+
+
+
+  //     // Validate webhook signature using PaymentService
+  //     if (signature) {
+  //       const isValid = this.paymentService.validateWebhookSignature(
+  //         webhookData,
+  //         signature,
+  //       );
+
+  //       if (!isValid) {
+  //         this.logger.error('Invalid Paystack webhook signature');
+  //         return {
+  //           success: false,
+  //           message: 'Invalid signature',
+  //         };
+  //       }
+  //       this.logger.log('Paystack webhook signature validated successfully');
+  //     } else {
+  //       this.logger.warn('Paystack signature verification skipped - missing signature');
+  //     }
+
+  //     // Process webhook asynchronously
+  //     this.orderService
+  //       .processPaymentWebhook(webhookData)
+  //       .then((result) => {
+  //         this.logger.log(
+  //           `Paystack webhook processed successfully: ${JSON.stringify(result)}`,
+  //         );
+  //       })
+  //       .catch((error) => {
+  //         this.logger.error(
+  //           `Error processing Paystack webhook: ${error.message}`,
+  //           error.stack,
+  //         );
+  //       });
+
+  //     return {
+  //       success: true,
+  //       message: 'Webhook received',
+  //     };
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Error handling Paystack webhook: ${error.message}`,
+  //       error.stack,
+  //     );
+  //     return {
+  //       success: false,
+  //       message: 'Error processing webhook',
+  //     };
+  //   }
+  // }
+
+  // @Get('payment/provider')
+  // @ApiAuth()
+  // @ApiOperation({
+  //   summary: 'Get active payment provider',
+  //   description: 'Returns the currently configured payment provider (MONNIFY or PAYSTACK)',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Payment provider retrieved successfully',
+  //   schema: {
+  //     example: {
+  //       provider: 'PAYSTACK',
+  //       status: 'active',
+  //     },
+  //   },
+  // })
+  // async getPaymentProvider() {
+  //   return {
+  //     provider: this.paymentService.getActiveProvider(),
+  //     status: 'active',
+  //   };
+  // }
+
+
+  // @Get('payment/health')
+  // @Public()
+  // @ApiOperation({
+  //   summary: 'Check payment system health',
+  //   description: 'Verifies connectivity with the configured payment provider',
+  // })
+  // @ApiResponse({
+  //   status: HttpStatus.OK,
+  //   description: 'Payment system is healthy',
+  // })
+  // async checkPaymentHealth() {
+  //   return await this.paymentService.healthCheck();
+  // }

@@ -42,16 +42,12 @@ export class OrderService {
     private readonly paymentService: PaymentService,
   ) { }
 
-  /**
- * Create order for authenticated user
- */
+
   async createOrder(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
     return this.createOrderInternal(createOrderDto, userId);
   }
 
-  /**
-   * Create order for guest (unauthenticated) user
-   */
+
   async createGuestOrder(createOrderDto: CreateOrderDto): Promise<Order> {
     return this.createOrderInternal(createOrderDto, null);
   }
@@ -382,391 +378,11 @@ export class OrderService {
     }
   }
 
-  // async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
-  //   try {
-  //     const { orderId } = initiatePaymentDto;
 
-  //     const order = await this.findOrderById(orderId);
 
-  //     if (order.paymentStatus === PaymentStatus.PAID) {
-  //       ErrorHelper.ConflictException('Payment already processed');
-  //     }
-
-  //     const business = await this.businessRepository.findOne({
-  //       where: { id: order.businessId },
-  //     });
-
-  //     if (!business) {
-  //       ErrorHelper.ConflictException('Business not found');
-  //     }
-
-  //     if (!business.paystackSubaccountCode) {
-  //       ErrorHelper.BadRequestException(
-  //         'Business subaccount not configured. Please contact support.',
-  //       );
-  //     }
-
-  //     // Calculate platform fee
-  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
-  //     const platformFee = order.total * (platformFeePercentage / 100);
-
-  //     // Initialize payment WITH SPLIT
-  //     const paymentResponse = await this.paymentService.initializePayment({
-  //       amount: Number(order.total),
-  //       customerName: order.customerName,
-  //       customerEmail: order.customerEmail,
-  //       paymentReference: order.transactionReference,
-  //       description: `Payment for Order ${order.orderReference}`,
-  //       currencyCode: 'NGN',
-  //       redirectUrl: initiatePaymentDto.redirectUrl ?? '',
-  //       paymentMethods: ['card', 'bank_transfer'],
-  //       metadata: {
-  //         orderId: order.id,
-  //         orderReference: order.orderReference,
-  //         businessId: business.id,
-  //         split: {
-  //           type: 'percentage',
-  //           platformFee: platformFeePercentage,
-  //           businessShare: 100 - platformFeePercentage,
-  //         },
-  //       },
-  //       // ADD SPLIT CONFIGURATION
-  //       subaccount: business.paystackSubaccountCode, // Auto-settle to business
-  //       transaction_charge: platformFee * 100,
-  //       bearer: 'account',
-  //     });
-
-  //     // Update order
-  //     await this.orderRepository.update(order.id, {
-  //       paymentStatus: PaymentStatus.INITIATED,
-  //     });
-
-  //     this.logger.log(`Payment with split initialized for order ${order.id}`);
-
-  //     return paymentResponse;
-  //   } catch (error) {
-  //     this.logger.error('Payment initialization failed:', error);
-  //     throw error;
-  //   }
-  // }
-
-  async acceptOrder(orderId: number, businessId: number, notes?: string): Promise<Order> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const order = await this.findOrderById(orderId);
-
-      // Verify business ownership
-      if (order.businessId !== businessId) {
-        ErrorHelper.BadRequestException('You do not have permission to accept this order');
-      }
-
-      // Verify payment status
-      if (order.paymentStatus !== PaymentStatus.PAID) {
-        ErrorHelper.BadRequestException('Only paid orders can be accepted');
-      }
-
-      // Verify current status allows acceptance
-      if (![OrderStatus.PROCESSING].includes(order.status)) {
-        ErrorHelper.BadRequestException(
-          `Order cannot be accepted from status: ${order.status}. Order must be in PROCESSING status.`
-        );
-      }
-
-      // Update order status to CONFIRMED
-      order.status = OrderStatus.CONFIRMED;
-      if (notes) {
-        order.notes = notes;
-      }
-
-      // Update all items to PROCESSING
-      for (const item of order.items) {
-        item.status = OrderItemStatus.PROCESSING;
-        await queryRunner.manager.save(OrderItem, item);
-      }
-
-      await queryRunner.manager.save(Order, order);
-      await queryRunner.commitTransaction();
-
-      this.logger.log(`Order ${orderId} accepted by business ${businessId}`);
-
-      return await this.findOrderById(orderId);
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Failed to accept order: ${error.message}`, error.stack);
-
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error;
-      }
-
-      ErrorHelper.InternalServerErrorException(`Failed to accept order: ${error.message}`);
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-
-  // async rejectOrder(orderId: number, businessId: number, reason: string): Promise<Order> {
-  //   const queryRunner = this.dataSource.createQueryRunner();
-  //   await queryRunner.connect();
-  //   await queryRunner.startTransaction();
-
-  //   try {
-  //     const order = await this.findOrderById(orderId);
-
-  //     // Verify business ownership
-  //     if (order.businessId !== businessId) {
-  //       ErrorHelper.BadRequestException('You do not have permission to reject this order');
-  //     }
-
-  //     // Verify payment status
-  //     if (order.paymentStatus !== PaymentStatus.PAID) {
-  //       ErrorHelper.BadRequestException('Only paid orders can be rejected');
-  //     }
-
-  //     // Can only reject orders in PROCESSING or CONFIRMED status
-  //     if (![OrderStatus.PROCESSING, OrderStatus.CONFIRMED].includes(order.status)) {
-  //       ErrorHelper.BadRequestException(
-  //         `Order cannot be rejected from status: ${order.status}. Order must be in PROCESSING or CONFIRMED status.`
-  //       );
-  //     }
-
-  //     // Update order status to CANCELLED
-  //     order.status = OrderStatus.CANCELLED;
-  //     order.notes = `REJECTED BY BUSINESS: ${reason}`;
-
-  //     // Update all items to CANCELLED
-  //     for (const item of order.items) {
-  //       item.status = OrderItemStatus.CANCELLED;
-  //       await queryRunner.manager.save(OrderItem, item);
-  //     }
-
-  //     // Return inventory
-  //     await this.returnInventoryForOrder(order, queryRunner.manager);
-
-  //     // Initiate refund process
-  //     order.isRefunded = false;
-  //     order.refundDetails = {
-  //       amount: order.total,
-  //       reason: `Order rejected by business: ${reason}`,
-  //       refundType: RefundType.FULL,
-  //       refundMethod: RefundMethod.ORIGINAL_PAYMENT,
-  //       merchantNote: reason,
-  //       refundedBy: businessId,
-  //       refundedAt: null,
-  //       requestedAt: new Date(),
-  //       transactions: [],
-  //     };
-
-  //     await queryRunner.manager.save(Order, order);
-  //     await queryRunner.commitTransaction();
-
-  //     this.logger.log(`Order ${orderId} rejected by business ${businessId}. Reason: ${reason}`);
-
-  //     // TODO: Trigger refund process asynchronously
-  //     this.initiateRefund(orderId).catch((err) => {
-  //       this.logger.error(`Failed to initiate refund for order ${orderId}: ${err.message}`);
-  //     });
-
-
-
-  //     return await this.findOrderById(orderId);
-  //   } catch (error) {
-  //     await queryRunner.rollbackTransaction();
-  //     this.logger.error(`Failed to reject order: ${error.message}`, error.stack);
-
-  //     if (error instanceof NotFoundException || error instanceof BadRequestException) {
-  //       throw error;
-  //     }
-
-  //     ErrorHelper.InternalServerErrorException(`Failed to reject order: ${error.message}`);
-  //   } finally {
-  //     await queryRunner.release();
-  //   }
-  // }
-
-
-  async rejectOrder(orderId: number, businessId: number, reason: string): Promise<Order> {
-    const queryRunner = this.dataSource.createQueryRunner();
-
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-      const order = await this.findOrderById(orderId);
-
-      // Validate business permission
-      if (order.businessId !== businessId) {
-        ErrorHelper.BadRequestException('You do not have permission to reject this order');
-      }
-
-      // Only paid orders can be rejected
-      if (order.paymentStatus !== PaymentStatus.PAID) {
-        ErrorHelper.BadRequestException('Only paid orders can be rejected');
-      }
-
-      // Order must be in PROCESSING or CONFIRMED
-      const validStatuses = [OrderStatus.PROCESSING, OrderStatus.CONFIRMED];
-      if (!validStatuses.includes(order.status)) {
-        ErrorHelper.BadRequestException(
-          `Order cannot be rejected from status: ${order.status}. Expected PROCESSING or CONFIRMED.`
-        );
-      }
-
-      // Update order status
-      order.status = OrderStatus.CANCELLED;
-      order.notes = `REJECTED BY BUSINESS: ${reason}`;
-
-      // Cancel all items
-      for (const item of order.items) {
-        item.status = OrderItemStatus.CANCELLED;
-        await queryRunner.manager.save(OrderItem, item);
-      }
-
-      // Return inventory
-      await this.returnInventoryForOrder(order, queryRunner.manager);
-
-      // Build refundDetails according to the improved model
-      order.refundDetails = {
-        refundReference: `RFD-${Date.now()}-${orderId}`, // generate unique reference
-        amountRequested: order.total,
-        amountApproved: order.total,
-        amountRefunded: 0,
-        remainingAmount: order.total,
-
-        status: RefundStatus.REQUESTED,
-        reason: `Order rejected by business: ${reason}`,
-        refundType: RefundType.FULL,
-        refundMethod: RefundMethod.ORIGINAL_PAYMENT,
-
-        customerNote: undefined,
-        merchantNote: reason,
-
-        requestedBy: businessId,
-        approvedBy: businessId,
-        refundedBy: undefined,
-
-        requestedAt: new Date(),
-        approvedAt: new Date(),
-        processingAt: null,
-        refundedAt: null,
-        failedAt: null,
-        cancelledAt: null,
-
-        transactions: [],
-        meta: {},
-      };
-
-      order.isRefunded = false;
-
-      // Persist changes
-      await queryRunner.manager.save(Order, order);
-
-      await queryRunner.commitTransaction();
-
-      this.logger.log(
-        `Order ${orderId} rejected by business ${businessId}. Reason: ${reason}`
-      );
-
-      // Trigger async refund (non-blocking)
-      this.initiateRefund(orderId).catch((err) => {
-        this.logger.error(
-          `Refund initiation failed for order ${orderId}: ${err.message}`,
-          err.stack
-        );
-      });
-
-      // Return updated order fresh
-      return await this.findOrderById(orderId);
-
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-
-      this.logger.error(`Failed to reject order: ${error.message}`, error.stack);
-
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error;
-      }
-
-      ErrorHelper.InternalServerErrorException(`Failed to reject order: ${error.message}`);
-
-    } finally {
-      await queryRunner.release();
-    }
-  }
-
-
-  // async initializePayment(initiatePaymentDto: InitiatePaymentDto): Promise<any> {
-  //   try {
-  //     const { orderId } = initiatePaymentDto;
-  //     const order = await this.findOrderById(orderId);
-
-  //     if (order.paymentStatus === PaymentStatus.PAID) {
-  //       ErrorHelper.ConflictException('Payment already processed');
-  //     }
-
-  //     const business = await this.businessRepository.findOne({
-  //       where: { id: order.businessId },
-  //     });
-
-  //     if (!business) {
-  //       ErrorHelper.ConflictException('Business not found');
-  //     }
-
-  //     if (!business.paystackSubaccountCode) {
-  //       ErrorHelper.BadRequestException(
-  //         'Business subaccount not configured. Please contact support.',
-  //       );
-  //     }
-
-  //     // Calculate platform fee
-  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
-  //     const platformFee = order.total * (platformFeePercentage / 100);
-
-  //     // Initialize payment WITH SPLIT
-  //     const paymentResponse = await this.paymentService.initializePayment({
-  //       amount: Number(order.total),
-  //       customerName: order.customerName,
-  //       customerEmail: order.customerEmail,
-  //       paymentReference: order.transactionReference,
-  //       description: `Payment for Order ${order.orderReference}`,
-  //       currencyCode: 'NGN',
-  //       redirectUrl: initiatePaymentDto.redirectUrl ?? '',
-  //       paymentMethods: ['card', 'bank_transfer'],
-  //       metadata: {
-  //         orderId: order.id,
-  //         orderReference: order.orderReference,
-  //         businessId: business.id,
-  //         split: {
-  //           type: 'percentage',
-  //           platformFee: platformFeePercentage,
-  //           businessShare: 100 - platformFeePercentage,
-  //         },
-  //       },
-  //       // ADD SPLIT CONFIGURATION
-  //       subaccount: business.paystackSubaccountCode, // Auto-settle to business
-  //       transaction_charge: platformFee * 100,
-  //       bearer: 'account',
-  //     });
-
-  //     // Update order
-  //     await this.orderRepository.update(order.id, {
-  //       paymentStatus: PaymentStatus.INITIATED,
-  //     });
-
-  //     this.logger.log(`Payment with split initialized for order ${order.id}`);
-
-  //     return paymentResponse;
-  //   } catch (error) {
-  //     this.logger.error('Payment initialization failed:', error);
-  //     throw error;
-  //   }
-  // }
-
-
-
+  // ============================================================
+  // ORDER PAYMENT  MANAGEMENT
+  // ============================================================
 
   async initializePayment(initiatePaymentDto: InitiatePaymentDto) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -776,13 +392,22 @@ export class OrderService {
     try {
       const { orderId } = initiatePaymentDto;
 
-      // Load order inside transaction
       const order = await queryRunner.manager.findOne(Order, {
         where: { id: orderId },
+        relations: ['items'],
       });
 
       if (!order) {
         ErrorHelper.NotFoundException('Order not found');
+      }
+
+      // Prevent duplicate payment initialization
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        ErrorHelper.ConflictException('Payment already completed for this order');
+      }
+
+      if (order.paymentStatus === PaymentStatus.INITIATED) {
+        ErrorHelper.ConflictException('Payment already initiated for this order');
       }
 
       const business = await queryRunner.manager.findOne(Business, {
@@ -793,38 +418,28 @@ export class OrderService {
         ErrorHelper.ConflictException('Business not found');
       }
 
-      // Platform fee calc
-      const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
-      const platformFee = Number(order.total) * (platformFeePercentage / 100);
-
-      // Update order: paid + processing
+      // Update order: paid + confirmed (not processing yet)
       order.paymentStatus = PaymentStatus.PAID;
-      order.status = OrderStatus.PROCESSING;
+      order.status = OrderStatus.CONFIRMED;
       order.paymentDate = new Date();
 
-      // Add history entry
+      // Add history entry (duplicate check inside)
       this.addStatusToHistory(
         order,
         OrderStatus.CONFIRMED,
         null,
-        'Payment method: Payment Confirmed'
+        'Payment confirmed - awaiting merchant acceptance'
       );
 
-      // Set confirmed status
-      order.status = OrderStatus.CONFIRMED;
-
-      // Save once, not twice
       await queryRunner.manager.save(order);
-
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Mock payment confirmed for order ${order.id}`);
+      this.logger.log(`Payment confirmed for order ${order.id}`);
 
-      // Fetch fresh order for return
       return await this.orderRepository.findOne({
         where: { id: order.id },
+        relations: ['items'],
       });
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error('Payment initialization failed:', error);
@@ -834,11 +449,6 @@ export class OrderService {
     }
   }
 
-
-
-  /**
-   * Verify payment using configured payment provider
-   */
   async verifyPayment(verifyPaymentDto: VerifyPaymentDto): Promise<any> {
     try {
       const { transactionReference } = verifyPaymentDto;
@@ -896,9 +506,6 @@ export class OrderService {
     }
   }
 
-  /**
-   * Process payment manually (admin/internal use)
-   */
   async processPayment(processPaymentDto: ProcessPaymentDto): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -956,10 +563,6 @@ export class OrderService {
     }
   }
 
-  /**
-   * Process webhook from payment provider
-   * Works with both Monnify and Paystack webhooks
-   */
   async processPaymentWebhook(webhookData: any): Promise<any> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1094,6 +697,177 @@ export class OrderService {
   // ============================================================
 
 
+  async acceptOrder(orderId: number, businessId: number, notes?: string): Promise<Order> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const order = await this.findOrderById(orderId);
+
+      // Verify business ownership
+      if (order.businessId !== businessId) {
+        ErrorHelper.BadRequestException('You do not have permission to accept this order');
+      }
+
+      // Verify payment status
+      if (order.paymentStatus !== PaymentStatus.PAID) {
+        ErrorHelper.BadRequestException('Only paid orders can be accepted');
+      }
+
+      // Can only accept CONFIRMED orders (after payment)
+      if (order.status !== OrderStatus.CONFIRMED) {
+        ErrorHelper.BadRequestException(
+          `Order cannot be accepted from status: ${order.status}. Order must be in CONFIRMED status after payment.`
+        );
+      }
+
+      // Prevent accepting already processed orders
+      if ([OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED].includes(order.status)) {
+        ErrorHelper.BadRequestException(
+          `Order has already been accepted and is in ${order.status} status`
+        );
+      }
+
+      // Update order status to PROCESSING
+      order.status = OrderStatus.PROCESSING;
+      if (notes) {
+        order.notes = notes;
+      }
+
+      // Add to history (duplicate check is inside)
+      this.addStatusToHistory(order, OrderStatus.PROCESSING, businessId, notes);
+
+      // Update all items to PROCESSING
+      for (const item of order.items) {
+        item.status = OrderItemStatus.PROCESSING;
+        await queryRunner.manager.save(OrderItem, item);
+      }
+
+      await queryRunner.manager.save(Order, order);
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Order ${orderId} accepted by business ${businessId}`);
+
+      return await this.findOrderById(orderId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to accept order: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      ErrorHelper.InternalServerErrorException(`Failed to accept order: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+
+  async rejectOrder(orderId: number, businessId: number, reason: string): Promise<Order> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const order = await this.findOrderById(orderId);
+
+      // Validate business permission
+      if (order.businessId !== businessId) {
+        ErrorHelper.BadRequestException('You do not have permission to reject this order');
+      }
+
+      // Only paid orders can be rejected
+      if (order.paymentStatus !== PaymentStatus.PAID) {
+        ErrorHelper.BadRequestException('Only paid orders can be rejected');
+      }
+
+      // Can only reject CONFIRMED or PROCESSING orders
+      const validStatuses = [OrderStatus.CONFIRMED, OrderStatus.PROCESSING];
+      if (!validStatuses.includes(order.status)) {
+        ErrorHelper.BadRequestException(
+          `Order cannot be rejected from status: ${order.status}. Expected CONFIRMED or PROCESSING.`
+        );
+      }
+
+      // Prevent rejecting already finalized orders
+      if ([OrderStatus.CANCELLED, OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED, OrderStatus.REFUNDED].includes(order.status)) {
+        ErrorHelper.BadRequestException(
+          `Order cannot be rejected from ${order.status} status`
+        );
+      }
+
+      // Update order status
+      order.status = OrderStatus.CANCELLED;
+      order.notes = `REJECTED BY BUSINESS: ${reason}`;
+
+      // Add to history
+      this.addStatusToHistory(order, OrderStatus.CANCELLED, businessId, `Rejected: ${reason}`);
+
+      // Cancel all items
+      for (const item of order.items) {
+        item.status = OrderItemStatus.CANCELLED;
+        await queryRunner.manager.save(OrderItem, item);
+      }
+
+      // Return inventory
+      await this.returnInventoryForOrder(order, queryRunner.manager);
+
+      // Build refundDetails
+      order.refundDetails = {
+        refundReference: `RFD-${Date.now()}-${orderId}`,
+        amountRequested: order.total,
+        amountApproved: order.total,
+        amountRefunded: 0,
+        remainingAmount: order.total,
+        status: RefundStatus.REQUESTED,
+        reason: `Order rejected by business: ${reason}`,
+        refundType: RefundType.FULL,
+        refundMethod: RefundMethod.ORIGINAL_PAYMENT,
+        customerNote: undefined,
+        merchantNote: reason,
+        requestedBy: businessId,
+        approvedBy: businessId,
+        refundedBy: undefined,
+        requestedAt: new Date(),
+        approvedAt: new Date(),
+        processingAt: null,
+        refundedAt: null,
+        failedAt: null,
+        cancelledAt: null,
+        transactions: [],
+        meta: {},
+      };
+
+      order.isRefunded = false;
+
+      await queryRunner.manager.save(Order, order);
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`Order ${orderId} rejected by business ${businessId}. Reason: ${reason}`);
+
+      // Trigger async refund
+      this.initiateRefund(orderId).catch((err) => {
+        this.logger.error(`Refund initiation failed for order ${orderId}: ${err.message}`, err.stack);
+      });
+
+      return await this.findOrderById(orderId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to reject order: ${error.message}`, error.stack);
+
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      ErrorHelper.InternalServerErrorException(`Failed to reject order: ${error.message}`);
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+
   async updateOrderStatus(
     orderId: number,
     updateStatusDto: UpdateOrderStatusDto,
@@ -1108,6 +882,12 @@ export class OrderService {
       const { status, notes } = updateStatusDto;
       const order = await this.findOrderById(orderId);
 
+      // Prevent duplicate status
+      if (order.status === status) {
+        this.logger.warn(`Order ${orderId} already has status ${status}, skipping update`);
+        return order;
+      }
+
       // If businessId is provided, verify ownership
       if (businessId && order.businessId !== businessId) {
         ErrorHelper.BadRequestException('You do not have permission to update this order');
@@ -1121,17 +901,17 @@ export class OrderService {
       // Validate status transition
       this.validateStatusTransition(order.status, status);
 
-      // Prevent downgrade transitions
-      this.validateNoDowngrade(order.status, status);
-
       // Update order status
       order.status = status;
       if (notes) {
         order.notes = notes;
       }
 
-      // Add to status history
+      // Add to status history (duplicate check inside)
       this.addStatusToHistory(order, status, userId, notes);
+
+      // Update payment status if needed
+      this.updatePaymentStatusForOrderStatus(order);
 
       // Update order items status based on order status
       let itemStatus: OrderItemStatus;
@@ -1183,51 +963,6 @@ export class OrderService {
       ErrorHelper.InternalServerErrorException(`Failed to update order status: ${error.message}`);
     } finally {
       await queryRunner.release();
-    }
-  }
-
-
-  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
-    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [
-        OrderStatus.PROCESSING,
-        OrderStatus.CANCELLED,
-      ],
-      [OrderStatus.PROCESSING]: [
-        OrderStatus.CONFIRMED,
-        OrderStatus.CANCELLED,
-      ],
-      [OrderStatus.CONFIRMED]: [
-        OrderStatus.SHIPPED,
-        OrderStatus.CANCELLED,
-      ],
-      [OrderStatus.SHIPPED]: [
-        OrderStatus.DELIVERED,
-        OrderStatus.RETURNED,
-      ],
-      [OrderStatus.DELIVERED]: [
-        OrderStatus.RETURNED,
-        OrderStatus.REFUNDED,
-        OrderStatus.COMPLETED,
-      ],
-      [OrderStatus.CANCELLED]: [
-        OrderStatus.REFUNDED,
-      ],
-      [OrderStatus.RETURNED]: [
-        OrderStatus.REFUNDED,
-      ],
-      [OrderStatus.REFUNDED]: [],
-      [OrderStatus.COMPLETED]: [],
-    };
-
-    if (currentStatus === newStatus) {
-      return;
-    }
-
-    if (!validTransitions[currentStatus]?.includes(newStatus)) {
-      ErrorHelper.BadRequestException(
-        `Invalid status transition from ${currentStatus} to ${newStatus}. Valid transitions: ${validTransitions[currentStatus]?.join(', ') || 'none'}`,
-      );
     }
   }
 
@@ -1511,9 +1246,7 @@ export class OrderService {
     }
   }
 
-  /**
-   * Process verified payment and update order
-   */
+
   private async processVerifiedPayment(order: Order, transaction: any): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1546,9 +1279,7 @@ export class OrderService {
     }
   }
 
-  /**
-   * Process order payment and handle settlement
-   */
+
   private async processOrderPayment(
     order: Order,
     paymentData: {
@@ -1613,9 +1344,7 @@ export class OrderService {
     }
   }
 
-  /**
-   * Handle business settlement using PaymentService
-   */
+
   private async handleBusinessSettlement(
     orderId: number,
     entityManager: EntityManager,
@@ -1848,29 +1577,6 @@ export class OrderService {
     }
   }
 
-
-  private addStatusToHistory(
-    order: Order,
-    newStatus: OrderStatus,
-    userId?: number | null,
-    notes?: string,
-    metadata?: Record<string, any>,
-  ): void {
-    if (!order.statusHistory) {
-      order.statusHistory = [];
-    }
-
-    const historyEntry: OrderStatusHistory = {
-      status: newStatus,
-      timestamp: new Date(),
-      updatedBy: userId,
-      notes,
-      metadata,
-    };
-
-    order.statusHistory.push(historyEntry);
-  }
-
   private async initiateRefund(orderId: number): Promise<void> {
     try {
       const order = await this.findOrderById(orderId);
@@ -1900,8 +1606,6 @@ export class OrderService {
       throw error;
     }
   }
-
-
 
   private async initiateAutomaticRefundAfterRejection(
     orderId: number,
@@ -2120,212 +1824,6 @@ export class OrderService {
     }
   }
 
-
-
-  // private async initiateAutomaticRefundAfterRejection(
-  //   orderId: number,
-  //   reason: string,
-  //   businessId: number,
-  // ): Promise<void> {
-  //   try {
-  //     this.logger.log(`Initiating automatic refund for rejected order ${orderId}`);
-
-  //     const order = await this.findOrderById(orderId);
-
-  //     // Double check order is still eligible
-  //     if (order.paymentStatus !== PaymentStatus.PAID) {
-  //       this.logger.warn(`Order ${orderId} is not paid, skipping refund`);
-  //       return;
-  //     }
-
-  //     if (order.isRefunded) {
-  //       this.logger.warn(`Order ${orderId} already refunded`);
-  //       return;
-  //     }
-
-  //     // Calculate refund amounts
-  //     const platformFeePercentage = PLATFORM_FEE_PERCENTAGE;
-  //     const platformFeeAmount = order.total * (platformFeePercentage / 100);
-  //     const businessReceivedAmount = order.total - platformFeeAmount;
-
-  //     // Generate refund references
-  //     const platformRefundReference = `REF-PLATFORM-${uuidv4().substring(0, 8).toUpperCase()}`;
-  //     const businessRefundReference = `REF-BUSINESS-${uuidv4().substring(0, 8).toUpperCase()}`;
-
-  //     // Update refund details
-  //     const refundDetails: RefundDetails = {
-  //       amount: order.total,
-  //       reason: `Order rejected by business: ${reason}`,
-  //       refundType: RefundType.FULL,
-  //       refundMethod: RefundMethod.ORIGINAL_PAYMENT,
-  //       customerNote: 'Your order has been cancelled by the merchant and a full refund has been initiated. The refund will be processed to your original payment method within 3-5 business days.',
-  //       merchantNote: reason,
-  //       refundedBy: businessId,
-  //       refundedAt: new Date(),
-  //       requestedAt: order.refundDetails?.requestedAt || new Date(),
-  //       transactions: [],
-  //     };
-
-  //     // Process platform refund (if any platform fee was collected)
-  //     if (platformFeeAmount > 0) {
-  //       try {
-  //         // const platformRefund = await this.paymentService.refundPayment({
-  //         //   paymentReference: order.transactionReference,
-  //         //   amount: platformFeeAmount,
-  //         //   reason: refundDetails.reason,
-  //         //   reference: platformRefundReference,
-  //         // });
-
-  //         refundDetails.transactions.push({
-  //           type: RefundTransactionType.PLATFORM_REFUND,
-  //           amount: platformFeeAmount,
-  //           reference: platformRefundReference,
-  //           status: RefundTransactionStatus.SUCCESS,
-  //         });
-
-  //         this.logger.log(
-  //           `Platform refund successful for order ${orderId}: ${platformFeeAmount} (${platformRefundReference})`,
-  //         );
-  //       } catch (error) {
-  //         this.logger.error(`Platform refund failed for order ${orderId}: ${error.message}`);
-  //         refundDetails.transactions.push({
-  //           type: RefundTransactionType.PLATFORM_REFUND,
-  //           amount: platformFeeAmount,
-  //           reference: platformRefundReference,
-  //           status: RefundTransactionStatus.FAILED,
-  //         });
-  //       }
-  //     }
-
-  //     // Process business refund(deduct from business and refund to customer)
-  //     if (businessReceivedAmount > 0) {
-  //       try {
-  //         const business = order.business;
-  //         const customer = order.user;
-
-  //         // If no platform fee, just do a direct refund via payment provider
-  //         if (platformFeeAmount === 0) {
-  //           // const fullRefund = await this.paymentService.refundPayment({
-  //           //   paymentReference: order.transactionReference,
-  //           //   amount: order.total,
-  //           //   reason: refundDetails.reason,
-  //           //   reference: businessRefundReference,
-  //           // });
-
-  //           refundDetails.transactions.push({
-  //             type: RefundTransactionType.PLATFORM_REFUND,
-  //             amount: order.total,
-  //             reference: businessRefundReference,
-  //             status: RefundTransactionStatus.SUCCESS,
-  //           });
-
-  //           this.logger.log(
-  //             `Full refund successful for order ${orderId}: ${order.total} (${businessRefundReference})`,
-  //           );
-  //         } else {
-  //           // Split refund: deduct from business, send to customer
-  //           const customerAccountNumber = customer.personalAccountNumber || customer.walletAccountNumber;
-  //           const customerBankCode = customer.personalBankCode || customer.walletBankCode;
-  //           const customerAccountName = customer.personalAccountName || customer.walletAccountName;
-
-  //           if (!customerAccountNumber || !customerBankCode) {
-  //             // Fallback: Refund to customer wallet
-  //             // TODO: Implement this
-  //             // const walletRefund = await this.paymentService.transferToWallet({
-  //             //   amount: businessReceivedAmount,
-  //             //   reference: businessRefundReference,
-  //             //   narration: `Refund for order ${order.orderReference}`,
-  //             //   destinationWalletReference: customer.walletReference,
-  //             //   currency: 'NGN',
-  //             // });
-
-  //             refundDetails.transactions.push({
-  //               type: RefundTransactionType.BUSINESS_REFUND,
-  //               amount: businessReceivedAmount,
-  //               reference: businessRefundReference,
-  //               status: RefundTransactionStatus.SUCCESS || 'SUCCESS',
-  //             });
-  //           } else {
-  //             // Transfer from business to customer
-  //             const businessRefund = await this.paymentService.transferToBank({
-  //               amount: businessReceivedAmount,
-  //               reference: businessRefundReference,
-  //               narration: `Refund for order ${order.orderReference}`,
-  //               destinationAccountNumber: customerAccountNumber,
-  //               destinationBankCode: customerBankCode,
-  //               destinationAccountName: customerAccountName,
-  //               sourceWalletReference: business.user.walletReference,
-  //               currency: 'NGN',
-  //             });
-
-  //             refundDetails.transactions.push({
-  //               type: RefundTransactionType.BUSINESS_REFUND,
-  //               amount: businessReceivedAmount,
-  //               reference: businessRefundReference,
-  //               status: RefundTransactionStatus.SUCCESS || 'SUCCESS',
-  //             });
-  //           }
-
-  //           this.logger.log(
-  //             `Business refund successful for order ${orderId}: ${businessReceivedAmount} (${businessRefundReference})`,
-  //           );
-  //         }
-  //       } catch (error) {
-  //         this.logger.error(`Business refund failed for order ${orderId}: ${error.message}`);
-  //         refundDetails.transactions.push({
-  //           type: RefundTransactionType.BUSINESS_REFUND,
-  //           amount: businessReceivedAmount,
-  //           reference: businessRefundReference,
-  //           status: RefundTransactionStatus.FAILED,
-  //         });
-  //       }
-  //     }
-
-  //     // Update order with refund results
-  //     const allTransactionsSuccessful = refundDetails.transactions.every(
-  //       (t) => t.status === 'SUCCESS',
-  //     );
-
-  //     await this.orderRepository.update(orderId, {
-  //       isRefunded: allTransactionsSuccessful,
-  //       refundedAmount: allTransactionsSuccessful ? order.total : 0,
-  //       refundReference: platformRefundReference || businessRefundReference,
-  //       // refundDate: allTransactionsSuccessful ? new Date() : null,
-  //       refundDetails,
-  //       status: allTransactionsSuccessful ? OrderStatus.REFUNDED : OrderStatus.CANCELLED,
-  //     });
-
-  //     if (allTransactionsSuccessful) {
-  //       this.logger.log(`Automatic refund completed successfully for order ${orderId}`);
-
-  //       // Send success notification
-  //       // this.sendRefundNotifications(order).catch((err) => {
-  //       //   this.logger.error(`Failed to send refund notifications: ${err.message}`);
-  //       // });
-  //     } else {
-  //       this.logger.error(
-  //         `Some refund transactions failed for order ${orderId}. Manual intervention required.`,
-  //       );
-
-  //       // Send alert to admin
-  //       this.sendRefundFailureAlert(orderId, refundDetails).catch((err) => {
-  //         this.logger.error(`Failed to send refund failure alert: ${err.message}`);
-  //       });
-  //     }
-  //   } catch (error) {
-  //     this.logger.error(
-  //       `Automatic refund process failed for order ${orderId}: ${error.message}`,
-  //       error.stack,
-  //     );
-
-  //     // Send alert to admin
-  //     this.sendRefundFailureAlert(orderId, null, error.message).catch((err) => {
-  //       this.logger.error(`Failed to send refund failure alert: ${err.message}`);
-  //     });
-  //   }
-  // }
-
-
   private async returnInventoryForOrder(
     order: Order,
     entityManager: EntityManager,
@@ -2351,8 +1849,6 @@ export class OrderService {
     }
   }
 
-
-
   private async sendRefundFailureAlert(
     orderId: number,
     refundDetails?: RefundDetails | null,
@@ -2368,8 +1864,6 @@ export class OrderService {
       this.logger.error(`Failed to send refund failure alert: ${error.message}`);
     }
   }
-
-
 
   private async returnInventoryForOrderItem(
     item: OrderItem,
@@ -2404,4 +1898,103 @@ export class OrderService {
     }
   }
 
+  private hasStatusInHistory(order: Order, status: OrderStatus): boolean {
+    if (!order.statusHistory || order.statusHistory.length === 0) {
+      return false;
+    }
+    return order.statusHistory.some(entry => entry.status === status);
+  }
+
+  private addStatusToHistory(
+    order: Order,
+    newStatus: OrderStatus,
+    userId?: number | null,
+    notes?: string,
+    metadata?: Record<string, any>,
+  ): void {
+    if (!order.statusHistory) {
+      order.statusHistory = [];
+    }
+
+    // Prevent duplicate status entries
+    if (this.hasStatusInHistory(order, newStatus)) {
+      this.logger.warn(
+        `Status ${newStatus} already exists in history for order ${order.id}, skipping duplicate`
+      );
+      return;
+    }
+
+    const historyEntry: OrderStatusHistory = {
+      status: newStatus,
+      timestamp: new Date(),
+      updatedBy: userId,
+      notes,
+      metadata,
+    };
+
+    order.statusHistory.push(historyEntry);
+  }
+
+  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
+    // Allow same status (no-op)
+    if (currentStatus === newStatus) {
+      return;
+    }
+
+    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+      [OrderStatus.PENDING]: [
+        OrderStatus.CONFIRMED,    // After payment
+        OrderStatus.CANCELLED,    // User cancels before payment
+      ],
+      [OrderStatus.CONFIRMED]: [
+        OrderStatus.PROCESSING,   // Merchant accepts
+        OrderStatus.CANCELLED,    // Merchant rejects
+      ],
+      [OrderStatus.PROCESSING]: [
+        OrderStatus.SHIPPED,
+        OrderStatus.CANCELLED,    // Only if not yet shipped
+      ],
+      [OrderStatus.SHIPPED]: [
+        OrderStatus.DELIVERED,
+        OrderStatus.RETURNED,     // Customer returns
+      ],
+      [OrderStatus.DELIVERED]: [
+        OrderStatus.COMPLETED,
+        OrderStatus.RETURNED,
+      ],
+      [OrderStatus.CANCELLED]: [
+        OrderStatus.REFUNDED,
+      ],
+      [OrderStatus.RETURNED]: [
+        OrderStatus.REFUNDED,
+      ],
+      [OrderStatus.REFUNDED]: [],
+      [OrderStatus.COMPLETED]: [],
+    };
+
+    if (!validTransitions[currentStatus]?.includes(newStatus)) {
+      ErrorHelper.BadRequestException(
+        `Invalid status transition from ${currentStatus} to ${newStatus}. Valid transitions: ${validTransitions[currentStatus]?.join(', ') || 'none'}`
+      );
+    }
+  }
+
+  private updatePaymentStatusForOrderStatus(order: Order): void {
+    switch (order.status) {
+      case OrderStatus.CANCELLED:
+        if (order.paymentStatus === PaymentStatus.PAID) {
+          // Paid orders that are cancelled should show refund pending
+          order.paymentStatus = PaymentStatus.PAID; // Keep as paid until refund completes
+        }
+        break;
+
+      case OrderStatus.REFUNDED:
+        order.paymentStatus = PaymentStatus.REFUNDED;
+        break;
+
+      // Other statuses maintain their payment status
+      default:
+        break;
+    }
+  }
 }
