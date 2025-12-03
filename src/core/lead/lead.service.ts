@@ -26,9 +26,9 @@ export class LeadService {
      */
     async createLeadForm(dto: CreateLeadFormDto, userId: number): Promise<LeadForm> {
         try {
-            if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
-                ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
-            }
+            // if (!dto.title || !dto.buttonText || !dto.isActive || dto.description) {
+            //     ErrorHelper.BadRequestException('Title, buttonText, and at least one input field are required');
+            // }
 
             // Fetch the user's business dynamically
             const business = await this.businessRepository.findOne({ where: { userId } });
@@ -476,7 +476,7 @@ export class LeadService {
                 ErrorHelper.BadRequestException('This form has reached its submission limit');
             }
 
-            this.validateFormInputs(dto, form.inputs);
+            // this.validateFormInputs(dto, form.inputs);
 
 
             // Create the lead with all tracking data
