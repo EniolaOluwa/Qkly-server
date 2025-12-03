@@ -29,9 +29,7 @@ export class RefundService {
     private readonly dataSource: DataSource,
   ) { }
 
-  /**
-   * Process a refund for an order
-   */
+
   async processRefund(
     createRefundDto: InitiateRefundDto,
     refundedByUserId: number,
@@ -212,9 +210,7 @@ export class RefundService {
     }
   }
 
-  /**
-   * Validate if order is eligible for refund
-   */
+
   private validateRefundEligibility(
     order: Order,
     refundType: RefundType,
@@ -257,9 +253,7 @@ export class RefundService {
     }
   }
 
-  /**
-   * Calculate refund amounts (split between platform and business)
-   */
+
   private calculateRefundAmounts(
     order: Order,
     refundType: RefundType,
@@ -283,9 +277,7 @@ export class RefundService {
     };
   }
 
-  /**
-   * Deduct refund amount from business wallet
-   */
+
   private async deductFromBusinessWallet(
     userId: number,
     businessId: number,
@@ -331,9 +323,7 @@ export class RefundService {
     }
   }
 
-  /**
-   * Get business wallet balance
-   */
+
   private async getBusinessBalance(userId: number): Promise<number> {
     const result = await this.transactionRepository
       .createQueryBuilder('txn')
@@ -350,9 +340,7 @@ export class RefundService {
     return credits - debits;
   }
 
-  /**
-   * Return inventory to stock for refunded items
-   */
+
   private async returnInventory(order: Order, queryRunner: any): Promise<void> {
     try {
       for (const item of order.items) {
@@ -373,9 +361,7 @@ export class RefundService {
     }
   }
 
-  /**
-   * Get refund history for an order
-   */
+
   async getOrderRefunds(orderId: number): Promise<any> {
     try {
       const order = await this.orderRepository.findOne({
