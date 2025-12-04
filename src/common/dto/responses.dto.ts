@@ -356,10 +356,10 @@ export class UpdateBusinessDto {
   @ApiProperty({
     description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
     type: 'string',
-    format: 'binary',
     required: false,
   })
   @IsOptional()
+  @IsString()
   logo?: Express.Multer.File;
 
   @ApiPropertyOptional({
