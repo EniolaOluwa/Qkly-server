@@ -21,6 +21,9 @@ import { ErrorHelper } from '../../common/utils';
 
 
 
+
+
+
 @Injectable()
 export class BusinessesService {
   constructor(
@@ -33,12 +36,12 @@ export class BusinessesService {
     private cloudinaryUtil: CloudinaryUtil,
   ) { }
 
-  // Business Type methods
+  // ==================== BUSINESS TYPE METHODS ====================
+
   async createBusinessType(
     createBusinessTypeDto: CreateBusinessTypeDto,
   ): Promise<BusinessType> {
     try {
-      // Check if business type already exists
       const existingBusinessType = await this.businessTypeRepository.findOne({
         where: { name: createBusinessTypeDto.name },
       });
@@ -49,12 +52,10 @@ export class BusinessesService {
         );
       }
 
-      // Create new business type
       const businessType = this.businessTypeRepository.create({
         name: createBusinessTypeDto.name,
       });
 
-      // Save business type to database
       return await this.businessTypeRepository.save(businessType);
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -66,7 +67,7 @@ export class BusinessesService {
 
   async findAllBusinessTypes(): Promise<BusinessType[]> {
     return this.businessTypeRepository.find({
-      select: ['id', 'name'],
+      select: ['id', 'name', 'createdAt', 'updatedAt'],
       order: { name: 'ASC' },
     });
   }
@@ -88,7 +89,6 @@ export class BusinessesService {
     try {
       const businessType = await this.findBusinessTypeById(id);
 
-      // Check if the new name conflicts with existing business types
       if (
         updateBusinessTypeDto.name &&
         updateBusinessTypeDto.name !== businessType.name
@@ -104,7 +104,6 @@ export class BusinessesService {
         }
       }
 
-      // Update the business type
       Object.assign(businessType, updateBusinessTypeDto);
       return await this.businessTypeRepository.save(businessType);
     } catch (error) {
@@ -123,13 +122,13 @@ export class BusinessesService {
     await this.businessTypeRepository.remove(businessType);
   }
 
-  // Business methods
+  // ==================== BUSINESS METHODS ====================
+
   async createBusiness(
     createBusinessDto: CreateBusinessDto,
     userId: number,
   ): Promise<Business> {
     try {
-      // Check if user already has a business
       const existingBusiness = await this.businessRepository.findOne({
         where: { userId },
       });
@@ -140,7 +139,6 @@ export class BusinessesService {
         );
       }
 
-      // Check if user is on the correct onboarding step
       const user = await this.userRepository.findOne({
         where: { id: userId },
       });
@@ -151,24 +149,26 @@ export class BusinessesService {
 
       if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
         ErrorHelper.ConflictException(
-          `User must be have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
+          `User must have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
         );
       }
 
-      // Verify business type exists
       await this.findBusinessTypeById(createBusinessDto.businessTypeId);
 
-      // Upload logo to Cloudinary (logo is required but validated in controller)
       if (!createBusinessDto.logo) {
         ErrorHelper.BadRequestException('Logo is required for business creation');
       }
 
-      const uploadResult = await this.cloudinaryUtil.uploadImage(
-        createBusinessDto.logo.buffer,
-      );
-      const logoUrl = uploadResult.secure_url;
 
-      // Create new business
+      const uploadImage = async (file: Express.Multer.File): Promise<string> => {
+        const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);
+        return uploaded.secure_url;
+      };
+
+      // upload logo
+      const logoUrl = await uploadImage(createBusinessDto.logo);
+
+
       const business = this.businessRepository.create({
         businessName: createBusinessDto.businessName,
         businessTypeId: createBusinessDto.businessTypeId,
@@ -178,19 +178,19 @@ export class BusinessesService {
         userId,
       });
 
-      // Save business to database
       const savedBusiness = await this.businessRepository.save(business);
 
-      // Update user's onboarding step to KYC_VERIFICATION
       await this.userRepository.update(userId, {
         onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
         businessId: savedBusiness.id,
       });
 
-      // Return business with relations loaded
       return await this.findBusinessById(savedBusiness.id);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException('Failed to create business');
@@ -222,88 +222,97 @@ export class BusinessesService {
     });
   }
 
-  async updateBusiness(
-    id: number,
-    updateBusinessDto: UpdateBusinessDto,
-  ): Promise<Business> {
-    try {
-      const business = await this.findBusinessById(id);
-
-      // Verify business type exists if provided
-      if (updateBusinessDto.businessTypeId) {
-        await this.findBusinessTypeById(updateBusinessDto.businessTypeId);
-        business.businessTypeId = updateBusinessDto.businessTypeId;
-      }
-
-      // Handle logo update
-      if (updateBusinessDto.logo) {
-        // Delete old logo if it exists
-        if (business.logo) {
-          try {
-            // Extract public_id from the Cloudinary URL
-            const urlParts = business.logo.split('/');
-            const publicIdWithExtension = urlParts[urlParts.length - 1];
-            const publicId = `Qkly/business-logo/${publicIdWithExtension.split('.')[0]}`;
-            await this.cloudinaryUtil.deleteImage(publicId);
-          } catch (deleteError) {
-            console.warn('Could not delete old logo:', deleteError);
-            // Continue with upload even if deletion fails
-          }
-        }
-
-        // Upload new logo
-        const uploadResult = await this.cloudinaryUtil.uploadImage(
-          updateBusinessDto.logo.buffer,
-        );
-        business.logo = uploadResult.secure_url;
-      }
-
-      // Update other fields
-      if (updateBusinessDto.businessName)
-        business.businessName = updateBusinessDto.businessName;
-      if (updateBusinessDto.businessDescription)
-        business.businessDescription = updateBusinessDto.businessDescription;
-      if (updateBusinessDto.location)
-        business.location = updateBusinessDto.location;
-
-      await this.businessRepository.save(business);
-
-      // Return updated business with relations loaded
-      return await this.findBusinessById(id);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException('Failed to update business');
-    }
-  }
-
   async deleteBusiness(id: number): Promise<void> {
     const business = await this.findBusinessById(id);
     await this.businessRepository.remove(business);
   }
 
 
-
   async updateBusinessDetails(
     updateBusiness: UpdateBusinessDto,
     userId: number,
-    businessId: number
-  ) {
+    businessId: number,
+  ): Promise<Business> {
     try {
       const business = await this.businessRepository.findOne({
         where: { userId, id: businessId },
+        relations: ['businessType'],
       });
 
       if (!business) {
         ErrorHelper.NotFoundException('Business record not found');
       }
 
-      Object.assign(business, updateBusiness);
+      // ===== Helper: upload + safely delete old image =====
+      const handleImageUpdate = async (
+        existing: string | null | undefined,
+        file: Express.Multer.File,
+        folder: string,
+      ): Promise<string> => {
+        try {
+          if (existing) {
+            const parts = existing.split('/');
+            const fileName = parts.pop();
+            if (fileName) {
+              const publicId = `${folder}/${fileName.split('.')[0]}`;
+              await this.cloudinaryUtil.deleteImage(publicId);
+            }
+          }
+        } catch (err) {
+          console.warn(`Could not delete old ${folder} image:`, err);
+        }
 
-      return await this.businessRepository.save(business);
+        const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);
+        return uploaded.secure_url;
+      };
+
+      // ===== Logo =====
+      if (updateBusiness.logo) {
+        business.logo = await handleImageUpdate(
+          business.logo,
+          updateBusiness.logo,
+          'Qkly/business-logo',
+        );
+      }
+
+      // ===== Cover image =====
+      if (updateBusiness.coverImage) {
+        business.coverImage = await handleImageUpdate(
+          business.coverImage,
+          updateBusiness.coverImage,
+          'Qkly/business-cover',
+        );
+      }
+
+      // ===== Update simple validated fields (DTO based) =====
+      const updatableFields: (keyof UpdateBusinessDto)[] = [
+        'businessName',
+        'businessDescription',
+        'location',
+        'storeName',
+        'heroText',
+        'storeColor',
+      ];
+
+      for (const field of updatableFields) {
+        const value = updateBusiness[field];
+        if (value !== undefined) {
+          (business as any)[field] = value;
+        }
+      }
+
+      // ===== Business type update =====
+      if (updateBusiness.businessTypeId !== undefined) {
+        await this.findBusinessTypeById(updateBusiness.businessTypeId);
+        business.businessTypeId = updateBusiness.businessTypeId;
+      }
+
+      // Save and return with full relations
+      const saved = await this.businessRepository.save(business);
+      return await this.findBusinessById(saved.id);
     } catch (error) {
-      ErrorHelper.InternalServerErrorException('failed to update business');
+      if (error instanceof NotFoundException) throw error;
+      ErrorHelper.InternalServerErrorException('Failed to update business');
     }
   }
 }
