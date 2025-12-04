@@ -14,6 +14,7 @@ import {
   PublicProductDto,
   StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
+import { async } from 'rxjs';
 
 
 @Injectable()
@@ -39,7 +40,7 @@ export class StoreFrontService {
     return business;
   }
 
-  async getStoreInfo(businessId: number): Promise<PublicBusinessInfoDto> {
+  async getStoreInfo(businessId: number) {
     const business = await this.businessRepository.findOne({
       where: { id: businessId },
       relations: ['businessType'],
@@ -55,6 +56,9 @@ export class StoreFrontService {
       businessDescription: business.businessDescription,
       location: business.location,
       logo: business.logo,
+      storeName: business.storeName,
+      storeColor: business.storeColor,
+      coverImage: business.coverImage,
       businessType: {
         id: business.businessType.id,
         name: business.businessType.name,
