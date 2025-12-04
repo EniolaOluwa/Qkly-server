@@ -28,7 +28,6 @@ export class LeadForm {
   @Column({ default: true })
   isActive: boolean;
 
-
   @Column({ unique: true, comment: 'Unique slug for public URL access' })
   slug: string;
 
