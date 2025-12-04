@@ -20,6 +20,7 @@ import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
 import { StoreFrontModule } from './core/store-front/store-front.module';
+import { DeviceModule } from './core/device/device.module';
 
 
 @Module({
@@ -40,7 +41,8 @@ import { StoreFrontModule } from './core/store-front/store-front.module';
     CategoryModule,
     PaymentModule,
     CloudinaryModule,
-    StoreFrontModule
+    StoreFrontModule,
+    DeviceModule,
   ],
   controllers: [AppController, AdminController],
   providers: [
