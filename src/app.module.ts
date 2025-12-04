@@ -19,6 +19,7 @@ import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
+import { StoreFrontModule } from './core/store-front/store-front.module';
 import { DeviceModule } from './core/device/device.module';
 
 
@@ -40,6 +41,7 @@ import { DeviceModule } from './core/device/device.module';
     CategoryModule,
     PaymentModule,
     CloudinaryModule,
+    StoreFrontModule,
     DeviceModule,
   ],
   controllers: [AppController, AdminController],
