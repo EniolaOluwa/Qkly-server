@@ -1,17 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository, In } from 'typeorm';
-import { PaginationDto, PaginationMetadataDto, PaginationResultDto } from '../../common/queries/dto';
+import { Repository } from 'typeorm';
+import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CategoryService } from '../category/category.service';
+import { Category } from '../category/entity/category.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
-import { generateRandomProduct } from '../../common/utils/product-generator';
-import { Category } from '../category/entity/category.entity';
 
 
 
@@ -25,7 +24,7 @@ export class ProductService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
-     @InjectRepository(Category)
+    @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
     private readonly categoryService: CategoryService
 
@@ -94,149 +93,36 @@ export class ProductService {
   }
 
 
-  async findAllProducts(
-    query: FindAllProductsDto,
-  ): Promise<PaginationResultDto<Product>> {
+
+  async findAllProducts(query: FindAllProductsDto): Promise<PaginationResultDto<Product>> {
     try {
-      const {
-        userId,
-        businessId,
-        categoryId,
-        search,
-        sortBy = 'createdAt',
-        sortOrder = 'DESC',
-        minPrice,
-        maxPrice,
-        inStock,
-        hasVariation,
-        colors,
-        sizes,
-        createdAfter,
-        createdBefore,
-        updatedAfter,
-        updatedBefore
-      } = query;
+      const qb = this.buildProductQuery(query);
 
-      // Create a QueryBuilder for more flexibility
-      const qb = this.productRepository
-        .createQueryBuilder('product')
-        .leftJoinAndSelect('product.sizes', 'sizes');
-
-      // User filter
-      if (userId) {
-        qb.andWhere('product.userId = :userId', { userId });
-      }
-
-      // Business filter
-      if (businessId) {
-        qb.andWhere('product.businessId = :businessId', { businessId });
-      }
-
-      // Category filter
-      if (categoryId) {
-        qb.andWhere('product.categoryId = :categoryId', { categoryId });
-      }
-
-      // Search filter (case-insensitive)
-      if (search) {
-        qb.andWhere(
-          '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
-          { search: `%${search}%` }
-        );
-      }
-
-      // Price range filter
-      if (minPrice !== undefined) {
-        qb.andWhere('product.price >= :minPrice', { minPrice });
-      }
-      if (maxPrice !== undefined) {
-        qb.andWhere('product.price <= :maxPrice', { maxPrice });
-      }
-
-      // Stock filter
-      if (inStock !== undefined) {
-        if (inStock) {
-          qb.andWhere('product.quantityInStock > 0');
-        } else {
-          qb.andWhere('product.quantityInStock <= 0');
-        }
-      }
-
-      // Variation filter
-      if (hasVariation !== undefined) {
-        qb.andWhere('product.hasVariation = :hasVariation', { hasVariation });
-      }
-
-      // Colors filter - FIXED
-      if (colors && colors.length > 0) {
-        qb.andWhere('product.colors && ARRAY[:...colors]', { colors });
-      }
-
-      // Size filter - FIXED
-      if (sizes && sizes.length > 0) {
-        qb.andWhere((qb) => {
-          const subQuery = qb
-            .subQuery()
-            .select('product_size.productId')
-            .from('product_sizes', 'product_size')
-            .where('product_size.value && ARRAY[:...sizes]', { sizes })
-            .getQuery();
-          return 'product.id IN ' + subQuery;
-        });
-      }
-
-      // Date range filters
-      if (createdAfter) {
-        qb.andWhere('product.createdAt >= :createdAfter', {
-          createdAfter: new Date(createdAfter)
-        });
-      }
-      if (createdBefore) {
-        qb.andWhere('product.createdAt <= :createdBefore', {
-          createdBefore: new Date(createdBefore)
-        });
-      }
-      if (updatedAfter) {
-        qb.andWhere('product.updatedAt >= :updatedAfter', {
-          updatedAfter: new Date(updatedAfter)
-        });
-      }
-      if (updatedBefore) {
-        qb.andWhere('product.updatedAt <= :updatedBefore', {
-          updatedBefore: new Date(updatedBefore)
-        });
-      }
-
-      // Get total count
-      const itemCount = await qb.getCount();
-      const { skip, limit } = query;
+      const { skip, limit, sortBy = 'createdAt', sortOrder = 'DESC' } = query;
 
       const allowedSortFields = [
         'id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'
       ];
+
       const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
       const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
       qb.orderBy(`product.${validSortBy}`, validSortOrder);
 
-      // Apply pagination
-      const data = await qb
-        .skip(skip)
-        .take(limit)
-        .getMany();
+      // Count after all filters
+      const itemCount = await qb.getCount();
 
-      return new PaginationResultDto(data, {
-        itemCount,
-        pageOptionsDto: query,
-      });
+      const data = await qb.skip(skip).take(limit).getMany();
+
+      return new PaginationResultDto(data, { itemCount, pageOptionsDto: query });
     } catch (error) {
-
       ErrorHelper.InternalServerErrorException(
         `Error finding products: ${error.message}`,
         error
       );
     }
   }
+
 
 
   async findProductById(id: number): Promise<Product> {
@@ -339,59 +225,59 @@ export class ProductService {
   }
 
   async updateProduct(
-  id: number,
-  updateData: UpdateProductDto,
-): Promise<Product> {
-  try {
-    const product = await this.findProductById(id);
+    id: number,
+    updateData: UpdateProductDto,
+  ): Promise<Product> {
+    try {
+      const product = await this.findProductById(id);
 
-    // Validate variations
-    if (updateData.hasVariation !== undefined) {
-      const hasSizes =
-        (updateData.sizes && updateData.sizes.length > 0) ||
-        (product.sizes && product.sizes.length > 0 && !updateData.sizes);
-      const hasColors =
-        (updateData.colors && updateData.colors.length > 0) ||
-        (product.colors && product.colors.length > 0 && !updateData.colors);
+      // Validate variations
+      if (updateData.hasVariation !== undefined) {
+        const hasSizes =
+          (updateData.sizes && updateData.sizes.length > 0) ||
+          (product.sizes && product.sizes.length > 0 && !updateData.sizes);
+        const hasColors =
+          (updateData.colors && updateData.colors.length > 0) ||
+          (product.colors && product.colors.length > 0 && !updateData.colors);
 
-      if (updateData.hasVariation && !hasSizes && !hasColors) {
-        ErrorHelper.BadRequestException(
-          'Product marked as having variations must include at least one size or color.',
-        );
+        if (updateData.hasVariation && !hasSizes && !hasColors) {
+          ErrorHelper.BadRequestException(
+            'Product marked as having variations must include at least one size or color.',
+          );
+        }
       }
-    }
 
-    // Handle category update by name
-    if (updateData.category) {
-      let category = await this.categoryRepository.findOne({
-        where: { name: updateData.category },
+      // Handle category update by name
+      if (updateData.category) {
+        let category = await this.categoryRepository.findOne({
+          where: { name: updateData.category },
+        });
+
+        // If category does not exist, create it
+        if (!category) {
+          category = this.categoryRepository.create({ name: updateData.category });
+          category = await this.categoryRepository.save(category);
+        }
+
+        product.category = category;
+        product.categoryId = category.id;
+      }
+
+      // Assign other fields
+      Object.assign(product, {
+        ...updateData,
+        category: product.category,
+        categoryId: product.categoryId,
       });
 
-      // If category does not exist, create it
-      if (!category) {
-        category = this.categoryRepository.create({ name: updateData.category });
-        category = await this.categoryRepository.save(category);
-      }
-
-      product.category = category;
-      product.categoryId = category.id;
+      return await this.productRepository.save(product);
+    } catch (error) {
+      ErrorHelper.InternalServerErrorException(
+        `Error updating product: ${error.message}`,
+        error,
+      );
     }
-
-    // Assign other fields
-    Object.assign(product, {
-      ...updateData,
-      category: product.category,
-      categoryId: product.categoryId,
-    });
-
-    return await this.productRepository.save(product);
-  } catch (error) {
-    ErrorHelper.InternalServerErrorException(
-      `Error updating product: ${error.message}`,
-      error,
-    );
   }
-}
 
 
   async deleteProduct(id: number): Promise<void> {
@@ -405,8 +291,74 @@ export class ProductService {
 
 
 
+  buildProductQuery(query: FindAllProductsDto) {
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('product.deletedAt IS NULL')
+      .distinct(true);
 
+    const {
+      userId,
+      businessId,
+      categoryId,
+      search,
+      minPrice,
+      maxPrice,
+      inStock,
+      hasVariation,
+      colors,
+      sizes,
+      createdAfter,
+      createdBefore,
+      updatedAfter,
+      updatedBefore
+    } = query;
 
+    if (userId) qb.andWhere('product.userId = :userId', { userId });
+    if (businessId) qb.andWhere('product.businessId = :businessId', { businessId });
+    if (categoryId) qb.andWhere('product.categoryId = :categoryId', { categoryId });
 
+    if (search) {
+      qb.andWhere(
+        '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
+        { search: `%${search}%` },
+      );
+    }
 
+    if (minPrice !== undefined) qb.andWhere('product.price >= :minPrice', { minPrice });
+    if (maxPrice !== undefined) qb.andWhere('product.price <= :maxPrice', { maxPrice });
+
+    if (inStock !== undefined) {
+      qb.andWhere(
+        inStock ? 'product.quantityInStock > 0' : 'product.quantityInStock <= 0'
+      );
+    }
+
+    if (hasVariation !== undefined) {
+      qb.andWhere('product.hasVariation = :hasVariation', { hasVariation });
+    }
+
+    if (colors?.length) {
+      qb.andWhere('product.colors && ARRAY[:...colors]', { colors });
+    }
+
+    if (sizes?.length) {
+      const sub = qb.subQuery()
+        .select('ps.productId')
+        .from('product_sizes', 'ps')
+        .where('ps.value && ARRAY[:...sizes]', { sizes })
+        .getQuery();
+
+      qb.andWhere(`product.id IN ${sub}`);
+    }
+
+    if (createdAfter) qb.andWhere('product.createdAt >= :createdAfter', { createdAfter: new Date(createdAfter) });
+    if (createdBefore) qb.andWhere('product.createdAt <= :createdBefore', { createdBefore: new Date(createdBefore) });
+    if (updatedAfter) qb.andWhere('product.updatedAt >= :updatedAfter', { updatedAfter: new Date(updatedAfter) });
+    if (updatedBefore) qb.andWhere('product.updatedAt <= :updatedBefore', { updatedBefore: new Date(updatedBefore) });
+
+    return qb;
+  }
 }

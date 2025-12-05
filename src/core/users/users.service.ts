@@ -37,6 +37,9 @@ const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
 export class UsersService {
 
   private readonly logger = new Logger(UsersService.name);
+  private readonly MAX_PIN_ATTEMPTS = 5;
+  private readonly PIN_LOCK_MINUTES = 15;
+
 
   constructor(
     @InjectRepository(User)
@@ -1224,6 +1227,80 @@ export class UsersService {
     }
   }
 
+  async loginWithPin(phone: string, pin: string): Promise<LoginResponseDto> {
+    if (!phone || !pin) {
+      ErrorHelper.BadRequestException('Phone and PIN are required');
+    }
 
+    const user = await this.userRepository.findOne({
+      where: { phone },
+    });
+
+
+    if (!user) {
+      ErrorHelper.UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.pin) {
+      ErrorHelper.UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.pinLockedUntil && user.pinLockedUntil > new Date()) {
+      const remainingMs = user.pinLockedUntil.getTime() - Date.now();
+      const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+      ErrorHelper.UnauthorizedException(
+        `Account locked due to too many failed PIN attempts. Try again in ${remainingMinutes} minute(s).`,
+      );
+    }
+
+    const isPinValid = CryptoUtil.verifyPin(pin, user.pin);
+    if (!isPinValid) {
+      const newAttempts = (user.pinFailedAttempts || 0) + 1;
+      const updates: Partial<User> = { pinFailedAttempts: newAttempts };
+
+      if (newAttempts >= this.MAX_PIN_ATTEMPTS) {
+        const lockUntil = new Date(Date.now() + this.PIN_LOCK_MINUTES * 60 * 1000);
+        updates.pinLockedUntil = lockUntil;
+      }
+
+      await this.userRepository.update(user.id, updates);
+
+      ErrorHelper.UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.pinFailedAttempts && user.pinFailedAttempts > 0) {
+      await this.userRepository.update(user.id, {
+        pinFailedAttempts: 0,
+        pinLockedUntil: null,
+      });
+    }
+
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      deviceId: user.deviceId,
+      role: user.role,
+    };
+
+    const accessToken = this.jwtService.sign(payload);
+
+    return {
+      message: 'User logged in successfully',
+      accessToken,
+      tokenType: 'Bearer',
+      expiresIn: EXPIRATION_TIME_SECONDS,
+      userId: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.isPhoneVerified,
+      onboardingStep: user.onboardingStep,
+    };
+
+  }
 
 }
