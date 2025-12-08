@@ -1,9 +1,9 @@
 import { Body, Controller, Logger, Post } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/admin.decorator';
-import { PaymentStatus } from '../order/interfaces/order.interface';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
+import { PaymentStatus } from '../payment/types/payment.status';
 
 
 @Admin()

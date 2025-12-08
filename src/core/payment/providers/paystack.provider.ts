@@ -12,7 +12,6 @@ import {
   CreateVirtualAccountDto,
   InitializePaymentRequestDto,
   InitializePaymentResponseDto,
-  PaymentProviderType,
   PaymentVerificationStatus,
   ResolveBankAccountDto,
   TransferRequestDto,
@@ -24,6 +23,7 @@ import {
   WebhookEventDto,
 } from '../dto/payment-provider.dto';
 import { IPaymentProvider } from '../interfaces/payment-provider.interface';
+import { PaymentProvider } from '../types/payment-provider.types';
 
 @Injectable()
 export class PaystackProvider extends IPaymentProvider {
@@ -52,8 +52,8 @@ export class PaystackProvider extends IPaymentProvider {
     }
   }
 
-  getProviderType(): PaymentProviderType {
-    return PaymentProviderType.PAYSTACK;
+  getProviderType(): PaymentProvider {
+    return PaymentProvider.PAYSTACK;
   }
 
   // Make public for PaystackIntegrationService
@@ -156,7 +156,7 @@ export class PaystackProvider extends IPaymentProvider {
         bankCode: activeAccount.bank?.code || activeAccount.bank?.id?.toString() || '',
         currencyCode: activeAccount.currency || 'NGN',
         createdOn: activeAccount.created_at,
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
         providerAccountId: activeAccount.id?.toString(),
         customerCode: customerCode,
         status: activeAccount.active ? 'ACTIVE' : 'PENDING',
@@ -188,7 +188,7 @@ export class PaystackProvider extends IPaymentProvider {
         bankCode: data.bank?.code || data.bank?.id?.toString() || '',
         currencyCode: data.currency || 'NGN',
         createdOn: new Date().toISOString(),
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
         providerAccountId: data.id?.toString() || 'PENDING',
         customerCode: data.customer_code,
         status: 'PENDING',
@@ -204,7 +204,7 @@ export class PaystackProvider extends IPaymentProvider {
       bankCode: data.bank.code || data.bank.id.toString(),
       currencyCode: data.currency,
       createdOn: data.created_at,
-      provider: PaymentProviderType.PAYSTACK,
+      provider: PaymentProvider.PAYSTACK,
       providerAccountId: data.id.toString(),
       customerCode: data.customer_code,
       status: 'ACTIVE',
@@ -235,7 +235,7 @@ export class PaystackProvider extends IPaymentProvider {
         bankCode: account.bank.code || account.bank.id.toString(),
         currencyCode: account.currency,
         createdOn: account.created_at,
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
         providerAccountId: account.id.toString(),
         customerCode: customerCode,
         status: account.active ? 'ACTIVE' : 'INACTIVE',
@@ -288,7 +288,7 @@ export class PaystackProvider extends IPaymentProvider {
         authorizationUrl: data.authorization_url,
         accessCode: data.access_code,
         paymentReference: data.reference,
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
       };
     } catch (error) {
       this.logger.error('Payment initialization failed:', error);
@@ -318,7 +318,7 @@ export class PaystackProvider extends IPaymentProvider {
         paidOn: transaction.paid_at || transaction.created_at,
         currency: transaction.currency,
         metadata: transaction.metadata,
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
       };
     } catch (error) {
       this.logger.error('Payment verification failed:', error);
@@ -366,7 +366,7 @@ export class PaystackProvider extends IPaymentProvider {
         recipientBankCode: dto.destinationBankCode,
         narration: dto.narration,
         dateInitiated: data.created_at || new Date().toISOString(),
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
         providerResponse: data,
       };
     } catch (error) {
@@ -533,7 +533,7 @@ export class PaystackProvider extends IPaymentProvider {
           currency: data.currency,
           metadata: data.metadata,
         },
-        provider: PaymentProviderType.PAYSTACK,
+        provider: PaymentProvider.PAYSTACK,
       };
     } catch (error) {
       this.logger.error('Webhook processing failed:', error);

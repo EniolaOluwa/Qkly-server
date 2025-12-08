@@ -7,6 +7,7 @@ import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../commo
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { PaymentService } from '../payment/payment.service';
+import { PaymentStatus } from '../payment/types/payment.status';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -15,7 +16,7 @@ import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/p
 import { RefundMethod, RefundType } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
-import { DeliveryMethod, OrderItemStatus, OrderStatus, OrderStatusHistory, PaymentDetails, PaymentMethod, PaymentStatus, RefundDetails, RefundStatus, RefundTransactionStatus, RefundTransactionType, SettlementDetails } from './interfaces/order.interface';
+import { DeliveryMethod, OrderItemStatus, OrderStatus, OrderStatusHistory, PaymentDetails, PaymentMethod, RefundDetails, RefundStatus, RefundTransactionStatus, RefundTransactionType, SettlementDetails } from './interfaces/order.interface';
 
 const SETTLEMENT_PERCENTAGE = 0.00;
 const SETTLEMENT_PERCENTAGE_ORDER = 0.985;

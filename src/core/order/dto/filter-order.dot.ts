@@ -1,19 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsOptional,
-  IsNumber,
-  IsEnum,
-  IsDateString,
-  IsString,
-  Min,
-  IsPositive,
-  IsObject,
-  IsNotEmpty,
-  MaxLength,
-} from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, OrderItemStatus } from '../interfaces/order.interface';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { PaginationDto } from '../../../common/queries/dto';
+import { PaymentStatus } from '../../payment/types/payment.status';
+import { DeliveryMethod, OrderItemStatus, OrderStatus, PaymentMethod } from '../interfaces/order.interface';
 
 export class FindAllOrdersDto extends PaginationDto {
   @ApiProperty({

@@ -231,19 +231,6 @@ export class WalletsService {
     try {
       const dto = plainToInstance(WalletTransferOtpDto, payload);
       await validateOrReject(dto);
-
-      // This is Monnify-specific, so we'll only call it if using Monnify
-      const activeProvider = this.paymentService.getActiveProvider();
-
-      if (activeProvider === 'MONNIFY') {
-        // Get Monnify provider instance and call OTP validation
-        // This would require additional implementation
-        ErrorHelper.InternalServerErrorException('OTP validation not yet implemented for current provider');
-      }
-
-      ErrorHelper.BadRequestException(
-        'OTP validation not supported by current payment provider',
-      );
     } catch (error) {
       this.logger.error('OTP validation failed', error.stack);
       ErrorHelper.InternalServerErrorException('OTP validation failed');
@@ -268,9 +255,7 @@ export class WalletsService {
     }
   }
 
-  /**
-   * Get list of banks
-   */
+
   async getBankList(): Promise<Array<{ code: string; name: string }>> {
     try {
       return await this.paymentService.getBankList();
@@ -278,13 +263,5 @@ export class WalletsService {
       this.logger.error('Failed to get bank list', error.stack);
       throw error;
     }
-  }
-
-  /**
-   * Get payment methods for provider
-   * Helper method for backward compatibility
-   */
-  getPaymentMethodsForMonnify(paymentMethod: string): string[] {
-    return this.paymentService.getPaymentMethodsForProvider(paymentMethod);
   }
 }

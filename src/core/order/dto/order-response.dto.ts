@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Type } from 'class-transformer';
+import { PaymentStatus } from '../../payment/types/payment.status';
 import {
   DeliveryMethod,
   OrderStatus,
   PaymentMethod,
-  PaymentStatus
 } from '../interfaces/order.interface';
 
 /**
@@ -172,7 +172,7 @@ export class OrderResponseDto {
   @Expose()
   paymentStatus: PaymentStatus;
 
-  @ApiProperty({ example: 'MONNIFY', enum: PaymentMethod })
+  @ApiProperty({ example: 'BANK_TRANSFER', enum: PaymentMethod })
   @Expose()
   paymentMethod: PaymentMethod;
 
@@ -278,7 +278,7 @@ export class OrderSummaryDto {
   @Expose()
   paymentStatus: PaymentStatus;
 
-  @ApiProperty({ example: 'MONNIFY', enum: PaymentMethod })
+  @ApiProperty({ example: 'BANK_TRANSFER', enum: PaymentMethod })
   @Expose()
   paymentMethod: PaymentMethod;
 

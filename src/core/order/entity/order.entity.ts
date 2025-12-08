@@ -15,7 +15,6 @@ import { Business } from '../../businesses/business.entity';
 import { User } from '../../users/entity/user.entity';
 import {
   OrderStatus,
-  PaymentStatus,
   PaymentMethod,
   DeliveryMethod,
   PaymentDetails,
@@ -26,6 +25,7 @@ import {
 } from '../interfaces/order.interface';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { PaymentStatus } from '../../payment/types/payment.status';
 
 @Entity('orders')
 @Index(['userId', 'businessId'])

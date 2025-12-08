@@ -10,13 +10,13 @@ import {
   ResolveBankAccountDto,
   BankAccountDetailsDto,
   WebhookEventDto,
-  PaymentProviderType,
 } from '../dto/payment-provider.dto';
+import { PaymentProvider } from '../types/payment-provider.types';
 
 
 export abstract class IPaymentProvider {
 
-  abstract getProviderType(): PaymentProviderType;
+  abstract getProviderType(): PaymentProvider;
 
 
   abstract createVirtualAccount(

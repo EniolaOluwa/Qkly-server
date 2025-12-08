@@ -32,7 +32,7 @@ export class WalletsController {
   @ApiOperation({
     summary: 'Generate user wallet',
     description:
-      'Creates a Monnify wallet for the authenticated user. Requires JWT authentication and user BVN.',
+      'Creates a wallet for the authenticated user. Requires JWT authentication and user BVN.',
   })
   @ApiResponse({
     status: 201,
@@ -103,86 +103,4 @@ export class WalletsController {
   async getWalletBalance(@Request() req): Promise<WalletBalanceResponseDto> {
     return await this.walletsService.getUserWalletWithBalance(req.user.userId);
   }
-
-  // @Post('payments/initialize')
-  // @UseGuards(JwtAuthGuard)
-  // @ApiBearerAuth()
-  // @ApiOperation({
-  //   summary: 'Initialize payment',
-  //   description: 'Initialize a payment transaction with Monnify.',
-  // })
-  // @ApiResponse({
-  //   status: 201,
-  //   description: 'Payment initialized successfully',
-  //   type: PaymentResponseDto,
-  // })
-  // @ApiResponse({
-  //   status: 400,
-  //   description: 'Bad request - Invalid payment data',
-  // })
-  // @ApiResponse({
-  //   status: 401,
-  //   description: 'Unauthorized - Invalid or missing JWT token',
-  // })
-  // @ApiResponse({
-  //   status: 500,
-  //   description: 'Internal server error - Failed to initialize payment',
-  // })
-  // async initializePayment(
-  //   @Body(ValidationPipe) initiatePaymentDto: InitiatePaymentDto,
-  //   @Request() req,
-  // ) {
-  //   // Add user details to the payment payload
-  //   const paymentPayload = {
-  //     ...initiatePaymentDto,
-  //     customerEmail: req.user.email,
-  //     customerName: req.user.name || `${req.user.firstName} ${req.user.lastName}`,
-  //     customerReference: req.user.userId.toString(),
-  //     paymentMethods: this.walletsService.getPaymentMethodsForMonnify(
-  //       initiatePaymentDto.paymentMethod
-  //     ),
-  //   };
-
-  //   const paymentResponse = await this.walletsService.initializeMonnifyPayment(paymentPayload);
-
-  //   return {
-  //     message: 'Payment initialized successfully',
-  //     data: paymentResponse.responseBody,
-  //   };
-  // }
-
-  // @Get('payments/verify/:reference')
-  // @UseGuards(JwtAuthGuard)
-  // @ApiBearerAuth()
-  // @ApiOperation({
-  //   summary: 'Verify payment',
-  //   description: 'Verify payment status by reference.',
-  // })
-  // @ApiParam({
-  //   name: 'reference',
-  //   required: true,
-  //   description: 'Payment reference to verify',
-  //   type: String,
-  // })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Payment verification successful',
-  // })
-  // @ApiResponse({
-  //   status: 401,
-  //   description: 'Unauthorized - Invalid or missing JWT token',
-  // })
-  // @ApiResponse({
-  //   status: 500,
-  //   description: 'Internal server error - Failed to verify payment',
-  // })
-  // async verifyPayment(@Param('reference') reference: string) {
-  //   const verification = await this.walletsService.verifyMonnifyPayment(reference);
-
-  //   return {
-  //     message: 'Payment verification successful',
-  //     data: verification,
-  //     status: verification.paymentStatus,
-  //   };
-  // }
 }

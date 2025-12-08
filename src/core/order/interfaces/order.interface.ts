@@ -57,49 +57,6 @@ export interface SettlementDetails {
   bankName?: string;
   meta?: any;
 }
-export interface MonnifyPaymentResponse {
-  requestSuccessful: boolean;
-  responseMessage?: string;
-  responseCode?: string;
-  responseBody: {
-    transactionReference?: string;
-    paymentReference?: string;
-    merchantName?: string;
-    apiKey?: string;
-    amount?: number;
-    currencyCode?: string;
-    customerName?: string;
-    customerEmail?: string;
-    paymentDescription?: string;
-    paymentMethods?: string[];
-    paymentMethod?: string;
-    transactionHash?: string;
-    merchantCode?: string;
-    checkoutUrl: string;
-    defaultPaymentMethod?: string;
-    expiresAt?: string;
-    amountPaid?: number;
-    completedOn?: string;
-  };
-}
-
-export interface MonnifyTransaction {
-  amount: number;
-  currencyCode: string;
-  customerEmail: string;
-  customerName: string;
-  paymentDescription?: string;
-  paymentReference: string;
-  paymentStatus: string;
-  transactionReference: string;
-  paymentMethod: string;
-  paidAmount: number;
-  createdOn: string;
-  transactionHash: string;
-  meta?: any;
-}
-
-
 
 export interface PaymentEventData {
   productType: string;
@@ -170,8 +127,6 @@ export interface PaymentDetails {
   invoiceReference?: string;
 }
 
-
-
 export enum RefundStatus {
   REQUESTED = 'REQUESTED',
   PROCESSING = 'PROCESSING',
@@ -241,8 +196,6 @@ export interface RefundDetails {
   meta?: Record<string, any>;
 }
 
-
-
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
@@ -253,18 +206,6 @@ export enum OrderStatus {
   RETURNED = 'RETURNED',
   REFUNDED = 'REFUNDED',
   COMPLETED = 'COMPLETED',
-}
-
-
-export enum PaymentStatus {
-  PENDING = 'PENDING',
-  INITIATED = 'INITIATED',
-  PAID = 'PAID',
-  FAILED = 'FAILED',
-  EXPIRED = 'EXPIRED',
-  REFUNDED = 'REFUNDED',
-  PARTIALLY_REFUNDED = 'PARTIALLY_REFUNDED',
-  PARTIALLY_PAID = 'PARTIALLY_PAID',
 }
 
 export interface OrderStatusHistory {

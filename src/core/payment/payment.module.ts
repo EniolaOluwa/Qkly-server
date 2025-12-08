@@ -5,7 +5,6 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { PaymentService } from './payment.service';
 import { PaystackIntegrationService } from './paystack-integration.service';
-import { MonnifyProvider } from './providers/monnify.provider';
 import { PaystackWebhookHandler } from './providers/paystack-webhook.handler';
 import { PaystackProvider } from './providers/paystack.provider';
 @Module({
@@ -17,7 +16,6 @@ import { PaystackProvider } from './providers/paystack.provider';
   ],
   providers: [
     PaymentService,
-    MonnifyProvider,
     PaystackProvider,
     PaystackWebhookHandler,
     PaystackIntegrationService,

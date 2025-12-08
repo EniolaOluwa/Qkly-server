@@ -1,11 +1,5 @@
-import { IsString, IsEmail, IsOptional } from "class-validator";
-
-export enum PaymentProviderType {
-  MONNIFY = 'MONNIFY',
-  PAYSTACK = 'PAYSTACK',
-}
-
-// src/core/payment/dto/payment-provider.dto.ts
+import { IsEmail, IsOptional, IsString } from "class-validator";
+import { PaymentProvider } from "../types/payment-provider.types";
 
 export class CreateVirtualAccountDto {
   @IsString()
@@ -63,7 +57,7 @@ export interface VirtualAccountResponseDto {
   bankCode: string;
   currencyCode: string;
   createdOn: string;
-  provider: PaymentProviderType;
+  provider: PaymentProvider;
   providerAccountId?: string;
 
   customerCode?: string;  // For Paystack
@@ -88,15 +82,15 @@ export interface InitializePaymentRequestDto {
   paymentMethods?: string[];
   metadata?: Record<string, any>;
   split?: PaymentSplitConfig;
-  subaccount?: string; // Paystack subaccount code
+  subaccount?: string;
   transaction_charge?: number; // Platform fee in kobo
-  bearer?: 'account' | 'subaccount' | 'all-proportional' | 'all'; // Who bears Paystack fee
+  bearer?: 'account' | 'subaccount' | 'all-proportional' | 'all';
 }
 
 export interface PaymentSplitConfig {
   type: 'flat' | 'percentage';
-  subaccountCode?: string; // For Paystack
-  walletReference?: string; // For Monnify
+  subaccountCode?: string;
+  walletReference?: string;
   bearerType: 'account' | 'subaccount' | 'all-proportional' | 'all';
   percentage?: number;
   flatAmount?: number;
@@ -106,7 +100,7 @@ export interface InitializePaymentResponseDto {
   authorizationUrl: string;
   accessCode: string;
   paymentReference: string;
-  provider: PaymentProviderType;
+  provider: PaymentProvider;
   expiresAt?: string;
 }
 
@@ -123,7 +117,7 @@ export interface VerifyPaymentResponseDto {
   paidOn: string;
   currency: string;
   metadata?: Record<string, any>;
-  provider: PaymentProviderType;
+  provider: PaymentProvider;
 }
 
 export enum PaymentVerificationStatus {
@@ -155,7 +149,7 @@ export interface TransferResponseDto {
   recipientBankCode: string;
   narration: string;
   dateInitiated: string;
-  provider: PaymentProviderType;
+  provider: PaymentProvider;
   providerResponse?: any;
 }
 
@@ -194,5 +188,5 @@ export interface WebhookEventDto {
     currency: string;
     metadata?: Record<string, any>;
   };
-  provider: PaymentProviderType;
+  provider: PaymentProvider;
 }

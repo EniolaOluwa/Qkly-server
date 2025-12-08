@@ -21,7 +21,6 @@ import {
   RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
-import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { OnboardingStep } from './dto/onboarding-step.enum';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
@@ -49,10 +48,6 @@ export class UsersService {
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
-
-
-
-    private walletProvisioningUtil: WalletProvisioningUtil,
   ) { }
 
 
@@ -424,31 +419,7 @@ export class UsersService {
         });
 
         // Try to provision wallet if utilities are available
-        try {
-          const bvnVerificationData = {
-            bvn: verificationData.bvn,
-            customerName: `${verificationData.first_name} ${verificationData.last_name}`.trim(),
-            firstName: verificationData.first_name,
-            lastName: verificationData.last_name,
-            dateOfBirth: verificationData.date_of_birth,
-            verification_status: 'VERIFIED',
-          };
-
-          const walletResult = await this.walletProvisioningUtil.provisionWalletOnBvnSuccess(
-            userId,
-            user.email,
-            bvnVerificationData,
-          );
-
-          if (walletResult.success) {
-            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
-          } else {
-            console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
-          }
-        } catch (walletError) {
-          // Log wallet provisioning error but don't fail the verification response
-          console.error('Wallet provisioning failed:', walletError);
-        }
+        // TODO: Provision wallet
       }
 
       // Return response based on verification result

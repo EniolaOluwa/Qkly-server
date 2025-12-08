@@ -4,15 +4,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order } from '../../order/entity/order.entity';
-import { OrderStatus, PaymentStatus } from '../../order/interfaces/order.interface';
-import {
-  Transaction,
-  TransactionFlow,
-  TransactionStatus,
-  TransactionType,
-} from '../../transaction/entity/transaction.entity';
+import { OrderStatus } from '../../order/interfaces/order.interface';
+import { TransactionFlow, TransactionStatus, TransactionType } from '../../transaction/types/transaction.types';
 import { User } from '../../users/entity/user.entity';
 import { PaystackIntegrationService } from '../paystack-integration.service';
+import { PaymentStatus } from '../types/payment.status';
+import { Transaction } from '../../transaction/entity/transaction.entity';
 
 
 @Injectable()

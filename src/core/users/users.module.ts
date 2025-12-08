@@ -6,7 +6,6 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtStrategy } from '../../common/auth/jwt.strategy';
 import { RoleGuard } from '../../common/guards/role.guard';
-import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { WalletsModule } from '../wallets/wallets.module';
 import { Otp } from './entity/otp.entity';
 import { User } from './entity/user.entity';
@@ -29,7 +28,7 @@ import { UsersService } from './users.service';
     WalletsModule,
   ],
   controllers: [UsersController],
-  providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
+  providers: [UsersService, JwtStrategy, RoleGuard],
   exports: [UsersService, RoleGuard, JwtStrategy, JwtModule, PassportModule],
 })
 export class UsersModule { }

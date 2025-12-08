@@ -278,84 +278,6 @@
 
 
   // @Public()
-  // @Post('webhook/monnify')
-  // @HttpCode(200)
-  // @ApiOperation({
-  //   summary: 'Monnify webhook handler',
-  //   description: 'Receives and processes payment webhooks from Monnify',
-  // })
-  // async handleMonnifyWebhook(
-  //   @Headers('monnify-signature') signature: string,
-  //   @Req() request: Request,
-  //   @Res({ passthrough: true }) response: Response,
-  // ) {
-  //   try {
-  //     this.logger.log('Received Monnify webhook');
-
-  //     const webhookData = request.body as any;
-  //     const rawBody = (request as any).rawBody;
-
-  //     if (!webhookData) {
-  //       this.logger.error('Webhook data is missing from request body');
-  //       return {
-  //         success: false,
-  //         message: 'Invalid webhook data',
-  //       };
-  //     }
-
-  //     this.logger.log(`Webhook event type: ${webhookData.eventType}`);
-
-  //     // Validate webhook signature using PaymentService
-  //     if (signature && rawBody) {
-  //       const isValid = this.paymentService.validateWebhookSignature(
-  //         webhookData,
-  //         signature,
-  //       );
-
-  //       if (!isValid) {
-  //         this.logger.error('Invalid Monnify webhook signature');
-  //         return {
-  //           success: false,
-  //           message: 'Invalid signature',
-  //         };
-  //       }
-  //       this.logger.log('Monnify webhook signature validated successfully');
-  //     } else {
-  //       this.logger.warn('Monnify signature verification skipped - missing signature or body');
-  //     }
-
-  //     // Process webhook asynchronously
-  //     this.orderService
-  //       .processPaymentWebhook(webhookData)
-  //       .then((result) => {
-  //         this.logger.log(
-  //           `Monnify webhook processed successfully: ${JSON.stringify(result)}`,
-  //         );
-  //       })
-  //       .catch((error) => {
-  //         this.logger.error(
-  //           `Error processing Monnify webhook: ${error.message}`,
-  //           error.stack,
-  //         );
-  //       });
-
-  //     return {
-  //       success: true,
-  //       message: 'Webhook received',
-  //     };
-  //   } catch (error) {
-  //     this.logger.error(
-  //       `Error handling Monnify webhook: ${error.message}`,
-  //       error.stack,
-  //     );
-  //     return {
-  //       success: false,
-  //       message: 'Error processing webhook',
-  //     };
-  //   }
-  // }
-
-  // @Public()
   // @Post('webhook/paystack')
   // @HttpCode(200)
   // @ApiOperation({
@@ -440,7 +362,7 @@
   // @ApiAuth()
   // @ApiOperation({
   //   summary: 'Get active payment provider',
-  //   description: 'Returns the currently configured payment provider (MONNIFY or PAYSTACK)',
+  //   description: 'Returns the currently configured payment provider (PAYSTACK)',
   // })
   // @ApiResponse({
   //   status: HttpStatus.OK,

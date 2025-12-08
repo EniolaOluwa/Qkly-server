@@ -37,7 +37,7 @@ export class PaymentEventData {
   @IsString()
   transactionReference: string;
 
-  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
+  @ApiProperty({ description: 'Payment reference', example: 'PSTK-12345678' })
   @IsNotEmpty()
   @IsString()
   paymentReference: string;
@@ -105,7 +105,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.BANK_TRANSFER
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -140,7 +140,7 @@ export class ProcessPaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.BANK_TRANSFER
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -152,7 +152,7 @@ export class ProcessPaymentDto {
   @IsPositive()
   amount: number;
 
-  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
+  @ApiProperty({ description: 'Payment reference', example: 'BANK_TRANSFER-12345678' })
   @IsNotEmpty()
   @IsString()
   paymentReference: string;
@@ -360,17 +360,4 @@ export class WebhookEventDataDto {
   @ValidateNested()
   @Type(() => WebhookCustomerDto)
   customer: WebhookCustomerDto;
-}
-
-
-export class MonnifyWebhookDto {
-  @ApiProperty({ example: 'SUCCESSFUL_TRANSACTION' })
-  @IsNotEmpty()
-  @IsString()
-  eventType: string;
-
-  @ApiProperty({ type: WebhookEventDataDto })
-  @ValidateNested()
-  @Type(() => WebhookEventDataDto)
-  eventData: WebhookEventDataDto;
 }

@@ -90,7 +90,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.BANK_TRANSFER
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)

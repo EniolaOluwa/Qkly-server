@@ -7,13 +7,11 @@ import { Repository } from 'typeorm';
 import { Business } from '../businesses/business.entity';
 import {
   Transaction,
-  TransactionFlow,
-  TransactionStatus,
-  TransactionType,
 } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { PaystackProvider } from './providers/paystack.provider';
 import { ErrorHelper } from '../../common/utils';
+import { TransactionStatus, TransactionFlow, TransactionType } from '../transaction/types/transaction.types';
 
 @Injectable()
 export class PaystackIntegrationService {

@@ -3,7 +3,6 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IPaymentProvider } from './interfaces/payment-provider.interface';
-import { MonnifyProvider } from './providers/monnify.provider';
 import { PaystackProvider } from './providers/paystack.provider';
 import {
   CreateVirtualAccountDto,
@@ -17,9 +16,9 @@ import {
   ResolveBankAccountDto,
   BankAccountDetailsDto,
   WebhookEventDto,
-  PaymentProviderType,
 } from './dto/payment-provider.dto';
 import { ErrorHelper } from '../../common/utils';
+import { PaymentProvider } from './types/payment-provider.types';
 
 /**
  * Payment Service - Unified interface for all payment providers
@@ -29,31 +28,26 @@ import { ErrorHelper } from '../../common/utils';
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   private readonly provider: IPaymentProvider;
-  private readonly providerType: PaymentProviderType;
+  private readonly providerType: PaymentProvider;
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly monnifyProvider: MonnifyProvider,
     private readonly paystackProvider: PaystackProvider,
   ) {
     // Get configured provider from environment
     const configuredProvider = this.configService.get<string>(
       'PAYMENT_PROVIDER',
-      PaymentProviderType.PAYSTACK,
+      PaymentProvider.PAYSTACK,
     ).toUpperCase();
 
-    this.providerType = configuredProvider as PaymentProviderType;
+    this.providerType = configuredProvider as PaymentProvider;
 
     // Select provider based on configuration
     switch (this.providerType) {
-      case PaymentProviderType.PAYSTACK:
+      case PaymentProvider.PAYSTACK:
+      default:
         this.provider = this.paystackProvider;
         this.logger.log('Using Paystack as payment provider');
-        break;
-      case PaymentProviderType.MONNIFY:
-      default:
-        this.provider = this.monnifyProvider;
-        this.logger.log('Using Monnify as payment provider');
         break;
     }
   }
@@ -61,7 +55,7 @@ export class PaymentService {
   /**
    * Get the current active provider
    */
-  getActiveProvider(): PaymentProviderType {
+  getActiveProvider(): PaymentProvider {
     return this.providerType;
   }
 
@@ -272,15 +266,15 @@ export class PaymentService {
   getPaymentMethodsForProvider(paymentMethod: string): string[] {
     switch (paymentMethod) {
       case 'CARD':
-        return this.providerType === PaymentProviderType.PAYSTACK
+        return this.providerType === PaymentProvider.PAYSTACK
           ? ['card']
           : ['CARD'];
       case 'BANK_TRANSFER':
-        return this.providerType === PaymentProviderType.PAYSTACK
+        return this.providerType === PaymentProvider.PAYSTACK
           ? ['bank_transfer']
           : ['ACCOUNT_TRANSFER'];
       default:
-        return this.providerType === PaymentProviderType.PAYSTACK
+        return this.providerType === PaymentProvider.PAYSTACK
           ? ['card', 'bank_transfer', 'ussd']
           : ['CARD', 'ACCOUNT_TRANSFER'];
     }
@@ -303,7 +297,7 @@ export class PaymentService {
    * Health check for payment provider
    */
   async healthCheck(): Promise<{
-    provider: PaymentProviderType;
+    provider: PaymentProvider;
     status: 'healthy' | 'unhealthy';
     message?: string;
   }> {

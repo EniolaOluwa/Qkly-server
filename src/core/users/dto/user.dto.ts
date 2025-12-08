@@ -1,11 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsEmail, IsNumber, Matches, MinLength, MaxLength } from 'class-validator';
 
-
-
-
-
-
 export class ChangePasswordDto {
   @ApiProperty({ example: 1 })
   @IsNumber()

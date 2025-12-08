@@ -11,28 +11,7 @@ import {
 import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { Order } from '../../order/entity/order.entity';
-
-
-export enum TransactionType {
-  ORDER_PAYMENT = 'ORDER_PAYMENT',
-  SETTLEMENT = 'SETTLEMENT',
-  WITHDRAWAL = 'WITHDRAWAL',
-  REFUND = 'REFUND',
-  WALLET_FUNDING = 'WALLET_FUNDING',
-  FEE = 'FEE',
-}
-
-export enum TransactionStatus {
-  PENDING = 'PENDING',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED',
-  REVERSED = 'REVERSED',
-}
-
-export enum TransactionFlow {
-  CREDIT = 'CREDIT',
-  DEBIT = 'DEBIT',
-}
+import { TransactionType, TransactionFlow, TransactionStatus } from '../types/transaction.types';
 
 @Entity('transactions')
 @Index(['userId', 'businessId'])

@@ -10,7 +10,8 @@ import {
   MaxLength,
   MinLength
 } from 'class-validator';
-import { PaymentMethod, PaymentStatus } from '../../order/interfaces/order.interface';
+import { PaymentMethod } from '../../order/interfaces/order.interface';
+import { PaymentStatus } from '../../payment/types/payment.status';
 
 export class ManualPaymentUpdateDto {
   @ApiProperty({
@@ -33,7 +34,7 @@ export class ManualPaymentUpdateDto {
 
   @ApiProperty({
     description: 'Payment reference from payment provider',
-    example: 'MONNIFY-12345678',
+    example: 'PSTK-12345678',
     required: false
   })
   @IsOptional()
@@ -82,7 +83,7 @@ export class ManualPaymentUpdateDto {
 
   @ApiProperty({
     description: 'Admin notes explaining why manual verification was needed',
-    example: 'Webhook failed but payment confirmed in Monnify dashboard',
+    example: 'Webhook failed but payment confirmed on dashboard',
     required: true
   })
   @IsNotEmpty()
