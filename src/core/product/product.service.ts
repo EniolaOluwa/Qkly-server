@@ -11,6 +11,8 @@ import { User } from '../users/entity/user.entity';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
+import { UserProgressService } from '../user-progress/user-progress.service';
+import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 
 
 
@@ -18,6 +20,7 @@ import { Product } from './entity/product.entity';
 @Injectable()
 export class ProductService {
   constructor(
+    private readonly userProgressService: UserProgressService,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(User)
@@ -85,8 +88,17 @@ export class ProductService {
         userId
       });
 
+      const savedProduct = await this.productRepository.save(product);
 
-      return await this.productRepository.save(product);
+
+      const productCount = await this.productRepository.count({ where: { userId } });
+
+      if (productCount === 1) {
+        await this.userProgressService.addProgress(userId, UserProgressEvent.FIRST_PRODUCT_CREATED);
+      }
+
+
+      return savedProduct;
     } catch (error) {
       ErrorHelper.InternalServerErrorException(`Error creating product: ${error.message}`, error);
     }
