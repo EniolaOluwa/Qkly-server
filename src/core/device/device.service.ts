@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { CreateDeviceDto } from './dto/device.dto';
 import { Device } from './entity/device.entity';
 import { UpdateDeviceDto } from './dto/device.dto';
+import { ErrorHelper } from '@app/common/utils';
 
 @Injectable()
 export class DeviceService {
@@ -24,12 +25,12 @@ export class DeviceService {
       const device = this.deviceRepository.create({
         ...createDeviceDto,
         userId,
+        businessId: createDeviceDto.businessId,
       });
+
       return await this.deviceRepository.save(device);
     } catch (error) {
-      throw new BadRequestException(
-        'Failed to create device: ' + error.message,
-      );
+     ErrorHelper.InternalServerErrorException("Failed to create device")
     }
   }
 
@@ -56,7 +57,7 @@ export class DeviceService {
 
   async getDevicesByUserId(userId: number): Promise<Device[]> {
     const devices = await this.deviceRepository.find({ where: { userId } });
-    if (!devices || devices.length === 0) {
+    if (!devices.length) {
       throw new NotFoundException(
         `No devices found for user with ID ${userId}`,
       );
@@ -64,13 +65,35 @@ export class DeviceService {
     return devices;
   }
 
+  //  Get devices for a business
+  async getDevicesByBusinessId(businessId: number): Promise<Device[]> {
+    try {
+         const devices = await this.deviceRepository.find({ where: { businessId } });
+
+          if (!devices.length) {
+            throw new NotFoundException(
+              `No devices found for business with ID ${businessId}`,
+            );
+          }
+
+          return devices;
+    } catch(error){
+      ErrorHelper.InternalServerErrorException('Failed to get devices for business')
+    }
+   
+  }
+
   async updateDevice(
     id: number,
     updateDeviceDto: UpdateDeviceDto,
   ): Promise<Device> {
+    try{
     const device = await this.getDeviceById(id);
     Object.assign(device, updateDeviceDto);
     return this.deviceRepository.save(device);
+    }catch(error){
+      ErrorHelper.InternalServerErrorException('Failed to update device')
+    }
   }
 
   async deleteDevice(id: number): Promise<void> {
@@ -79,4 +102,5 @@ export class DeviceService {
       throw new NotFoundException(`Device with ID ${id} not found`);
     }
   }
+
 }

@@ -17,9 +17,15 @@ export class Device {
   @Column({ nullable: false })
   userId: number;
 
+  @ManyToOne(() => Business, { nullable: true })
+  @JoinColumn({ name: 'businessId' })
+  business: Business;
+
+  @Column({ nullable: true })
+  businessId: number;
+
   @Column({ nullable: true })
   deviceName: string;
-
 
   @Column({ nullable: true })
   osType: string;

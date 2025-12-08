@@ -1,13 +1,19 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsNumber, IsOptional, IsString } from "class-validator";
 
-// DTO for creating a device
 export class CreateDeviceDto {
-    @ApiProperty({
+  @ApiProperty({
     description: 'User ID',
     example: 1,
   })
   userId: number;
+
+  @ApiPropertyOptional({
+    description: 'Business ID',
+    example: 10,
+  })
+  @IsOptional()
+  businessId?: number;
 
   @ApiProperty({
     description: 'Device name',
@@ -49,7 +55,7 @@ export class CreateDeviceDto {
   referralUrl?: string;
 }
 
-// DTO for updating a device
+
 export class UpdateDeviceDto {
   @ApiPropertyOptional({
     description: 'Device name',
@@ -90,4 +96,13 @@ export class UpdateDeviceDto {
   @IsOptional()
   @IsString()
   referralUrl?: string;
+
+  // 🔥 New businessId field
+  @ApiPropertyOptional({
+    description: 'Business ID linked to this device',
+    example: 10,
+  })
+  @IsOptional()
+  @IsNumber()
+  businessId?: number;
 }

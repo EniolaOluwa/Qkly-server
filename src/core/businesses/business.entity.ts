@@ -7,9 +7,11 @@ import {
   ManyToOne,
   OneToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
+import { Device } from '../device/entity/device.entity';
 
 @Entity('businesses')
 export class Business {
@@ -42,6 +44,8 @@ export class Business {
   @JoinColumn({ name: 'userId' })
   user: User;
 
+  @OneToMany(() => Device, (device) => device.business) 
+  devices: Device[];
 
   @Column({ nullable: true })
   coverImage: string;
