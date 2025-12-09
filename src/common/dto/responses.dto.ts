@@ -10,6 +10,7 @@ import {
   MaxLength,
   Matches,
   IsUUID,
+  Length,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -915,4 +916,28 @@ export class ResetPasswordResponseDto {
     example: true,
   })
   success: boolean;
+}
+
+export class LoginWithPinDto {
+  @ApiProperty({
+    description: 'User phone number',
+    example: '+1234567890',
+  })
+  @IsNotEmpty()
+  @IsString()
+  phone: string;
+
+
+  @ApiProperty({
+    description: '4-digit PIN for user authentication',
+    example: '1234',
+    minLength: 4,
+    maxLength: 4,
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(4)
+  @MaxLength(4)
+  @Matches(/^\d{4}$/, { message: 'PIN must be exactly 4 digits' })
+  pin: string;
 }
