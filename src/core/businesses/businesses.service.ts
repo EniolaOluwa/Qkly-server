@@ -348,14 +348,6 @@ export class BusinessesService {
         );
       }
 
-      // ===== Detect first-time cover image upload =====
-      if (coverImageFirstTime) {
-        await this.userProgressService.addProgressIfMissing(
-          userId,
-          UserProgressEvent.COVER_IMAGE_UPDATED,
-        );
-      }
-
       return await this.findBusinessById(saved.id);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;

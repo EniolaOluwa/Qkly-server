@@ -16,8 +16,10 @@ export class ProgressBackfillService {
   async runBackfill() {
     const users = await this.userRepo.find();
 
+
     for (const user of users) {
       const expectedProgress = await this.evaluator.evaluate(user);
+
 
       for (const event of expectedProgress) {
         await this.userProgressService.addProgressIfMissing(user.id, event);

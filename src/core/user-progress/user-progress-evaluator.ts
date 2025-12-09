@@ -6,6 +6,8 @@ import { Product } from "../product/entity/product.entity";
 import { User } from "../users";
 import { UserProgressEvent } from "./entities/user-progress.entity";
 
+
+
 @Injectable()
 export class UserProgressEvaluator {
   constructor(
@@ -16,15 +18,12 @@ export class UserProgressEvaluator {
   async evaluate(user: User): Promise<UserProgressEvent[]> {
     const progress: UserProgressEvent[] = [];
 
-    // 1. Business exists
+    // 1. BUSINESS_INFO_UPDATED
     const business = await this.businessRepo.findOne({
       where: { userId: user.id },
     });
 
     if (business) {
-      progress.push(UserProgressEvent.BUSINESS_CREATED);
-
-      // 2. Business info updated (if extra fields beyond creation exist)
       if (
         business.storeName ||
         business.heroText ||
@@ -34,20 +33,22 @@ export class UserProgressEvaluator {
       ) {
         progress.push(UserProgressEvent.BUSINESS_INFO_UPDATED);
       }
-
-      // 3. Cover image added
-      if (business.coverImage) {
-        progress.push(UserProgressEvent.COVER_IMAGE_UPDATED);
-      }
     }
 
-    // 4. First product created
+    // 2. FIRST_PRODUCT_CREATED
     const productCount = await this.productRepo.count({
       where: { userId: user.id },
     });
 
     if (productCount > 0) {
       progress.push(UserProgressEvent.FIRST_PRODUCT_CREATED);
+    }
+
+    // 3. PIN_CREATED (Backfill friendly)
+    const hasPin = !!user.pin;
+
+    if (hasPin) {
+      progress.push(UserProgressEvent.TRANSACTION_PIN_CREATED);
     }
 
     return progress;
