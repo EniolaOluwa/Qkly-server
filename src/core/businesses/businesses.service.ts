@@ -168,6 +168,8 @@ export class BusinessesService {
       // upload logo
       const logoUrl = await uploadImage(createBusinessDto.logo);
 
+      console.log(logoUrl)
+
 
       const business = this.businessRepository.create({
         businessName: createBusinessDto.businessName,
@@ -178,6 +180,8 @@ export class BusinessesService {
         userId,
       });
 
+      console.log(business)
+
       const savedBusiness = await this.businessRepository.save(business);
 
       await this.userRepository.update(userId, {
@@ -187,6 +191,7 @@ export class BusinessesService {
 
       return await this.findBusinessById(savedBusiness.id);
     } catch (error) {
+      console.log(error)
       if (
         error instanceof NotFoundException ||
         error instanceof ConflictException
@@ -207,7 +212,7 @@ export class BusinessesService {
   async findBusinessById(id: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
     if (!business) {
       ErrorHelper.NotFoundException(`Business with ID ${id} not found`);
@@ -218,7 +223,7 @@ export class BusinessesService {
   async findBusinessByUserId(userId: number): Promise<Business | null> {
     return await this.businessRepository.findOne({
       where: { userId },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
   }
 

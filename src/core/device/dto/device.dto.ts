@@ -2,11 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateDeviceDto {
-  @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  userId: number;
+
 
   @ApiPropertyOptional({
     description: 'Business ID',

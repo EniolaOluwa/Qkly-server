@@ -18,20 +18,25 @@ import { CreateDeviceDto } from './dto/device.dto';
 import { UpdateDeviceDto } from './dto/device.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 
-@Public()
+// @Public()
 @ApiTags('devices')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('devices')
 export class DeviceController {
   constructor(private readonly deviceService: DeviceService) {}
 
+
   @Post()
   async create(@Body() createDto: CreateDeviceDto, @Req() req, @Res() res) {
     // Use the userId from authentication token
     const userId = req.user.userId;
+    console.log('this is userId:',userId)
+   
+
     if (!userId) {
       throw new BadRequestException('Authenticated user id not found');
     }
@@ -39,7 +44,8 @@ export class DeviceController {
     return res.status(HttpStatus.CREATED).json(device);
   }
 
-  @Get()
+
+@Get()
  async findAll(@Req() req) {
   const { deviceName, osVersion } = req.query;
 
@@ -54,10 +60,11 @@ export class DeviceController {
 }
 
 
-  @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number) {
-    return await this.deviceService.getDeviceById(id);
+  @Get(':deviceId')
+  async findOne(@Param('deviceId', ParseIntPipe) deviceId: number) {
+    return await this.deviceService.getDeviceById(deviceId);
   }
+
 
   @Get('user/:userId')
   async findByUserId(
@@ -73,7 +80,8 @@ export class DeviceController {
     return await this.deviceService.getDevicesByUserId(userId);
   }
 
-  @Put(':id')
+
+  @Put(':deviceId')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateDeviceDto,
@@ -85,7 +93,8 @@ export class DeviceController {
     return await this.deviceService.updateDevice(id, updateDto);
   }
 
-  @Delete(':id')
+
+  @Delete(':deviceId')
   async remove(@Param('id', ParseIntPipe) id: number) {
     return await this.deviceService.deleteDevice(id);
   }

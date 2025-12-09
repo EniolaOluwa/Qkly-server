@@ -10,19 +10,19 @@ export class Device {
   @PrimaryGeneratedColumn()
   id: number;
 
-   @ManyToOne(() => User, { nullable: true })
+  @Column({ nullable: true })
+  userId?: number;
+
+  @ManyToOne(() => User, (user) => user.devices, { nullable: true })
   @JoinColumn({ name: 'userId' })
-  user: User;
+  user?: User;
 
-  @Column({ nullable: false })
-  userId: number;
-
-  @ManyToOne(() => Business, { nullable: true })
+  @ManyToOne(() => Business, (business) => business.devices, { nullable: true })
   @JoinColumn({ name: 'businessId' })
-  business: Business;
+  business?: Business;
 
   @Column({ nullable: true })
-  businessId: number;
+  businessId?: number;
 
   @Column({ nullable: true })
   deviceName: string;
