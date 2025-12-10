@@ -40,7 +40,7 @@ export class UsersService {
 
   private readonly logger = new Logger(UsersService.name);
   private readonly MAX_PIN_ATTEMPTS = 5;
-  private readonly PIN_LOCK_MINUTES = 15;
+  private readonly PIN_LOCK_MINUTES = 5;
 
 
   constructor(
