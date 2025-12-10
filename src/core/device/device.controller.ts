@@ -22,11 +22,11 @@ import { ApiTags } from '@nestjs/swagger';
 
 
 @Public()
-@ApiTags('devices')
+@ApiTags('Devices')
 @UseGuards(JwtAuthGuard)
 @Controller('devices')
 export class DeviceController {
-  constructor(private readonly deviceService: DeviceService) {}
+  constructor(private readonly deviceService: DeviceService) { }
 
   @Post()
   async create(@Body() createDto: CreateDeviceDto, @Req() req, @Res() res) {
@@ -40,18 +40,18 @@ export class DeviceController {
   }
 
   @Get()
- async findAll(@Req() req) {
-  const { deviceName, osVersion } = req.query;
+  async findAll(@Req() req) {
+    const { deviceName, osVersion } = req.query;
 
-  const query: Record<string, any> = {};
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 10;
+    const query: Record<string, any> = {};
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
 
-  if (deviceName) query.deviceName = deviceName;
-  if (osVersion) query.osVersion = osVersion;
+    if (deviceName) query.deviceName = deviceName;
+    if (osVersion) query.osVersion = osVersion;
 
-  return await this.deviceService.getAllDevices(page, limit, query);
-}
+    return await this.deviceService.getAllDevices(page, limit, query);
+  }
 
 
   @Get(':id')

@@ -37,7 +37,7 @@ import { Business } from './business.entity';
 import { BusinessesService } from './businesses.service';
 
 
-@ApiTags('business')
+@ApiTags('Business')
 @Controller('business')
 export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) { }
@@ -190,7 +190,9 @@ export class BusinessesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @UseInterceptors(
-    FileInterceptor('logo', {
+    FileFieldsInterceptor([
+      { name: 'logo', maxCount: 1, },
+    ], {
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB limit
       },
@@ -214,7 +216,7 @@ export class BusinessesController {
             false,
           );
         }
-      },
+      }
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -246,7 +248,6 @@ export class BusinessesController {
     @UploadedFiles()
     files: {
       logo?: Express.Multer.File[];
-      coverImage?: Express.Multer.File[];
     },
     @CurrentUser('userId') userId: number,
   ): Promise<BusinessResponseDto> {

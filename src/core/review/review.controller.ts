@@ -35,7 +35,7 @@ import { Review } from './entity/review.entity';
 import { ReviewService } from './review.service';
 import { ErrorHelper } from '../../common/utils';
 
-@ApiTags('reviews')
+@ApiTags('Reviews')
 @Controller('reviews')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
