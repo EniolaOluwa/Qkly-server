@@ -35,9 +35,10 @@ import { BusinessGuard } from '../../common/guards/business.guard';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from './business.entity';
 import { BusinessesService } from './businesses.service';
+import { create } from 'domain';
 
 
-@ApiTags('business')
+@ApiTags('Business')
 @Controller('business')
 export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) { }
@@ -190,7 +191,9 @@ export class BusinessesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @UseInterceptors(
-    FileInterceptor('logo', {
+    FileFieldsInterceptor([
+      { name: 'logo', maxCount: 1, },
+    ], {
       limits: {
         fileSize: 5 * 1024 * 1024, // 5MB limit
       },
@@ -214,7 +217,7 @@ export class BusinessesController {
             false,
           );
         }
-      },
+      }
     }),
   )
   @ApiConsumes('multipart/form-data')
@@ -243,23 +246,28 @@ export class BusinessesController {
   })
   async createBusiness(
     @Body(ValidationPipe) createBusinessDto: CreateBusinessDto,
-    @UploadedFiles()
-    files: {
+    @UploadedFiles() files: {
       logo?: Express.Multer.File[];
-      coverImage?: Express.Multer.File[];
     },
     @CurrentUser('userId') userId: number,
   ): Promise<BusinessResponseDto> {
-    if (!files.logo) {
+
+    console.log(BusinessResponseDto)
+    if (!files?.logo?.[0]) {
       ErrorHelper.BadRequestException('Logo is required for business creation');
     }
 
-    if (files.logo) createBusinessDto.logo = files.logo[0];
+    // if (files.logo) createBusinessDto.logo = files.logo[0];
+
+    // Attach uploaded files to DTO
+    createBusinessDto.logo = files.logo[0];
 
     const business = await this.businessesService.createBusiness(
       createBusinessDto,
       userId,
     );
+
+    console.log(business);
 
     return this.mapBusinessToResponse(business);
   }

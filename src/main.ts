@@ -38,7 +38,7 @@ async function bootstrap() {
     .setVersion('1.0')
     .addBearerAuth()
     .addTag('health', 'Health check endpoints')
-    .addTag('app', 'Application endpoints')
+    .addTag('App', 'Application endpoints')
     .addTag('users', 'User management endpoints')
     .build();
 
@@ -47,7 +47,12 @@ async function bootstrap() {
     customSiteTitle: 'NQkly API Documentation',
     customfavIcon: 'https://nestjs.com/favicon.ico',
     customCss: '.swagger-ui .topbar { display: none }',
-    jsonDocumentUrl: '/api/docs-json', // This exposes the JSON
+    jsonDocumentUrl: '/api/docs-json',
+    swaggerOptions: {
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+      persistAuthorization: true,
+    },
   });
 
   const port = process.env.PORT!;

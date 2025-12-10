@@ -23,15 +23,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
-import { PaginationDto } from '../../common/queries/dto';
+import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { HttpResponse } from '../../common/utils/http-response.utils';
 import { JwtAuthGuard, UserRole } from '../users';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { Product } from './entity/product.entity';
 import { ProductService } from './product.service';
 
-@ApiTags('products')
+@ApiTags('Products')
 @UseGuards(JwtAuthGuard)
 @Controller('products')
 export class ProductsController {
@@ -238,7 +239,7 @@ export class ProductsController {
     @Query() query: FindAllProductsDto & PaginationDto
   ) {
     query.businessId = businessId;
-    const products = await this.productService.findAllProducts(query);
+    const products = await this.productService.findAllProducts(query) as PaginationResultDto<Product>;
 
     // Sanitize product data for public endpoint
     const sanitizedData = {
@@ -247,7 +248,7 @@ export class ProductsController {
     };
 
     return HttpResponse.success({
-      data: sanitizedData,
+      data: products,
       message: `Products for business ${businessId} retrieved successfully`
     });
   }
@@ -318,9 +319,7 @@ export class ProductsController {
     }
   })
   async findAllProducts(@Query() query: FindAllProductsDto & PaginationDto) {
-    console.log({ query })
-    const products = await this.productService.findAllProducts(query);
-
+    const products = await this.productService.findAllProducts(query) as PaginationResultDto<Product>;
     // Sanitize product data for public endpoint
     const sanitizedData = {
       ...products,
@@ -389,109 +388,109 @@ export class ProductsController {
   // PATCH ROUTES
   // ============================================
 
-@Patch(':id')
-@ApiBearerAuth()
-@ApiOperation({
-  summary: 'Update product',
-  description: `Updates an existing product by its ID. Only the product owner (merchant who created it) or admin users can update products. 
+  @Patch(':id')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Update product',
+    description: `Updates an existing product by its ID. Only the product owner (merchant who created it) or admin users can update products. 
   Merchants can only update products in their own business. All fields are optional - only provided fields will be updated.`
-})
-@ApiParam({
-  name: 'id',
-  required: true,
-  type: Number,
-  description: 'Product ID to update',
-  example: 42
-})
-@ApiBody({
-  type: UpdateProductDto,
-  description: 'Product fields to update (all fields optional)',
-  examples: {
-    updatePrice: {
-      summary: 'Update only price and stock',
-      value: {
-        price: 24.99,
-        quantityInStock: 75
-      }
-    },
-    updateVariations: {
-      summary: 'Update product variations',
-      value: {
-        hasVariation: true,
-        sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-        colors: ['#000080', '#808080', '#000000'] // hex codes
-      }
-    },
-    updateCategory: {
-      summary: 'Update category by name',
-      value: {
-        category: 'T-Shirts'
-      }
-    },
-    fullUpdate: {
-      summary: 'Update multiple fields',
-      value: {
-        name: 'Updated Product Name',
-        description: 'Updated description',
-        price: 39.99,
-        quantityInStock: 100,
-        images: ['https://example.com/new-image.jpg'],
-        category: 'Hoodies',
-        hasVariation: true,
-        sizes: ['M', 'L'],
-        colors: ['#FF5733', '#C70039']
+  })
+  @ApiParam({
+    name: 'id',
+    required: true,
+    type: Number,
+    description: 'Product ID to update',
+    example: 42
+  })
+  @ApiBody({
+    type: UpdateProductDto,
+    description: 'Product fields to update (all fields optional)',
+    examples: {
+      updatePrice: {
+        summary: 'Update only price and stock',
+        value: {
+          price: 24.99,
+          quantityInStock: 75
+        }
+      },
+      updateVariations: {
+        summary: 'Update product variations',
+        value: {
+          hasVariation: true,
+          sizes: ['S', 'M', 'L', 'XL', 'XXL'],
+          colors: ['#000080', '#808080', '#000000'] // hex codes
+        }
+      },
+      updateCategory: {
+        summary: 'Update category by name',
+        value: {
+          category: 'T-Shirts'
+        }
+      },
+      fullUpdate: {
+        summary: 'Update multiple fields',
+        value: {
+          name: 'Updated Product Name',
+          description: 'Updated description',
+          price: 39.99,
+          quantityInStock: 100,
+          images: ['https://example.com/new-image.jpg'],
+          category: 'Hoodies',
+          hasVariation: true,
+          sizes: ['M', 'L'],
+          colors: ['#FF5733', '#C70039']
+        }
       }
     }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Product updated successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid update data'
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Valid JWT token required'
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Access denied: You can only update products you own (unless admin)'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Product not found'
+  })
+  async updateProduct(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateData: UpdateProductDto,
+    @Request() req: any
+  ) {
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+
+    // Get the product to check ownership
+    const product = await this.productService.findProductById(id);
+
+    // Authorization check: Only product owner or admin can update
+    if (userRole !== UserRole.ADMIN && product.userId !== userId) {
+      ErrorHelper.ForbiddenException('Access denied: You can only update your own products');
+    }
+
+    // For merchants, verify they still own the business
+    if (userRole === UserRole.MERCHANT) {
+      await this.productService.verifyBusinessOwnership(userId, product.businessId);
+    }
+
+    const updatedProduct = await this.productService.updateProduct(id, updateData);
+
+    return HttpResponse.success({
+      data: this.sanitizeProductData(updatedProduct),
+      message: 'Product updated successfully'
+    });
   }
-})
-@ApiResponse({
-  status: 200,
-  description: 'Product updated successfully'
-})
-@ApiResponse({
-  status: 400,
-  description: 'Bad request - Invalid update data'
-})
-@ApiResponse({
-  status: 401,
-  description: 'Unauthorized - Valid JWT token required'
-})
-@ApiResponse({
-  status: 403,
-  description: 'Forbidden - Access denied: You can only update products you own (unless admin)'
-})
-@ApiResponse({
-  status: 404,
-  description: 'Product not found'
-})
-async updateProduct(
-  @Param('id', ParseIntPipe) id: number,
-  @Body() updateData: UpdateProductDto,
-  @Request() req: any
-) {
-  const userId = req.user.userId;
-  const userRole = req.user.role;
-
-  // Get the product to check ownership
-  const product = await this.productService.findProductById(id);
-
-  // Authorization check: Only product owner or admin can update
-  if (userRole !== UserRole.ADMIN && product.userId !== userId) {
-    ErrorHelper.ForbiddenException('Access denied: You can only update your own products');
-  }
-
-  // For merchants, verify they still own the business
-  if (userRole === UserRole.MERCHANT) {
-    await this.productService.verifyBusinessOwnership(userId, product.businessId);
-  }
-
-  const updatedProduct = await this.productService.updateProduct(id, updateData);
-
-  return HttpResponse.success({
-    data: this.sanitizeProductData(updatedProduct),
-    message: 'Product updated successfully'
-  });
-}
 
 
 

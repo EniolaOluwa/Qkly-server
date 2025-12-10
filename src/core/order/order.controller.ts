@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Req, Request, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -8,24 +8,24 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
-import { Response } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
+import { BusinessGuard } from '../../common/guards/business.guard';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common/swagger/api-decorators';
+import { ErrorHelper } from '../../common/utils';
 import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard, RoleGuard, Roles, UserRole } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { AcceptOrderDto, FindAllOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import { AcceptOrderDto, FindAllOrdersDto, FindBusinessOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { InitiateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
 import { Order } from './entity/order.entity';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
-import { ErrorHelper } from '../../common/utils';
 
 
-@ApiTags('orders')
+@ApiTags('Orders')
 @Controller('orders')
 @UseGuards(JwtAuthGuard)
 export class OrdersController {
@@ -141,14 +141,13 @@ export class OrdersController {
   }
 
 
-  @Public()
   @Get()
   @UseGuards(JwtAuthGuard, RoleGuard)
   @Roles(UserRole.ADMIN)
   @ApiAuth()
   @ApiPaginatedResponse(
     Order,
-    'Find all orders with filtering and pagination',
+    'Find all orders with filtering and pagination (Admin only)',
     'Retrieves all orders with optional filters and pagination',
   )
   async findAllOrders(
@@ -159,6 +158,7 @@ export class OrdersController {
 
 
   @Get('business/:businessId')
+  @UseGuards(JwtAuthGuard, BusinessGuard)
   @ApiAuth()
   @ApiFindOneDecorator(
     Order,
@@ -167,11 +167,10 @@ export class OrdersController {
   )
   async findOrdersByBusinessId(
     @Param('businessId', ParseIntPipe) businessId: number,
-    @Query() paginationDto: PaginationDto,
-  ): Promise<PaginationResultDto<Order>> {
+    @Query() query: FindBusinessOrdersDto,): Promise<PaginationResultDto<Order>> {
     return await this.orderService.findOrdersByBusinessId(
       businessId,
-      paginationDto,
+      query,
     );
   }
 

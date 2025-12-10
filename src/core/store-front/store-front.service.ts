@@ -250,11 +250,12 @@ export class StoreFrontService {
 
 
 
+
   async getStoreProducts(
     businessId: number,
     query: StoreFrontProductQueryDto
-  ) {
-
+  ): Promise<PaginationResultDto<any>> {
+    // Build the query for the product service
     const storeQuery: FindAllProductsDto = {
       businessId,
       page: query.page ?? 1,
@@ -269,35 +270,12 @@ export class StoreFrontService {
 
       sortBy: query.sortBy ?? 'createdAt',
       sortOrder: query.sortOrder ?? 'DESC',
-      order: query.sortOrder === 'DESC' ? PaginationOrder.DESC : PaginationOrder.ASC // To be. refactored
+      order: query.sortOrder === 'DESC' ? PaginationOrder.DESC : PaginationOrder.ASC,
     };
 
-    const result = await this.productService.findAllProducts(storeQuery);
+    // Fetch paginated products
+    const result = await this.productService.findAllProducts(storeQuery) as PaginationResultDto<Product>;
 
-
-    return new PaginationResultDto(
-      result.data.map(product => ({
-        id: product.id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        quantityInStock: product.quantityInStock,
-        hasVariation: product.hasVariation,
-        colors: product.colors,
-        sizes: product.sizes,
-        images: product.images || [],
-        category: {
-          id: product.category.id,
-          name: product.category.name,
-        },
-        createdAt: product.createdAt,
-      })),
-      {
-        itemCount: result.meta.itemCount,
-        pageOptionsDto: storeQuery,
-      }
-    );
+    return result
   }
-
-
 }

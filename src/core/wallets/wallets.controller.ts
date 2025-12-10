@@ -21,7 +21,7 @@ import {
 } from './dto/wallet.dto';
 import { WalletsService } from './wallets.service';
 
-@ApiTags('wallets')
+@ApiTags('Wallets')
 @Controller('wallets')
 export class WalletsController {
   constructor(private readonly walletsService: WalletsService) { }

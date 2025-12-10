@@ -1,3 +1,4 @@
+import { TrafficEvent } from './../device/entity/device.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -7,6 +8,7 @@ import {
   ManyToOne,
   OneToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
@@ -42,6 +44,8 @@ export class Business {
   @JoinColumn({ name: 'userId' })
   user: User;
 
+  @OneToMany(() => TrafficEvent, (trafficEvent) => trafficEvent.business)
+  trafficEvents: TrafficEvent[];
 
   @Column({ nullable: true })
   coverImage: string;

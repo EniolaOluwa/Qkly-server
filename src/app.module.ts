@@ -8,20 +8,20 @@ import { AppService } from './app.service';
 import { AdminController } from './core/admin/admin.controller';
 import { BusinessesModule } from './core/businesses/businesses.module';
 import { CategoryModule } from './core/category/category.module';
+import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
+import { TrafficModule } from './core/device/traffic.module';
 import { LeadModule } from './core/lead/lead.module';
 import { OrderModule } from './core/order/order.module';
 import { PaymentModule } from './core/payment/payment.module';
 import { ProductModule } from './core/product/product.module';
 import { ReviewModule } from './core/review/review.module';
+import { StoreFrontModule } from './core/store-front/store-front.module';
 import { TransactionService } from './core/transaction/transaction.service';
+import { UserProgressModule } from './core/user-progress/user-progress.module';
 import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
-import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
-import { StoreFrontModule } from './core/store-front/store-front.module';
-import { DeviceModule } from './core/device/device.module';
-import { UserProgressModule } from './core/user-progress/user-progress.module';
 
 
 @Module({
@@ -43,7 +43,7 @@ import { UserProgressModule } from './core/user-progress/user-progress.module';
     PaymentModule,
     CloudinaryModule,
     StoreFrontModule,
-    DeviceModule,
+    TrafficModule,
     UserProgressModule,
   ],
   controllers: [AppController, AdminController],

@@ -24,7 +24,7 @@ import {
   StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
 
-@ApiTags('store-front')
+@ApiTags('Store Front')
 @Controller('store-front')
 @Public()
 export class StoreFrontController {

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
@@ -106,31 +106,15 @@ export class ProductService {
 
 
 
-  async findAllProducts(query: FindAllProductsDto): Promise<PaginationResultDto<Product>> {
+
+  async findAllProducts(query: FindAllProductsDto): Promise<Product[] | PaginationResultDto<Product>> {
     try {
       const qb = this.buildProductQuery(query);
-
-      const { skip, limit, sortBy = 'createdAt', sortOrder = 'DESC' } = query;
-
-      const allowedSortFields = [
-        'id', 'name', 'price', 'quantityInStock', 'createdAt', 'updatedAt'
-      ];
-
-      const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-      const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
-
-      qb.orderBy(`product.${validSortBy}`, validSortOrder);
-
-      // Count after all filters
-      const itemCount = await qb.getCount();
-
-      const data = await qb.skip(skip).take(limit).getMany();
-
-      return new PaginationResultDto(data, { itemCount, pageOptionsDto: query });
+      return this.paginateProducts(qb, query);
     } catch (error) {
       ErrorHelper.InternalServerErrorException(
         `Error finding products: ${error.message}`,
-        error
+        error,
       );
     }
   }
@@ -138,103 +122,49 @@ export class ProductService {
 
 
   async findProductById(id: number): Promise<Product> {
-    try {
-      const product = await this.productRepository.findOne({
-        where: { id },
-        relations: ['user', 'category', 'business', 'sizes'],
-      });
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoin('product.category', 'category')
+      .addSelect(['category.id', 'category.name'])
+      .leftJoin('product.user', 'user')
+      .addSelect(['user.id']) // add more fields if needed
+      .where('product.id = :id', { id })
+      .getOne();
 
-      if (!product) {
-        ErrorHelper.NotFoundException(`Product with ID ${id} not found`);
-      }
-
-      return product;
-    } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding product by id: ${error.message}`, error);
+    if (!product) {
+      ErrorHelper.NotFoundException(`Product with ID ${id} not found`);
     }
+
+    return product;
   }
+
+
 
   async findProductsByUserId(
     userId: number,
-    pageOptionsDto?: PaginationDto
+    pageOptionsDto?: PaginationDto,
   ): Promise<Product[] | PaginationResultDto<Product>> {
-    try {
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) ErrorHelper.NotFoundException(`User with ID ${userId} not found`);
 
-      if (!user) {
-        ErrorHelper.NotFoundException(`User with ID ${userId} not found`);
-      }
-
-      if (pageOptionsDto) {
-        const qb = this.productRepository
-          .createQueryBuilder('product')
-          .leftJoinAndSelect('product.sizes', 'sizes')
-          .where('product.userId = :userId', { userId });
-
-        const itemCount = await qb.getCount();
-        const { skip, limit, order } = pageOptionsDto;
-
-        const data = await qb
-          .skip(skip)
-          .take(limit)
-          .orderBy('product.createdAt', order)
-          .getMany();
-
-        return new PaginationResultDto(data, {
-          itemCount,
-          pageOptionsDto,
-        });
-      }
-
-      return await this.productRepository.find({
-        where: { userId },
-        relations: ['sizes'],
-      });
-    } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding products by user id: ${error.message}`, error);
-    }
+    const qb = this.buildProductQuery({ userId });
+    return this.paginateProducts(qb, pageOptionsDto);
   }
+
 
   async findProductsByBusinessId(
     businessId: number,
-    pageOptionsDto?: PaginationDto
+    pageOptionsDto?: PaginationDto,
   ): Promise<Product[] | PaginationResultDto<Product>> {
-    try {
-      const business = await this.businessRepository.findOne({ where: { id: businessId } });
+    const business = await this.businessRepository.findOne({ where: { id: businessId } });
+    if (!business) ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
 
-      if (!business) {
-        ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
-      }
-
-      if (pageOptionsDto) {
-        const qb = this.productRepository
-          .createQueryBuilder('product')
-          .leftJoinAndSelect('product.sizes', 'sizes')
-          .where('product.businessId = :businessId', { businessId });
-
-        const itemCount = await qb.getCount();
-        const { skip, limit, order } = pageOptionsDto;
-
-        const data = await qb
-          .skip(skip)
-          .take(limit)
-          .orderBy('product.createdAt', order)
-          .getMany();
-
-        return new PaginationResultDto(data, {
-          itemCount,
-          pageOptionsDto,
-        });
-      }
-
-      return await this.productRepository.find({
-        where: { businessId },
-        relations: ['user', 'business', 'sizes'],
-      });
-    } catch (error) {
-      ErrorHelper.InternalServerErrorException(`Error finding products by business id: ${error.message}`, error);
-    }
+    const qb = this.buildProductQuery({ businessId });
+    return this.paginateProducts(qb, pageOptionsDto);
   }
+
+
 
   async updateProduct(
     id: number,
@@ -303,11 +233,14 @@ export class ProductService {
 
 
 
-  buildProductQuery(query: FindAllProductsDto) {
+  buildProductQuery(
+    query: Partial<FindAllProductsDto> & { userId?: number; businessId?: number }
+  ) {
     const qb = this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.sizes', 'sizes')
       .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.user', 'user')
       .where('product.deletedAt IS NULL')
       .distinct(true);
 
@@ -325,7 +258,7 @@ export class ProductService {
       createdAfter,
       createdBefore,
       updatedAfter,
-      updatedBefore
+      updatedBefore,
     } = query;
 
     if (userId) qb.andWhere('product.userId = :userId', { userId });
@@ -343,9 +276,7 @@ export class ProductService {
     if (maxPrice !== undefined) qb.andWhere('product.price <= :maxPrice', { maxPrice });
 
     if (inStock !== undefined) {
-      qb.andWhere(
-        inStock ? 'product.quantityInStock > 0' : 'product.quantityInStock <= 0'
-      );
+      qb.andWhere(inStock ? 'product.quantityInStock > 0' : 'product.quantityInStock <= 0');
     }
 
     if (hasVariation !== undefined) {
@@ -371,6 +302,34 @@ export class ProductService {
     if (updatedAfter) qb.andWhere('product.updatedAt >= :updatedAfter', { updatedAfter: new Date(updatedAfter) });
     if (updatedBefore) qb.andWhere('product.updatedAt <= :updatedBefore', { updatedBefore: new Date(updatedBefore) });
 
-    return qb;
+    // Select fields explicitly; include only businessId, not full business
+    return qb.select([
+      'product',       // all product fields
+      'sizes',
+      'category',
+      'user.id',       // just user id (or add fields if needed)
+      'product.businessId', // only businessId
+    ]);
+  }
+
+  private async paginateProducts(
+    qb: SelectQueryBuilder<Product>,
+    pageOptionsDto?: PaginationDto,
+  ): Promise<Product[] | PaginationResultDto<Product>> {
+    if (!pageOptionsDto) return qb.getMany();
+
+    const { skip, limit, order = 'DESC' } = pageOptionsDto;
+
+    // Clone query for count
+    const countQb = qb.clone();
+    const itemCount = await countQb.getCount();
+
+    const data = await qb
+      .orderBy('product.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    return new PaginationResultDto(data, { itemCount, pageOptionsDto });
   }
 }
