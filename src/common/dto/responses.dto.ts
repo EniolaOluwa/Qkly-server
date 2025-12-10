@@ -269,14 +269,6 @@ export class CreateBusinessDto {
   logo?: Express.Multer.File;
 
   @ApiPropertyOptional({
-    description: 'Cover image file for store front (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
-    type: 'string',
-    format: 'binary',
-  })
-  @IsOptional()
-  coverImage?: Express.Multer.File;
-
-  @ApiPropertyOptional({
     description: 'Store name (if different from business name)',
     example: "Success's Clothings",
   })
@@ -357,6 +349,7 @@ export class UpdateBusinessDto {
   @ApiProperty({
     description: 'Business logo image file (JPEG, PNG, GIF, WebP, BMP, TIFF supported)',
     type: 'string',
+    format: 'binary',
     required: false,
   })
   @IsOptional()

@@ -25,6 +25,8 @@ export class ChangePasswordDto {
   confirmPassword: string;
 }
 
+
+
 export class UpdateUserProfileDto {
   @ApiPropertyOptional({ example: 'John' })
   @IsOptional()
@@ -48,6 +50,7 @@ export class UpdateUserProfileDto {
   @IsString()
   phone?: string;
 }
+
 
 export class ChangePinDto {
   @ApiProperty({ example: 1 })

@@ -1,10 +1,12 @@
-import { Body, Controller, Logger, Post } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/admin.decorator';
 import { PaymentStatus } from '../order/interfaces/order.interface';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
 import { ProgressBackfillService } from '../user-progress/progress-backfill.script';
+import { TrafficEventService } from '../device/traffic.service';
+import { AdminTrafficFilterDto } from '../device/dto/device.dto';
 
 
 @Admin()
@@ -16,6 +18,7 @@ export class AdminController {
     private readonly backfill: ProgressBackfillService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
+    private readonly trafficService: TrafficEventService
   ) { }
 
   @Post('payment/verify-and-update')
@@ -259,4 +262,17 @@ export class AdminController {
   async backfillProgress() {
     return this.backfill.runBackfill();
   }
+
+
+
+  @Get('/business-traffic')
+  @ApiOperation({
+    summary: 'Admin: Query all traffic events',
+    description:
+      'Full filtering: source, businessId, date ranges, pagination.',
+  })
+  async getAll(@Query() filters: AdminTrafficFilterDto) {
+    return this.trafficService.adminQuery(filters);
+  }
+
 }

@@ -55,7 +55,7 @@ import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/use
 import { UsersService } from './users.service';
 
 
-@ApiTags('users')
+@ApiTags('Users')
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {

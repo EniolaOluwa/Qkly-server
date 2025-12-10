@@ -44,28 +44,21 @@ export class BusinessesService {
   async createBusinessType(
     createBusinessTypeDto: CreateBusinessTypeDto,
   ): Promise<BusinessType> {
-    try {
-      const existingBusinessType = await this.businessTypeRepository.findOne({
-        where: { name: createBusinessTypeDto.name },
-      });
+    const existingBusinessType = await this.businessTypeRepository.findOne({
+      where: { name: createBusinessTypeDto.name },
+    });
 
-      if (existingBusinessType) {
-        ErrorHelper.ConflictException(
-          'Business type with this name already exists',
-        );
-      }
-
-      const businessType = this.businessTypeRepository.create({
-        name: createBusinessTypeDto.name,
-      });
-
-      return await this.businessTypeRepository.save(businessType);
-    } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException('Failed to create business type');
+    if (existingBusinessType) {
+      ErrorHelper.ConflictException(
+        'Business type with this name already exists',
+      );
     }
+
+    const businessType = this.businessTypeRepository.create({
+      name: createBusinessTypeDto.name,
+    });
+
+    return await this.businessTypeRepository.save(businessType);
   }
 
   async findAllBusinessTypes(): Promise<BusinessType[]> {
@@ -131,73 +124,64 @@ export class BusinessesService {
     createBusinessDto: CreateBusinessDto,
     userId: number,
   ): Promise<Business> {
-    try {
-      const existingBusiness = await this.businessRepository.findOne({
-        where: { userId },
-      });
+    const existingBusiness = await this.businessRepository.findOne({
+      where: { userId },
+    });
 
-      if (existingBusiness) {
-        ErrorHelper.ConflictException(
-          'User already has a business. Only one business per user is allowed',
-        );
-      }
-
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-      });
-
-      if (!user) {
-        ErrorHelper.NotFoundException('User not found');
-      }
-
-      if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
-        ErrorHelper.ConflictException(
-          `User must have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
-        );
-      }
-
-      await this.findBusinessTypeById(createBusinessDto.businessTypeId);
-
-      if (!createBusinessDto.logo) {
-        ErrorHelper.BadRequestException('Logo is required for business creation');
-      }
-
-
-      const uploadImage = async (file: Express.Multer.File): Promise<string> => {
-        const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);
-        return uploaded.secure_url;
-      };
-
-      // upload logo
-      const logoUrl = await uploadImage(createBusinessDto.logo);
-
-
-      const business = this.businessRepository.create({
-        businessName: createBusinessDto.businessName,
-        businessTypeId: createBusinessDto.businessTypeId,
-        businessDescription: createBusinessDto.businessDescription,
-        location: createBusinessDto.location,
-        logo: logoUrl,
-        userId,
-      });
-
-      const savedBusiness = await this.businessRepository.save(business);
-
-      await this.userRepository.update(userId, {
-        onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
-        businessId: savedBusiness.id,
-      });
-
-      return await this.findBusinessById(savedBusiness.id);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException('Failed to create business');
+    if (existingBusiness) {
+      ErrorHelper.ConflictException(
+        'User already has a business. Only one business per user is allowed',
+      );
     }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
+      ErrorHelper.ConflictException(
+        `User must have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
+      );
+    }
+
+    await this.findBusinessTypeById(createBusinessDto.businessTypeId);
+
+    if (!createBusinessDto.logo) {
+      ErrorHelper.BadRequestException('Logo is required for business creation');
+    }
+
+
+    const uploadImage = async (file: Express.Multer.File): Promise<string> => {
+      const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);
+      return uploaded.secure_url;
+    };
+
+
+    // upload logo
+    const logoUrl = await uploadImage(createBusinessDto.logo);
+
+
+    const business = this.businessRepository.create({
+      businessName: createBusinessDto.businessName,
+      businessTypeId: createBusinessDto.businessTypeId,
+      businessDescription: createBusinessDto.businessDescription,
+      location: createBusinessDto.location,
+      logo: logoUrl,
+      userId,
+    });
+
+    const savedBusiness = await this.businessRepository.save(business);
+
+    await this.userRepository.update(userId, {
+      onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
+      businessId: savedBusiness.id,
+    });
+
+    return await this.findBusinessById(savedBusiness.id);
   }
 
   async findAllBusinesses(): Promise<Business[]> {
@@ -210,7 +194,7 @@ export class BusinessesService {
   async findBusinessById(id: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
     if (!business) {
       ErrorHelper.NotFoundException(`Business with ID ${id} not found`);
@@ -221,7 +205,7 @@ export class BusinessesService {
   async findBusinessByUserId(userId: number): Promise<Business | null> {
     return await this.businessRepository.findOne({
       where: { userId },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
   }
 

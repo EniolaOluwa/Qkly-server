@@ -10,7 +10,7 @@ import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { FindAllOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import { FindAllOrdersDto, FindBusinessOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { RefundMethod, RefundType } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
@@ -242,142 +242,140 @@ export class OrderService {
     });
   }
 
-  async findAllOrders(
-    query: FindAllOrdersDto
-  ): Promise<PaginationResultDto<Order>> {
-    try {
-      const {
-        userId,
-        businessId,
-        status,
-        paymentStatus,
-        paymentMethod,
-        deliveryMethod,
-        minTotal,
-        maxTotal,
-        search,
-        startDate,
-        endDate,
-        sortBy = 'createdAt',
-        sortOrder = 'DESC',
-        skip,
-        limit,
-      } = query;
 
-      const qb = this.orderRepository
-        .createQueryBuilder('order')
+  async findAllOrders(query: FindAllOrdersDto): Promise<PaginationResultDto<Order>> {
+    const {
+      userId,
+      businessId,
+      status,
+      paymentStatus,
+      paymentMethod,
+      deliveryMethod,
+      minTotal,
+      maxTotal,
+      search,
+      startDate,
+      endDate,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      skip,
+      limit
+    } = query;
 
-        .leftJoinAndSelect('order.items', 'items')
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items');
 
+    // ---- Filters ----
+    if (userId) qb.andWhere('order.userId = :userId', { userId });
+    if (businessId) qb.andWhere('order.businessId = :businessId', { businessId });
+    if (status) qb.andWhere('order.status = :status', { status });
+    if (paymentStatus) qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
+    if (paymentMethod) qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
+    if (deliveryMethod) qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
+    if (minTotal !== undefined) qb.andWhere('order.total >= :minTotal', { minTotal });
+    if (maxTotal !== undefined) qb.andWhere('order.total <= :maxTotal', { maxTotal });
 
-      if (userId) qb.andWhere('order.userId = :userId', { userId });
-      if (businessId) qb.andWhere('order.businessId = :businessId', { businessId });
-      if (status) qb.andWhere('order.status = :status', { status });
-      if (paymentStatus)
-        qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
-      if (paymentMethod)
-        qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
-      if (deliveryMethod)
-        qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
-      if (minTotal !== undefined) qb.andWhere('order.total >= :minTotal', { minTotal });
-      if (maxTotal !== undefined) qb.andWhere('order.total <= :maxTotal', { maxTotal });
-
-      if (search) {
-        qb.andWhere(
-          '(order.orderReference LIKE :search OR ' +
-          'order.customerName LIKE :search OR ' +
-          'order.customerEmail LIKE :search OR ' +
-          'order.customerPhoneNumber LIKE :search)',
-          { search: `%${search}%` },
-        );
-      }
-
-      if (startDate) {
-        qb.andWhere('order.createdAt >= :startDate', { startDate: new Date(startDate) });
-      }
-      if (endDate) {
-        qb.andWhere('order.createdAt <= :endDate', { endDate: new Date(endDate) });
-      }
-
-      const itemCount = await qb.getCount();
-
-      const allowedSortFields = [
-        'id',
-        'status',
-        'paymentStatus',
-        'total',
-        'createdAt',
-        'updatedAt',
-      ];
-      const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-      const validSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
-
-      qb.orderBy(`order.${validSortBy}`, validSortOrder);
-      qb.skip(skip).take(limit);
-
-      const data = await qb.getMany();
-
-      const paginationDto: PaginationDto = {
-        skip,
-        limit,
-        order: validSortOrder as PaginationOrder,
-        page: Math.floor(skip / limit) + 1,
-      };
-
-      return new PaginationResultDto(data, {
-        itemCount,
-        pageOptionsDto: paginationDto,
-      });
-    } catch (error) {
-      this.logger.error(`Failed to find orders: ${error.message}`, error.stack);
-      ErrorHelper.InternalServerErrorException(`Failed to find orders: ${error.message}`);
+    // ---- Search ----
+    if (search) {
+      qb.andWhere(
+        `
+        (
+          order.orderReference ILIKE :search OR
+          order.customerName ILIKE :search OR
+          order.customerEmail ILIKE :search OR
+          order.customerPhoneNumber ILIKE :search
+        )
+      `,
+        { search: `%${search}%` }
+      );
     }
+
+    // ---- Date range ----
+    if (startDate) qb.andWhere('order.createdAt >= :startDate', { startDate });
+    if (endDate) qb.andWhere('order.createdAt <= :endDate', { endDate });
+
+    // ---- Count (clone before pagination) ----
+    const countQb = qb.clone();
+    const itemCount = await countQb.getCount();
+
+    // ---- Sorting ----
+    const allowedSortFields = ['id', 'status', 'paymentStatus', 'total', 'createdAt', 'updatedAt'];
+    const safeSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const safeSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+    qb.orderBy(`order.${safeSortBy}`, safeSortOrder);
+
+    // ---- Pagination ----
+    qb.skip(skip).take(limit);
+
+    const data = await qb.getMany();
+
+    return new PaginationResultDto(data, {
+      itemCount,
+      pageOptionsDto: query,
+    });
   }
 
   async findOrdersByBusinessId(
     businessId: number,
-    query?: PaginationDto,
+    query: FindBusinessOrdersDto,
   ): Promise<PaginationResultDto<Order>> {
-    try {
-      const business = await this.businessRepository.findOne({ where: { id: businessId } });
-      if (!business) {
-        ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
-      }
+    const business = await this.businessRepository.findOne({
+      where: { id: businessId },
+    });
 
-      const qb = this.orderRepository
-        .createQueryBuilder('order')
-        .leftJoinAndSelect('order.items', 'items')
-        .leftJoinAndSelect('order.user', 'user')
-        .where('order.businessId = :businessId', { businessId })
-        // CRITICAL: Only show orders that have been PAID
-        .andWhere('order.paymentStatus = :paymentStatus', { paymentStatus: PaymentStatus.PAID })
-        .select(['order', 'user.id', 'user.firstName', 'user.lastName', 'user.email', 'items']);
-
-      const itemCount = await qb.getCount();
-      const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
-
-      const data = await qb.skip(skip).take(limit).orderBy('order.createdAt', order).getMany();
-
-      const paginationDto: PaginationDto = query || {
-        skip,
-        limit,
-        order,
-        page: Math.floor(skip / limit) + 1,
-      };
-
-      return new PaginationResultDto(data, {
-        itemCount,
-        pageOptionsDto: paginationDto,
-      });
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(`Failed to find orders by business id: ${error.message}`, error.stack);
-      ErrorHelper.InternalServerErrorException(`Failed to find orders: ${error.message}`);
+    if (!business) {
+      ErrorHelper.NotFoundException(`Business with ID ${businessId} not found`);
     }
-  }
 
+    const { status, search, limit, skip, order } = query;
+
+    const qb = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.business', 'business')
+      .andWhere('order.paymentStatus = :paymentStatus', {
+        paymentStatus: PaymentStatus.PAID,
+      })
+      .select(['order', 'business.id', 'user.id', 'user.firstName', 'user.lastName', 'user.email', 'items']);
+
+
+    if (status) {
+      qb.andWhere('order.status = :status', { status });
+    }
+
+    // Text search
+    if (search) {
+      qb.andWhere(
+        `
+        (
+          order.orderReference ILIKE :search OR
+          order.customerName ILIKE :search OR
+          order.customerEmail ILIKE :search OR
+          order.customerPhoneNumber ILIKE :search
+        )
+      `,
+        { search: `%${search}%` },
+      );
+    }
+
+    const countQuery = qb.clone();
+    const itemCount = await countQuery.getCount();
+
+    // Pagination + sorting
+    const data = await qb
+      .orderBy('order.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    return new PaginationResultDto(data, {
+      itemCount,
+      pageOptionsDto: query,
+    });
+  }
 
 
   // ============================================================

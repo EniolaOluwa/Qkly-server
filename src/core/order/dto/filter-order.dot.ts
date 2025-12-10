@@ -140,6 +140,26 @@ export class FindAllOrdersDto extends PaginationDto {
   sortOrder?: 'ASC' | 'DESC';
 }
 
+export class FindBusinessOrdersDto extends PaginationDto {
+  @ApiProperty({
+    description: 'Filter by order status',
+    required: false,
+    enum: OrderStatus,
+  })
+  @IsOptional()
+  @IsEnum(OrderStatus)
+  status?: OrderStatus;
+
+  @ApiProperty({
+    description: 'Search text for order reference, customer name, email or phone',
+    required: false,
+    example: 'John',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+}
+
 export class UpdateOrderStatusDto {
   @ApiProperty({
     description: 'New order status',

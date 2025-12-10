@@ -3,10 +3,10 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
 import { HealthResponseDto, WelcomeResponseDto } from './common/dto/responses.dto';
 
-@ApiTags('app')
+@ApiTags('App')
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
+  constructor(private readonly appService: AppService) { }
 
   @Get()
   @ApiOperation({
@@ -24,7 +24,6 @@ export class AppController {
   }
 
   @Get('health')
-  @ApiTags('health')
   @ApiOperation({
     summary: 'Health check',
     description:
