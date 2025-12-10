@@ -1,42 +1,27 @@
 import {
   Controller,
   Get,
-  Post,
-  Patch,
-  Param,
-  Query,
-  Body,
-  Request,
-  ParseIntPipe,
   HttpStatus,
-  UseGuards,
-  UseInterceptors,
-  UploadedFile,
-  UploadedFiles,
-  ValidationPipe,
-  BadRequestException,
+  Param,
+  ParseIntPipe,
+  Query
 } from '@nestjs/common';
 import {
-  ApiTags,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
-  ApiBearerAuth,
-  ApiConsumes,
+  ApiTags
 } from '@nestjs/swagger';
-import { FileInterceptor, FilesInterceptor, AnyFilesInterceptor } from '@nestjs/platform-express';
 import { Public } from '../../common/decorators/public.decorator';
-import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { StoreFrontService } from './store-front.service';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
+import { StoreFrontService } from './store-front.service';
 
 import {
+  PaginatedProductsDto,
   PublicBusinessInfoDto,
   PublicProductDetailDto,
-  StoreFrontCategoryDto,
-  PaginatedProductsDto,
-  StoreFrontResponseDto,
+  StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
 
 @ApiTags('store-front')
@@ -166,7 +151,7 @@ export class StoreFrontController {
   async getStoreProducts(
     @Param('businessId', ParseIntPipe) businessId: number,
     @Query() query: StoreFrontProductQueryDto
-  ): Promise<PaginatedProductsDto> {
+  ) {
     return this.storeFrontService.getStoreProducts(businessId, query);
   }
 
@@ -350,16 +335,11 @@ export class StoreFrontController {
     @Param('businessId', ParseIntPipe) businessId: number,
     @Param('categoryId', ParseIntPipe) categoryId: number,
     @Query() query: StoreFrontProductQueryDto
-  ): Promise<PaginatedProductsDto> {
+  ) {
     return this.storeFrontService.getProductsByCategory(
       businessId,
       categoryId,
       query
     );
   }
-
- 
-  
- 
-  
 }

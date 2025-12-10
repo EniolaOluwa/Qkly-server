@@ -18,6 +18,8 @@ import {
 } from '../../common/dto/responses.dto';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { ErrorHelper } from '../../common/utils';
+import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
+import { UserProgressService } from '../user-progress/user-progress.service';
 
 
 
@@ -27,6 +29,7 @@ import { ErrorHelper } from '../../common/utils';
 @Injectable()
 export class BusinessesService {
   constructor(
+    private readonly userProgressService: UserProgressService,
     @InjectRepository(Business)
     private businessRepository: Repository<Business>,
     @InjectRepository(BusinessType)
@@ -243,6 +246,9 @@ export class BusinessesService {
         ErrorHelper.NotFoundException('Business record not found');
       }
 
+      // Store original data to detect changes
+      const original = { ...business };
+
       // ===== Helper: upload + safely delete old image =====
       const handleImageUpdate = async (
         existing: string | null | undefined,
@@ -276,7 +282,14 @@ export class BusinessesService {
       }
 
       // ===== Cover image =====
+      let coverImageFirstTime = false;
+
       if (updateBusiness.coverImage) {
+        // FIRST-TIME update check
+        if (!business.coverImage) {
+          coverImageFirstTime = true;
+        }
+
         business.coverImage = await handleImageUpdate(
           business.coverImage,
           updateBusiness.coverImage,
@@ -284,7 +297,7 @@ export class BusinessesService {
         );
       }
 
-      // ===== Update simple validated fields (DTO based) =====
+      // ===== Standard fields =====
       const updatableFields: (keyof UpdateBusinessDto)[] = [
         'businessName',
         'businessDescription',
@@ -307,12 +320,39 @@ export class BusinessesService {
         business.businessTypeId = updateBusiness.businessTypeId;
       }
 
-      // Save and return with full relations
+      // Save updated business
       const saved = await this.businessRepository.save(business);
+
+      // ===== Detect business info updated =====
+
+      const fieldsToCheck = [
+        'businessName',
+        'businessDescription',
+        'location',
+        'storeName',
+        'heroText',
+        'storeColor',
+        'businessTypeId',
+        'logo',
+        'coverImage',
+      ];
+
+      const infoChanged = fieldsToCheck.some(field => {
+        return original[field] !== (saved as any)[field];
+      });
+
+      if (infoChanged) {
+        await this.userProgressService.addProgressIfMissing(
+          userId,
+          UserProgressEvent.BUSINESS_INFO_UPDATED,
+        );
+      }
+
       return await this.findBusinessById(saved.id);
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       ErrorHelper.InternalServerErrorException('Failed to update business');
     }
   }
+
 }

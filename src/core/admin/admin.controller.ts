@@ -4,6 +4,7 @@ import { Admin } from '../../common/decorators/admin.decorator';
 import { PaymentStatus } from '../order/interfaces/order.interface';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
+import { ProgressBackfillService } from '../user-progress/progress-backfill.script';
 
 
 @Admin()
@@ -12,12 +13,12 @@ export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
   constructor(
+    private readonly backfill: ProgressBackfillService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
   ) { }
 
   @Post('payment/verify-and-update')
-  // @UseGuards(AdminAuthGuard)
   @ApiOperation({
     summary: 'Verify payment status with gateway and update if needed',
     description: 'Checks payment status with gateway and updates the order if payment was successful',
@@ -161,7 +162,6 @@ export class AdminController {
    * Manually trigger payment webhook processing
    */
   @Post('payment/retry-webhook')
-  // @UseGuards(AdminAuthGuard)
   @ApiOperation({
     summary: 'Retry webhook processing for a payment',
     description: 'Manually trigger webhook processing for failed/missed payment notifications',
@@ -199,7 +199,6 @@ export class AdminController {
    * Get order payment status
    */
   @Post('payment/status')
-  // @UseGuards(AdminAuthGuard)
   @ApiOperation({
     summary: 'Get payment status for an order',
     description: 'Retrieve current payment status from both database and payment gateway',
@@ -253,5 +252,11 @@ export class AdminController {
       this.logger.error(`Failed to get payment status: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+
+  @Post('backfill-progress')
+  async backfillProgress() {
+    return this.backfill.runBackfill();
   }
 }

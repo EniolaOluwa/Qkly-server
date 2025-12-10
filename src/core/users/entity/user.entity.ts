@@ -124,6 +124,13 @@ export class User {
   })
   paymentProvider: string;
 
+
+  @Column({ default: 0 })
+  pinFailedAttempts: number;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  pinLockedUntil?: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 

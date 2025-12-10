@@ -21,6 +21,8 @@ export class DeviceService {
     userId: number,
   ): Promise<Device> {
     try {
+
+      const  a = this.deviceRepository.target
       const device = this.deviceRepository.create({
         ...createDeviceDto,
         userId,

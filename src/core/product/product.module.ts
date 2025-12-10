@@ -8,12 +8,13 @@ import { ProductsController } from './product.controller';
 import { ProductService } from './product.service';
 import { Category } from '../category/entity/category.entity';
 import { CategoryService } from '../category/category.service';
+import { UserProgressModule } from '../user-progress/user-progress.module';
 
 
 
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, ProductSize, User, Business,Category])],
+  imports: [TypeOrmModule.forFeature([Product, ProductSize, User, Business, Category]), UserProgressModule],
   controllers: [ProductsController],
   providers: [ProductService, CategoryService],
   exports: [ProductService],

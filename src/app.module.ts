@@ -21,6 +21,7 @@ import { dataSource } from './database';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
 import { StoreFrontModule } from './core/store-front/store-front.module';
 import { DeviceModule } from './core/device/device.module';
+import { UserProgressModule } from './core/user-progress/user-progress.module';
 
 
 @Module({
@@ -43,6 +44,7 @@ import { DeviceModule } from './core/device/device.module';
     CloudinaryModule,
     StoreFrontModule,
     DeviceModule,
+    UserProgressModule,
   ],
   controllers: [AppController, AdminController],
   providers: [

@@ -1,20 +1,19 @@
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { Category } from '../category/entity/category.entity';
+import { FindAllProductsDto } from '../product/dto/create-product.dto';
 import { Product } from '../product/entity/product.entity';
+import { ProductService } from '../product/product.service';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
 import {
-  PaginatedProductsDto,
-  PublicBusinessInfoDto,
   PublicProductDetailDto,
-  PublicProductDto,
   StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
-import { async } from 'rxjs';
 
 
 @Injectable()
@@ -26,6 +25,8 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
+    private readonly productService: ProductService
+
   ) { }
 
   async getBusinessByUserId(userId: number): Promise<Business> {
@@ -67,102 +68,102 @@ export class StoreFrontService {
     };
   }
 
-  async getStoreProducts(
-    businessId: number,
-    query: StoreFrontProductQueryDto
-  ): Promise<PaginatedProductsDto> {
-    // Verify business exists
-    const business = await this.businessRepository.findOne({
-      where: { id: businessId }
-    });
+  // async getStoreProducts(
+  //   businessId: number,
+  //   query: StoreFrontProductQueryDto
+  // ): Promise<PaginatedProductsDto> {
+  //   // Verify business exists
+  //   const business = await this.businessRepository.findOne({
+  //     where: { id: businessId }
+  //   });
 
-    if (!business) {
-      ErrorHelper.NotFoundException(`Store with ID ${businessId} not found`);
-    }
+  //   if (!business) {
+  //     ErrorHelper.NotFoundException(`Store with ID ${businessId} not found`);
+  //   }
 
-    const {
-      page = 1,
-      limit = 20,
-      categoryId,
-      search,
-      minPrice,
-      maxPrice,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC'
-    } = query;
+  //   const {
+  //     page = 1,
+  //     limit = 20,
+  //     categoryId,
+  //     search,
+  //     minPrice,
+  //     maxPrice,
+  //     sortBy = 'createdAt',
+  //     sortOrder = 'DESC'
+  //   } = query;
 
-    // Build query
-    const qb = this.productRepository
-      .createQueryBuilder('product')
-      .leftJoinAndSelect('product.category', 'category')
-      .where('product.businessId = :businessId', { businessId })
-      .andWhere('product.quantityInStock > 0');
+  //   // Build query
+  //   const qb = this.productRepository
+  //     .createQueryBuilder('product')
+  //     .leftJoinAndSelect('product.category', 'category')
+  //     .where('product.businessId = :businessId', { businessId })
+  //     .andWhere('product.quantityInStock > 0');
 
-    // Apply filters
-    if (categoryId) {
-      qb.andWhere('product.categoryId = :categoryId', { categoryId });
-    }
+  //   // Apply filters
+  //   if (categoryId) {
+  //     qb.andWhere('product.categoryId = :categoryId', { categoryId });
+  //   }
 
-    if (search) {
-      qb.andWhere(
-        '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
-        { search: `%${search}%` }
-      );
-    }
+  //   if (search) {
+  //     qb.andWhere(
+  //       '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
+  //       { search: `%${search}%` }
+  //     );
+  //   }
 
-    if (minPrice !== undefined) {
-      qb.andWhere('product.price >= :minPrice', { minPrice });
-    }
+  //   if (minPrice !== undefined) {
+  //     qb.andWhere('product.price >= :minPrice', { minPrice });
+  //   }
 
-    if (maxPrice !== undefined) {
-      qb.andWhere('product.price <= :maxPrice', { maxPrice });
-    }
+  //   if (maxPrice !== undefined) {
+  //     qb.andWhere('product.price <= :maxPrice', { maxPrice });
+  //   }
 
-    // Apply sorting
-    const allowedSortFields = ['name', 'price', 'createdAt'];
-    const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-    qb.orderBy(`product.${validSortBy}`, sortOrder);
+  //   // Apply sorting
+  //   const allowedSortFields = ['name', 'price', 'createdAt'];
+  //   const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+  //   qb.orderBy(`product.${validSortBy}`, sortOrder);
 
-    // Get total count
-    const totalItems = await qb.getCount();
+  //   // Get total count
+  //   const totalItems = await qb.getCount();
 
-    // Apply pagination
-    const skip = (page - 1) * limit;
-    const products = await qb.skip(skip).take(limit).getMany();
+  //   // Apply pagination
+  //   const skip = (page - 1) * limit;
+  //   const products = await qb.skip(skip).take(limit).getMany();
 
-    // Transform to public DTO (remove sensitive data)
-    const data: PublicProductDto[] = products.map(product => ({
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      price: product.price,
-      quantityInStock: product.quantityInStock,
-      hasVariation: product.hasVariation,
-      colors: product.colors,
-      sizes: product.sizes,
-      images: product.images || [],
-      category: {
-        id: product.category.id,
-        name: product.category.name,
-      },
-      createdAt: product.createdAt,
-    }));
+  //   // Transform to public DTO (remove sensitive data)
+  //   const data: PublicProductDto[] = products.map(product => ({
+  //     id: product.id,
+  //     name: product.name,
+  //     description: product.description,
+  //     price: product.price,
+  //     quantityInStock: product.quantityInStock,
+  //     hasVariation: product.hasVariation,
+  //     colors: product.colors,
+  //     sizes: product.sizes,
+  //     images: product.images || [],
+  //     category: {
+  //       id: product.category.id,
+  //       name: product.category.name,
+  //     },
+  //     createdAt: product.createdAt,
+  //   }));
 
-    // Calculate pagination metadata
-    const totalPages = Math.ceil(totalItems / limit);
+  //   // Calculate pagination metadata
+  //   const totalPages = Math.ceil(totalItems / limit);
 
-    return {
-      data,
-      meta: {
-        page,
-        limit,
-        totalItems,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
-      },
-    };
-  }
+  //   return {
+  //     data,
+  //     meta: {
+  //       page,
+  //       limit,
+  //       totalItems,
+  //       totalPages,
+  //       hasNextPage: page < totalPages,
+  //       hasPreviousPage: page > 1,
+  //     },
+  //   };
+  // }
 
   async getProductDetail(
     businessId: number,
@@ -235,7 +236,7 @@ export class StoreFrontService {
     businessId: number,
     categoryId: number,
     query: StoreFrontProductQueryDto
-  ): Promise<PaginatedProductsDto> {
+  ) {
     const category = await this.categoryRepository.findOne({
       where: { id: categoryId }
     });
@@ -245,6 +246,57 @@ export class StoreFrontService {
     }
 
     return this.getStoreProducts(businessId, { ...query, categoryId });
+  }
+
+
+
+  async getStoreProducts(
+    businessId: number,
+    query: StoreFrontProductQueryDto
+  ) {
+
+    const storeQuery: FindAllProductsDto = {
+      businessId,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      skip: ((query.page ?? 1) - 1) * (query.limit ?? 20),
+
+      categoryId: query.categoryId,
+      search: query.search,
+      minPrice: query.minPrice,
+      maxPrice: query.maxPrice,
+      inStock: true,
+
+      sortBy: query.sortBy ?? 'createdAt',
+      sortOrder: query.sortOrder ?? 'DESC',
+      order: query.sortOrder === 'DESC' ? PaginationOrder.DESC : PaginationOrder.ASC // To be. refactored
+    };
+
+    const result = await this.productService.findAllProducts(storeQuery);
+
+
+    return new PaginationResultDto(
+      result.data.map(product => ({
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        quantityInStock: product.quantityInStock,
+        hasVariation: product.hasVariation,
+        colors: product.colors,
+        sizes: product.sizes,
+        images: product.images || [],
+        category: {
+          id: product.category.id,
+          name: product.category.name,
+        },
+        createdAt: product.createdAt,
+      })),
+      {
+        itemCount: result.meta.itemCount,
+        pageOptionsDto: storeQuery,
+      }
+    );
   }
 
 

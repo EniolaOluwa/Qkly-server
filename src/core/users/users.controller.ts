@@ -1,5 +1,5 @@
+import { HttpResponse } from '@app/common/utils/http-response.utils';
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -15,11 +15,10 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
-  ApiBody,
   ApiConsumes,
   ApiOperation,
   ApiResponse,
-  ApiTags,
+  ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { UserRole } from '../../common/auth/user-role.enum';
@@ -37,6 +36,7 @@ import {
   KycVerificationResponseDto,
   LoginDto,
   LoginResponseDto,
+  LoginWithPinDto,
   RegisterUserDto,
   RegisterUserResponseDto,
   ResetPasswordDto,
@@ -50,10 +50,9 @@ import {
   VerifyPhoneOtpResponseDto
 } from '../../common/dto/responses.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
+import { ErrorHelper } from '../../common/utils';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { UsersService } from './users.service';
-import { HttpResponse } from '@app/common/utils/http-response.utils';
-import { ErrorHelper } from '../../common/utils';
 
 
 @ApiTags('users')
@@ -695,6 +694,46 @@ export class UsersController {
       data: data,
       message: 'Pin changed successfully'
     })
+  }
+
+
+
+
+  @Public()
+  @Post('login-with-pin')
+  @ApiOperation({
+    summary: 'Login user with PIN',
+    description:
+      'Authenticates a user using their phone number and 4-digit PIN. Returns JWT and user profile.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User logged in successfully',
+    type: LoginResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid input or PIN not set',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid PIN or phone number',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async loginWithPin(@Body(ValidationPipe) loginWithPinDto: LoginWithPinDto) {
+    const data = await this.usersService.loginWithPin(loginWithPinDto.phone, loginWithPinDto.pin);
+
+    return HttpResponse.success({
+      message: 'User logged in successfully',
+      data: data,
+    });
   }
 
 
