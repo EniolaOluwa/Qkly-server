@@ -36,6 +36,7 @@ import { ErrorHelper } from '../../common/utils';
 import { Business } from './business.entity';
 import { BusinessesService } from './businesses.service';
 import { create } from 'domain';
+import { Public } from '../../common/decorators/public.decorator';
 
 
 @ApiTags('Business')
@@ -401,6 +402,71 @@ export class BusinessesController {
     );
 
     return this.mapBusinessToResponse(business);
+  }
+
+
+  // GET business by store name
+  @Public()
+  @Get('store/:storeName')
+  @ApiOperation({
+    summary: 'Get business by store name',
+    description: 'Retrieves a business using its store name',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business retrieved successfully',
+    type: BusinessResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found',
+  })
+  async getBusinessByStoreName(
+    @Param('storeName') storeName: string,
+  ): Promise<BusinessResponseDto> {
+    const business = await this.businessesService.getBusinessByStoreName(storeName);
+    return this.mapBusinessToResponse(business);
+  }
+
+  // GET business by slug
+  @Public()
+  @Get('slug/:slug')
+  @ApiOperation({
+    summary: 'Get business by slug',
+    description: 'Retrieves a business using its slug',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business retrieved successfully',
+    type: BusinessResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found',
+  })
+  async getBusinessBySlug(
+    @Param('slug') slug: string,
+  ): Promise<BusinessResponseDto> {
+    const business = await this.businessesService.getBusinessBySlug(slug);
+    return this.mapBusinessToResponse(business);
+  }
+
+  // POST to check if storeName exists
+  @Public()
+  @Post('check-store-name')
+  @ApiOperation({
+    summary: 'Check if a store name exists',
+    description: 'Returns true if the store name exists, false otherwise',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Store name existence check successful',
+  })
+  async checkStoreName(
+    @Body('storeName') storeName: string,
+  ): Promise<{ exists: boolean }> {
+    const exists = await this.businessesService.storeNameExists(storeName);
+    return { exists };
   }
 
   // ==================== HELPER METHOD ====================

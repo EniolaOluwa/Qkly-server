@@ -9,11 +9,19 @@ import {
   OneToOne,
   JoinColumn,
   OneToMany,
+  BeforeInsert,
+  BeforeUpdate,
+  Index,
 } from 'typeorm';
 import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
+import slugify from 'slugify';
+
+
 
 @Entity('businesses')
+@Index('IDX_business_storeName', ['storeName'])
+@Index('IDX_business_slug', ['slug'])
 export class Business {
   @PrimaryGeneratedColumn()
   id: number;
@@ -50,15 +58,18 @@ export class Business {
   @Column({ nullable: true })
   coverImage: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, unique: true })
   storeName: string;
+
+  @Column({ nullable: true, unique: true })
+  slug: string;
+
 
   @Column({ nullable: true })
   heroText: string;
 
   @Column({ nullable: true })
   storeColor: string;
-
 
   @Column({ nullable: true, comment: 'Paystack subaccount code for split payments' })
   paystackSubaccountCode: string;
@@ -77,4 +88,13 @@ export class Business {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+
+  @BeforeInsert()
+  @BeforeUpdate()
+  generateSlug() {
+    if (!this.slug && this.storeName) {
+      this.slug = slugify(this.storeName, { lower: true, strict: true, trim: true });
+    }
+  }
 }
