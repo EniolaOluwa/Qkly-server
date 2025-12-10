@@ -21,11 +21,6 @@ import { ErrorHelper } from '../../common/utils';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
 
-
-
-
-
-
 @Injectable()
 export class BusinessesService {
   constructor(
@@ -40,7 +35,6 @@ export class BusinessesService {
   ) { }
 
   // ==================== BUSINESS TYPE METHODS ====================
-
   async createBusinessType(
     createBusinessTypeDto: CreateBusinessTypeDto,
   ): Promise<BusinessType> {
@@ -119,7 +113,6 @@ export class BusinessesService {
   }
 
   // ==================== BUSINESS METHODS ====================
-
   async createBusiness(
     createBusinessDto: CreateBusinessDto,
     userId: number,
@@ -194,7 +187,7 @@ export class BusinessesService {
   async findBusinessById(id: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['businessType', 'user', 'devices'],
+      relations: ['businessType', 'user', 'trafficEvents'],
     });
     if (!business) {
       ErrorHelper.NotFoundException(`Business with ID ${id} not found`);
@@ -205,7 +198,7 @@ export class BusinessesService {
   async findBusinessByUserId(userId: number): Promise<Business | null> {
     return await this.businessRepository.findOne({
       where: { userId },
-      relations: ['businessType', 'user', 'devices'],
+      relations: ['businessType', 'user', 'trafficEvents'],
     });
   }
 
@@ -334,9 +327,38 @@ export class BusinessesService {
 
       return await this.findBusinessById(saved.id);
     } catch (error) {
+      if (error.code === '23505') { // Postgres unique violation
+        ErrorHelper.BadRequestException('Store name or slug already exists');
+      }
       if (error instanceof NotFoundException) throw error;
       ErrorHelper.InternalServerErrorException('Failed to update business');
     }
   }
 
+  async getBusinessByStoreName(storeName: string): Promise<Business> {
+    const business = await this.businessRepository.findOne({
+      where: { storeName },
+      relations: ['businessType', 'user', 'trafficEvents'],
+    });
+    if (!business) {
+      ErrorHelper.NotFoundException(`Business with store name "${storeName}" not found`);
+    }
+    return business;
+  }
+
+
+  async getBusinessBySlug(slug: string): Promise<Business> {
+    const business = await this.businessRepository.findOne({
+      where: { slug },
+      relations: ['businessType', 'user', 'trafficEvents'],
+    });
+    if (!business) throw new NotFoundException(`Business with slug "${slug}" not found`);
+    return business;
+  }
+
+
+  async storeNameExists(storeName: string): Promise<boolean> {
+    const count = await this.businessRepository.count({ where: { storeName } });
+    return count > 0;
+  }
 }
