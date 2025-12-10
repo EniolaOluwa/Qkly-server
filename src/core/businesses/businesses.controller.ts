@@ -35,6 +35,7 @@ import { BusinessGuard } from '../../common/guards/business.guard';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from './business.entity';
 import { BusinessesService } from './businesses.service';
+import { create } from 'domain';
 
 
 @ApiTags('Business')
@@ -245,22 +246,28 @@ export class BusinessesController {
   })
   async createBusiness(
     @Body(ValidationPipe) createBusinessDto: CreateBusinessDto,
-    @UploadedFiles()
-    files: {
+    @UploadedFiles() files: {
       logo?: Express.Multer.File[];
     },
     @CurrentUser('userId') userId: number,
   ): Promise<BusinessResponseDto> {
-    if (!files.logo) {
+
+    console.log(BusinessResponseDto)
+    if (!files?.logo?.[0]) {
       ErrorHelper.BadRequestException('Logo is required for business creation');
     }
 
-    if (files.logo) createBusinessDto.logo = files.logo[0];
+    // if (files.logo) createBusinessDto.logo = files.logo[0];
+
+    // Attach uploaded files to DTO
+    createBusinessDto.logo = files.logo[0];
 
     const business = await this.businessesService.createBusiness(
       createBusinessDto,
       userId,
     );
+
+    console.log(business);
 
     return this.mapBusinessToResponse(business);
   }

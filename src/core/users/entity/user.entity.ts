@@ -6,10 +6,12 @@ import {
   UpdateDateColumn,
   OneToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
 import { UserRole } from '../../../common/auth/user-role.enum';
 import { OnboardingStep } from '../dto/onboarding-step.enum';
+import { TrafficEvent } from '../../device/entity/device.entity';
 
 @Entity('users')
 export class User {
@@ -77,8 +79,10 @@ export class User {
   businessId: number;
 
   @OneToOne(() => Business, (business) => business.user, { nullable: true })
+
   @JoinColumn({ name: 'businessId' })
   business: Business;
+
 
   @Column({ default: false })
   isEmailVerified: boolean;

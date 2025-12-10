@@ -1,7 +1,6 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Order } from '../../../core/order/entity/order.entity';
 
 export enum PaginationOrder {
   ASC = 'ASC',

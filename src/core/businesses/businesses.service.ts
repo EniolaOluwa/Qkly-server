@@ -194,7 +194,7 @@ export class BusinessesService {
   async findBusinessById(id: number): Promise<Business> {
     const business = await this.businessRepository.findOne({
       where: { id },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
     if (!business) {
       ErrorHelper.NotFoundException(`Business with ID ${id} not found`);
@@ -205,7 +205,7 @@ export class BusinessesService {
   async findBusinessByUserId(userId: number): Promise<Business | null> {
     return await this.businessRepository.findOne({
       where: { userId },
-      relations: ['businessType', 'user'],
+      relations: ['businessType', 'user', 'devices'],
     });
   }
 

@@ -1,93 +1,65 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import { TrafficSource } from '../types/traffic-source.types';
 
-// DTO for creating a device
-export class CreateDeviceDto {
-    @ApiProperty({
-    description: 'User ID',
-    example: 1,
-  })
-  userId: number;
 
-  @ApiProperty({
-    description: 'Device name',
-    example: 'iPhone 12',
-  })
-  @IsString()
-  deviceName: string;
-
+export class RecordTrafficDto {
   @ApiPropertyOptional({
-    description: 'Operating System Type',
-    example: 'iOS',
+    description:
+      'The referrer URL captured from JavaScript (document.referrer). ' +
+      'Used when the HTTP Referer header is missing.',
+    example: 'https://instagram.com/someprofile',
   })
   @IsOptional()
   @IsString()
-  osType?: string;
+  referrerFromJs?: string;
 
   @ApiPropertyOptional({
-    description: 'Operating System Version',
-    example: '14.0',
+    description:
+      'The landing page URL the visitor first arrived on within your site/app.',
+    example: '/product/123',
   })
   @IsOptional()
   @IsString()
-  osVersion?: string;
+  landingPage?: string;
 
   @ApiPropertyOptional({
-    description: 'Device Type',
-    example: 'Mobile',
+    description:
+      'Value from UTM source if passed in the URL. Used to detect marketing campaigns.',
+    example: 'instagram',
   })
   @IsOptional()
   @IsString()
-  deviceType?: string;
-
-  @ApiPropertyOptional({
-    description: 'Referral URL',
-    example: 'https://example.com',
-  })
-  @IsOptional()
-  @IsString()
-  referralUrl?: string;
+  utmSource?: string;
 }
 
-// DTO for updating a device
-export class UpdateDeviceDto {
-  @ApiPropertyOptional({
-    description: 'Device name',
-    example: 'iPhone 12',
-  })
-  @IsOptional()
-  @IsString()
-  deviceName?: string;
 
-  @ApiPropertyOptional({
-    description: 'Operating System Type',
-    example: 'iOS',
-  })
+export class AdminTrafficFilterDto {
+  @ApiPropertyOptional({ enum: TrafficSource })
   @IsOptional()
-  @IsString()
-  osType?: string;
+  @IsEnum(TrafficSource)
+  source?: TrafficSource;
 
-  @ApiPropertyOptional({
-    description: 'Operating System Version',
-    example: '14.0',
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  osVersion?: string;
+  businessId?: number;
 
-  @ApiPropertyOptional({
-    description: 'Device Type',
-    example: 'Mobile',
-  })
+  @ApiPropertyOptional({ description: 'Start date YYYY-MM-DD' })
   @IsOptional()
-  @IsString()
-  deviceType?: string;
+  @IsDateString()
+  startDate?: string;
 
-  @ApiPropertyOptional({
-    description: 'Referral URL',
-    example: 'https://example.com',
-  })
+  @ApiPropertyOptional({ description: 'End date YYYY-MM-DD' })
   @IsOptional()
-  @IsString()
-  referralUrl?: string;
+  @IsDateString()
+  endDate?: string;
+
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
+  page?: number = 1;
+
+  @ApiPropertyOptional({ example: 20 })
+  @IsOptional()
+  limit?: number = 20;
 }
