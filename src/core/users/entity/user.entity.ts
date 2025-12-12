@@ -135,6 +135,9 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   pinLockedUntil?: Date | null;
 
+  @Column({ default: true, comment: 'Indicates if the user account is active or suspended' })
+  isActive: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

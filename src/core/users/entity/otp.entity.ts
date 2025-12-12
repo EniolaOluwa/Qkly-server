@@ -12,14 +12,10 @@ import { User } from './user.entity';
 
 
 
-
-
 export enum OtpType {
   EMAIL = 'email',
   PHONE = 'phone',
 }
-
-
 
 
 
@@ -29,8 +25,6 @@ export enum OtpPurpose {
   EMAIL_VERIFICATION = 'email_verification',
   PIN_CREATION = 'pin_creation',
 }
-
-
 
 
 @Entity('otps')
