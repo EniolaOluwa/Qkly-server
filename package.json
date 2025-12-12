@@ -35,7 +35,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.1",
-    "@nestjs/swagger": "^11.2.0",
+    "@nestjs/swagger": "^11.2.3",
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/typeorm": "^11.0.0",
     "awesome-phonenumber": "^7.5.0",
@@ -85,7 +85,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.3",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.20.0"
   },
   "engines": {

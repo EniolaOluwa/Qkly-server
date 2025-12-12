@@ -7,6 +7,7 @@ import { PaymentService } from '../payment/payment.service';
 import { ProgressBackfillService } from '../user-progress/progress-backfill.script';
 import { TrafficEventService } from '../device/traffic.service';
 import { AdminTrafficFilterDto } from '../device/dto/device.dto';
+import { UsersService, MerchantMetricsResponse } from '../users/users.service';
 
 
 @Admin()
@@ -15,6 +16,7 @@ export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
   constructor(
+    private readonly usersService: UsersService,
     private readonly backfill: ProgressBackfillService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
@@ -275,4 +277,17 @@ export class AdminController {
     return this.trafficService.adminQuery(filters);
   }
 
+  @Get('/merchant-metrics')
+  @ApiOperation({
+    summary: 'Admin: Get merchant metrics',
+    description: 'Returns total, active, inactive, and recent active merchants with sales data.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Merchant metrics retrieved successfully',
+    type: MerchantMetricsResponse,
+  })
+  async getMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    return this.usersService.merchantMetrics();
+  }
 }

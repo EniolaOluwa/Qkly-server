@@ -13,10 +13,10 @@ import { User } from './entity/user.entity';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { UserProgressModule } from '../user-progress/user-progress.module';
-
+import { Order } from '../order/entity/order.entity';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp]),
+    TypeOrmModule.forFeature([User, Otp, Order]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     JwtModule.registerAsync({
