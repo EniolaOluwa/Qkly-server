@@ -101,6 +101,9 @@ export class User {
   @Column({ default: false, comment: 'Whether user has completed all onboarding steps' })
   isOnboardingCompleted: boolean;
 
+  @Column({ default: true, comment: 'Whether the user account is active' })
+  isActive: boolean;
+
   @Column({ nullable: false })
   deviceId: string;
 

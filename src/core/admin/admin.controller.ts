@@ -1,6 +1,11 @@
-import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Body, Controller, Get, Logger, Post, Query, Param, Patch, Delete } from '@nestjs/common';
+import { ApiBadRequestResponse, ApiConflictResponse, ApiNotFoundResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/admin.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '@app/common/auth/user-role.enum';
+import { CreateAdminDto, UpdateAdminRoleDto, UpdateAdminStatusDto, AdminUserResponseDto } from '../users/dto/admin-management.dto';
+import { UsersService, MerchantMetricsResponse } from '../users/users.service';
+import { User } from '../users/entity/user.entity';
 import { PaymentStatus } from '../order/interfaces/order.interface';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
@@ -8,19 +13,132 @@ import { ProgressBackfillService } from '../user-progress/progress-backfill.scri
 import { TrafficEventService } from '../device/traffic.service';
 import { AdminTrafficFilterDto } from '../device/dto/device.dto';
 
-
+@ApiTags('Admin')
 @Admin()
 @Controller('admin')
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
   constructor(
+    private readonly usersService: UsersService,
     private readonly backfill: ProgressBackfillService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
     private readonly trafficService: TrafficEventService
   ) { }
 
+  // Admin Metrics Endpoint
+  @Get('/merchant-metrics')
+  @ApiOperation({
+    summary: 'Admin: Get merchant metrics',
+    description: 'Returns total, active, inactive, and recent active merchants with sales data.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Merchant metrics retrieved successfully',
+    type: MerchantMetricsResponse,
+  })
+  async getMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    return this.usersService.merchantMetrics();
+  }
+
+  // Admin User Management Endpoints
+  @Get('admins')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get all admin users' })
+  @ApiResponse({ status: 200, description: 'List of admin users', type: [AdminUserResponseDto] })
+  async getAdmins(): Promise<AdminUserResponseDto[]> {
+    return this.usersService.getAdmins();
+  }
+
+  @Get('admins/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get a single admin user by ID' })
+  @ApiResponse({ status: 200, description: 'Admin user details', type: AdminUserResponseDto })
+  @ApiNotFoundResponse({ description: 'Admin user not found' })
+  async getAdminById(@Param('id') id: number): Promise<AdminUserResponseDto> {
+    return this.usersService.getAdminById(id);
+  }
+
+  @Post('admins')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Create a new admin user',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Admin user created successfully',
+    type: AdminUserResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid admin data',
+  })
+  @ApiConflictResponse({
+    description: 'User with this email already exists',
+  })
+  async createAdmin(
+    @Body() createAdminDto: CreateAdminDto,
+  ): Promise<AdminUserResponseDto> {
+    return this.usersService.createAdmin(createAdminDto);
+  }
+
+  @Patch('admins/:id/role')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: "Update an admin user's role",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin user role updated successfully',
+    type: AdminUserResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Admin user not found',
+  })
+  async updateAdminRole(
+    @Param('id') id: number,
+    @Body() updateAdminRoleDto: UpdateAdminRoleDto,
+  ): Promise<AdminUserResponseDto> {
+    return this.usersService.updateAdminRole(id, updateAdminRoleDto.newRole);
+  }
+
+  @Patch('admins/:id/status')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: "Update an admin user's active status (suspend/activate)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Admin user status updated successfully',
+    type: AdminUserResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description: 'Admin user not found',
+  })
+  async updateAdminStatus(
+    @Param('id') id: number,
+    @Body() updateAdminStatusDto: UpdateAdminStatusDto,
+  ): Promise<AdminUserResponseDto> {
+    return this.usersService.updateAdminStatus(id, updateAdminStatusDto.isActive);
+  }
+
+  @Delete('admins/:id')
+  @Roles(UserRole.SUPER_ADMIN)
+  @ApiOperation({
+    summary: 'Delete an admin user',
+  })
+  @ApiResponse({
+    status: 204,
+    description: 'Admin user deleted successfully',
+  })
+  @ApiNotFoundResponse({
+    description: 'Admin user not found',
+  })
+  async deleteAdmin(@Param('id') id: number): Promise<void> {
+    await this.usersService.deleteAdmin(id);
+  }
+
+  // Existing Payment/Traffic Endpoints
   @Post('payment/verify-and-update')
   @ApiOperation({
     summary: 'Verify payment status with gateway and update if needed',
@@ -274,5 +392,4 @@ export class AdminController {
   async getAll(@Query() filters: AdminTrafficFilterDto) {
     return this.trafficService.adminQuery(filters);
   }
-
 }

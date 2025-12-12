@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import {
   CreatePinResponseDto,
   KycVerificationResponseDto,
@@ -21,6 +21,7 @@ import {
   RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
+import { CreateAdminDto, UpdateAdminRoleDto, UpdateAdminStatusDto, AdminUserResponseDto } from './dto/admin-management.dto';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
@@ -29,14 +30,130 @@ import { OnboardingStep } from './dto/onboarding-step.enum';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User } from './entity/user.entity';
+import { ApiProperty } from '@nestjs/swagger';
+import { UserRole } from '@app/common/auth/user-role.enum';
 
+import { Business } from '../businesses/business.entity';
+import { PaymentStatus } from '../order/interfaces/order.interface';
+import { Order } from '../order/entity/order.entity';
 
+class RecentMerchantWithSales {
+  @ApiProperty({ example: 1, description: 'Unique identifier of the merchant' })
+  id: number;
 
+  @ApiProperty({ example: 'John', description: 'First name of the merchant' })
+  firstName: string;
+
+  @ApiProperty({ example: 'Doe', description: 'Last name of the merchant' })
+  lastName: string;
+
+  @ApiProperty({ example: 'john.doe@example.com', description: 'Email address of the merchant' })
+  email: string;
+
+  @ApiProperty({ example: '2348012345678', description: 'Phone number of the merchant' })
+  phone: string;
+
+  @ApiProperty({ example: 'John Doe Stores', description: 'Business name of the merchant' })
+  businessName: string;
+
+  @ApiProperty({ example: 1500.75, description: 'Total sales amount for the merchant' })
+  totalSales: number;
+
+  @ApiProperty({ example: 25, description: 'Total number of sales for the merchant' })
+  salesVolume: number;
+
+  @ApiProperty({ example: new Date(), description: 'Date when the merchant account was created' })
+  dateCreated: Date;
+}
+
+export class MerchantMetricsResponse {
+  @ApiProperty({ example: 100, description: 'Total number of merchants' })
+  totalMerchants: number;
+
+  @ApiProperty({ example: 80, description: 'Total number of active merchants' })
+  activeMerchants: number;
+
+  @ApiProperty({ example: 20, description: 'Total number of inactive merchants' })
+  inactiveMerchants: number;
+
+  @ApiProperty({ type: [RecentMerchantWithSales], description: 'List of 10 recent active merchants with sales data' })
+  recentMerchants: RecentMerchantWithSales[];
+}
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
 
 @Injectable()
 export class UsersService {
+
+  async createAdmin(createAdminDto: CreateAdminDto): Promise<User> {
+    const existingUser = await this.userRepository.findOne({ where: { email: createAdminDto.email } });
+    if (existingUser) {
+      ErrorHelper.ConflictException('User with this email already exists');
+    }
+
+    const hashedPassword = CryptoUtil.hashPassword(createAdminDto.password);
+
+    const adminUser = this.userRepository.create({
+      firstName: createAdminDto.firstName,
+      lastName: createAdminDto.lastName,
+      email: createAdminDto.email,
+      phone: createAdminDto.phone,
+      password: hashedPassword,
+      role: createAdminDto.role,
+      isEmailVerified: true,
+      isPhoneVerified: true,
+      isOnboardingCompleted: true,
+    });
+
+    return await this.userRepository.save(adminUser);
+  }
+
+  async updateAdminRole(userId: number, newRole: UserRole): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      ErrorHelper.NotFoundException('Admin user not found');
+    }
+    user.role = newRole;
+    return await this.userRepository.save(user);
+  }
+
+  async updateAdminStatus(userId: number, isActive: boolean): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId, role: In([UserRole.ADMIN, UserRole.SUPER_ADMIN]) } });
+    if (!user) {
+      ErrorHelper.NotFoundException('Admin user not found');
+    }
+    user.isActive = isActive; // Assuming your User entity has an 'isActive' field
+    return await this.userRepository.save(user);
+  }
+
+  async getAdmins(): Promise<AdminUserResponseDto[]> {
+    const admins = await this.userRepository.find({
+      where: {
+        role: In([UserRole.ADMIN, UserRole.SUPER_ADMIN])
+      },
+      select: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'isActive', 'createdAt'],
+    });
+    return admins as AdminUserResponseDto[];
+  }
+
+  async getAdminById(userId: number): Promise<AdminUserResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId, role: In([UserRole.ADMIN, UserRole.SUPER_ADMIN]) },
+      select: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'isActive', 'createdAt'],
+    });
+    if (!user) {
+      ErrorHelper.NotFoundException('Admin user not found');
+    }
+    return user as AdminUserResponseDto;
+  }
+
+  async deleteAdmin(userId: number): Promise<void> {
+    const result = await this.userRepository.delete({ id: userId, role: In([UserRole.ADMIN, UserRole.SUPER_ADMIN]) });
+    if (result.affected === 0) {
+      ErrorHelper.NotFoundException('Admin user not found');
+    }
+  }
+
 
   private readonly logger = new Logger(UsersService.name);
   private readonly MAX_PIN_ATTEMPTS = 5;
@@ -53,6 +170,8 @@ export class UsersService {
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
     private userProgressService: UserProgressService,
+    @InjectRepository(Order)
+    private orderRepository: Repository<Order>,
   ) { }
 
 
@@ -1218,6 +1337,84 @@ export class UsersService {
       onboardingStep: user.onboardingStep,
     };
 
+  }
+
+
+  // ednpoints to return total, active, inactive, and return recent merchants
+  async merchantMetrics(): Promise<MerchantMetricsResponse> {
+    try {
+      const totalMerchants = await this.userRepository.count({
+        where: { role: UserRole.MERCHANT },
+      });
+
+      const activeMerchantsCount = await this.userRepository.count({
+        where: { 
+          role: UserRole.MERCHANT,
+          isOnboardingCompleted: true,
+        },
+      });
+
+      const inactiveMerchantsCount = totalMerchants - activeMerchantsCount;
+
+      // Fetch recent successful orders and calculate sales metrics
+      const salesData = await this.orderRepository
+        .createQueryBuilder('order')
+        .select('order.businessId', 'businessId')
+        .addSelect('SUM(order.total)', 'totalSales')
+        .addSelect('COUNT(order.id)', 'salesVolume')
+        .where('order.paymentStatus = :status', { status: PaymentStatus.PAID })
+        .groupBy('order.businessId')
+        .getRawMany();
+
+      // Get the business IDs from the sales data
+      const businessIds = salesData.map(data => data.businessId);
+
+      let recentMerchantsWithSales: RecentMerchantWithSales[] = [];
+      if (businessIds.length > 0) {
+      // Fetch the merchants (users with role MERCHANT) and their associated businesses
+      const merchants = await this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.business', 'business')
+        .where('user.role = :role', { role: UserRole.MERCHANT })
+        .andWhere('business.id IN (:...businessIds)', { businessIds })
+          .andWhere('user.isOnboardingCompleted = :completed', { completed: true }) // Only active merchants
+        .orderBy('user.createdAt', 'DESC') // Order by merchant creation date to get recent merchants
+        .limit(10) // Limit to 10 recent merchants
+        .getMany();
+
+      // Combine merchant data with sales data
+        recentMerchantsWithSales = merchants.map(merchant => {
+        const merchantSales = salesData.find(
+          data => data.businessId === merchant.business?.id,
+        );
+
+        return {
+          id: merchant.id,
+          firstName: merchant.firstName,
+          lastName: merchant.lastName,
+          email: merchant.email,
+          phone: merchant.phone,
+          businessName: merchant.business?.businessName,
+          totalSales: merchantSales ? parseFloat(merchantSales.totalSales) : 0,
+          salesVolume: merchantSales ? parseInt(merchantSales.salesVolume, 10) : 0,
+            dateCreated: merchant.createdAt,
+        };
+      });
+      }
+
+      return {
+        totalMerchants,
+        activeMerchants: activeMerchantsCount,
+        inactiveMerchants: inactiveMerchantsCount,
+        recentMerchants: recentMerchantsWithSales,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to return merchant metrics: ${error.message}`,
+        error.stack,
+      );
+      ErrorHelper.InternalServerErrorException('Failed to return merchant metrics');
+    }
   }
 
 }
