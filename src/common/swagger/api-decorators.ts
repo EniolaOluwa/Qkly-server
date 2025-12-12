@@ -23,6 +23,7 @@ export function ApiAuth() {
   );
 }
 
+
 /**
  * Applies the standard Not Found (404) response.
  */

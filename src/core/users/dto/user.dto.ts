@@ -3,9 +3,6 @@ import { IsString, IsOptional, IsEmail, IsNumber, Matches, MinLength, MaxLength 
 
 
 
-
-
-
 export class ChangePasswordDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
