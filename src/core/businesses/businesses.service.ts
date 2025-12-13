@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
@@ -20,6 +20,12 @@ import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { ErrorHelper } from '../../common/utils';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
+import { PaginationMetadataDto } from '../../common/queries/dto';
+import { DateFilterUtil } from '../../common/utils/date-filter.util';
+import { SubaccountStatusEnum } from '../admin/enums/admin-filter.enum';
+import { MerchantFilterDto } from './dto/merchant-filter.dto';
+import { MerchantStatsDto } from './dto/merchant-stats.dto';
+import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
 
 @Injectable()
 export class BusinessesService {
@@ -361,4 +367,166 @@ export class BusinessesService {
     const count = await this.businessRepository.count({ where: { storeName } });
     return count > 0;
   }
+
+
+  // ADMIN USE ONLY
+
+  async getMerchantsList(
+    filterDto: MerchantFilterDto,
+  ): Promise<MerchantsListResponseDto> {
+    const { skip, limit, order } = filterDto;
+
+    // Build the query
+    let queryBuilder = this.businessRepository
+      .createQueryBuilder('business')
+      .leftJoinAndSelect('business.user', 'user')
+      .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoin('orders', 'order', 'order.businessId = business.id')
+      .leftJoin('products', 'product', 'product.businessId = business.id')
+      .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
+      .select([
+        'business.id',
+        'business.businessName',
+        'business.storeName',
+        'business.slug',
+        'business.location',
+        'business.isSubaccountActive',
+        'business.revenueSharePercentage',
+        'business.createdAt',
+        'business.updatedAt',
+        'user.email',
+        'businessType.name',
+      ])
+      .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
+      .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
+      .addSelect('COUNT(DISTINCT product.id)', 'totalProducts')
+      .addSelect('COUNT(DISTINCT transaction.id)', 'totalTransactions');
+
+    // Apply filters
+    queryBuilder = this.applyFilters(queryBuilder, filterDto);
+
+    // Group by
+    queryBuilder = queryBuilder
+      .groupBy('business.id')
+      .addGroupBy('user.id')
+      .addGroupBy('businessType.id');
+
+    // Get count query before applying pagination
+    const countQueryBuilder = this.businessRepository
+      .createQueryBuilder('business')
+      .leftJoin('business.user', 'user')
+      .leftJoin('business.businessType', 'businessType');
+
+    // Apply same filters to count query
+    const countQuery = this.applyFilters(countQueryBuilder, filterDto);
+
+    // Execute queries
+    const [merchants, totalCount] = await Promise.all([
+      queryBuilder.orderBy('business.createdAt', order).skip(skip).take(limit).getRawAndEntities(),
+      countQuery.getCount(),
+    ]);
+
+    // Map results to DTOs
+    const merchantsData: MerchantStatsDto[] = merchants.entities.map((business, index) => {
+      const raw = merchants.raw[index];
+      return {
+        id: business.id,
+        businessName: business.businessName,
+        storeName: business.storeName,
+        slug: business.slug,
+        ownerEmail: business.user?.email || 'N/A',
+        businessType: business.businessType?.name || 'N/A',
+        location: business.location,
+        totalOrders: parseInt(raw.totalOrders) || 0,
+        totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
+        totalProducts: parseInt(raw.totalProducts) || 0,
+        totalTransactions: parseInt(raw.totalTransactions) || 0,
+        isSubaccountActive: business.isSubaccountActive,
+        revenueSharePercentage: business.revenueSharePercentage.toString(),
+        dateRegistered: business.createdAt,
+        lastUpdated: business.updatedAt,
+      };
+    });
+
+    const meta = new PaginationMetadataDto({
+      pageOptionsDto: filterDto,
+      itemCount: totalCount,
+    });
+
+    return {
+      data: merchantsData,
+      meta,
+    };
+  }
+
+  private applyFilters(
+    queryBuilder: SelectQueryBuilder<Business>,
+    filterDto: MerchantFilterDto,
+  ): SelectQueryBuilder<Business> {
+    const {
+      search,
+      businessTypeId,
+      dateFilter,
+      customStartDate,
+      customEndDate,
+      subaccountStatus,
+      location,
+      minRevenueShare,
+      maxRevenueShare,
+    } = filterDto;
+
+    // Search filter (name, store name, or email)
+    if (search) {
+      queryBuilder.andWhere(
+        '(business.businessName ILIKE :search OR business.storeName ILIKE :search OR user.email ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    // Business type filter
+    if (businessTypeId) {
+      queryBuilder.andWhere('business.businessTypeId = :businessTypeId', { businessTypeId });
+    }
+
+    // Date filter
+    if (dateFilter) {
+      const dateRange = DateFilterUtil.getDateRange(
+        dateFilter,
+        customStartDate ? new Date(customStartDate) : undefined,
+        customEndDate ? new Date(customEndDate) : undefined,
+      );
+
+      queryBuilder.andWhere('business.createdAt BETWEEN :startDate AND :endDate', {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      });
+    }
+
+    // Subaccount status filter
+    if (subaccountStatus) {
+      const isActive = subaccountStatus === SubaccountStatusEnum.ACTIVE;
+      queryBuilder.andWhere('business.isSubaccountActive = :isActive', { isActive });
+    }
+
+    // Location filter
+    if (location) {
+      queryBuilder.andWhere('business.location ILIKE :location', { location: `%${location}%` });
+    }
+
+    // Revenue share filter
+    if (minRevenueShare !== undefined) {
+      queryBuilder.andWhere('business.revenueSharePercentage >= :minRevenueShare', {
+        minRevenueShare,
+      });
+    }
+
+    if (maxRevenueShare !== undefined) {
+      queryBuilder.andWhere('business.revenueSharePercentage <= :maxRevenueShare', {
+        maxRevenueShare,
+      });
+    }
+
+    return queryBuilder;
+  }
+
 }

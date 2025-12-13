@@ -9,7 +9,7 @@ import { AdminController } from './core/admin/admin.controller';
 import { BusinessesModule } from './core/businesses/businesses.module';
 import { CategoryModule } from './core/category/category.module';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
-import { TrafficModule } from './core/device/traffic.module';
+import { TrafficModule } from './core/traffic-events/traffic.module';
 import { LeadModule } from './core/lead/lead.module';
 import { OrderModule } from './core/order/order.module';
 import { PaymentModule } from './core/payment/payment.module';
@@ -22,6 +22,7 @@ import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
+import { AdminModule } from './core/admin/admin.module';
 
 
 @Module({
@@ -45,6 +46,7 @@ import { dataSource } from './database';
     StoreFrontModule,
     TrafficModule,
     UserProgressModule,
+    AdminModule
   ],
   controllers: [AppController, AdminController],
   providers: [
