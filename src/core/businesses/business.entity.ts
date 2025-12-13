@@ -1,4 +1,4 @@
-import { TrafficEvent } from './../device/entity/device.entity';
+import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,

@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TrafficEventService } from './traffic.service';
 import { TrafficEventController } from './traffic.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TrafficEvent } from './entity/device.entity';
+import { TrafficEvent } from './entity/traffic-events.entity';
 import { Business } from '../businesses/business.entity';
 
 @Module({

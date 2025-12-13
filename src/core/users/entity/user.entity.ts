@@ -1,17 +1,15 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  UpdateDateColumn,
-  OneToOne,
+  Entity,
   JoinColumn,
-  OneToMany,
+  OneToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn
 } from 'typeorm';
-import { Business } from '../../businesses/business.entity';
 import { UserRole } from '../../../common/auth/user-role.enum';
+import { Business } from '../../businesses/business.entity';
 import { OnboardingStep } from '../dto/onboarding-step.enum';
-import { TrafficEvent } from '../../device/entity/device.entity';
 
 @Entity('users')
 export class User {

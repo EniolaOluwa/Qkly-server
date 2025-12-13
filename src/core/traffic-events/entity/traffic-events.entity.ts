@@ -4,8 +4,11 @@ import { User } from '../../users/entity/user.entity';
 import { TrafficSource } from '../types/traffic-source.types';
 
 
-
 @Entity('traffic_events')
+@Index('IDX_TRAFFIC_BUSINESS_ID', ['businessId'])
+@Index('IDX_TRAFFIC_CREATED_AT', ['createdAt'])
+@Index('IDX_TRAFFIC_BUSINESS_CREATED', ['businessId', 'createdAt'])
+@Index('IDX_TRAFFIC_BUSINESS_SOURCE', ['businessId', 'source'])
 export class TrafficEvent {
   @PrimaryGeneratedColumn()
   id: number;
@@ -35,7 +38,7 @@ export class TrafficEvent {
   @Column({ nullable: true })
   ipAddress?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, type: 'text' })
   userAgent?: string;
 
   @CreateDateColumn()
