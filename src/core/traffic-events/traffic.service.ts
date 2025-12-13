@@ -7,7 +7,7 @@ import { Repository } from 'typeorm';
 import { Business } from '../businesses/business.entity';
 import { detectSource } from './detect-source.util';
 import { AdminTrafficFilterDto, RecordTrafficDto } from './dto/device.dto';
-import { TrafficEvent } from './entity/device.entity';
+import { TrafficEvent } from './entity/traffic-events.entity';
 
 @Injectable()
 export class TrafficEventService {
@@ -99,7 +99,7 @@ export class TrafficEventService {
   async adminQuery(filters: AdminTrafficFilterDto) {
     const qb = this.repo
       .createQueryBuilder('e')
-      .leftJoin('businesses', 'b', 'b.id = e.businessId')
+      .leftJoinAndSelect('e.business', 'b')
       .select([
         'e.id',
         'e.source',
@@ -108,34 +108,60 @@ export class TrafficEventService {
         'e.ipAddress',
         'e.userAgent',
         'e.createdAt',
-        'b.name AS businessName',
+        'e.businessId',
+        'b.id',
+        'b.businessName',
       ]);
 
-    if (filters.source) qb.andWhere('e.source = :source', { source: filters.source });
+    if (filters.source) {
+      qb.andWhere('e.source = :source', { source: filters.source });
+    }
 
-    if (filters.businessId)
+    if (filters.businessId) {
       qb.andWhere('e.businessId = :bid', { bid: filters.businessId });
+    }
 
-    if (filters.startDate)
-      qb.andWhere('DATE(e.createdAt) >= :start', { start: filters.startDate });
+    if (filters.startDate) {
+      qb.andWhere('e.createdAt >= :start', {
+        start: new Date(filters.startDate)
+      });
+    }
 
-    if (filters.endDate)
-      qb.andWhere('DATE(e.createdAt) <= :end', { end: filters.endDate });
+    if (filters.endDate) {
+      // Add 1 day to include the entire end date
+      const endDate = new Date(filters.endDate);
+      endDate.setDate(endDate.getDate() + 1);
+      qb.andWhere('e.createdAt < :end', { end: endDate });
+    }
 
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
 
-    qb.skip((page - 1) * limit).take(limit).orderBy('e.createdAt', 'DESC');
+    qb.skip((page - 1) * limit)
+      .take(limit)
+      .orderBy('e.createdAt', 'DESC');
 
     const [data, total] = await qb.getManyAndCount();
+
+    // Transform the data to include businessName at the top level
+    const transformedData = data.map(event => ({
+      id: event.id,
+      source: event.source,
+      referralUrl: event.referralUrl,
+      landingPage: event.landingPage,
+      ipAddress: event.ipAddress,
+      userAgent: event.userAgent,
+      createdAt: event.createdAt,
+      businessId: event.businessId,
+      businessName: event.business?.businessName || null,
+    }));
 
     return {
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      data,
+      data: transformedData,
     };
   }
-
 }

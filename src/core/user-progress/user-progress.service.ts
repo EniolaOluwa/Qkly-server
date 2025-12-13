@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserProgress, UserProgressEvent } from './entities/user-progress.entity';
+import e from 'express';
 
 @Injectable()
 export class UserProgressService {

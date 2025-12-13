@@ -1,269 +1,35 @@
-import { Body, Controller, Get, Logger, Post, Query } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Logger, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Admin } from '../../common/decorators/admin.decorator';
-import { PaymentStatus } from '../order/interfaces/order.interface';
-import { OrderService } from '../order/order.service';
-import { PaymentService } from '../payment/payment.service';
-import { ProgressBackfillService } from '../user-progress/progress-backfill.script';
-import { TrafficEventService } from '../device/traffic.service';
-import { AdminTrafficFilterDto } from '../device/dto/device.dto';
+import { BusinessesService } from '../businesses/businesses.service';
+import { MerchantFilterDto } from '../businesses/dto/merchant-filter.dto';
+import { MerchantsListResponseDto } from '../businesses/dto/merchants-list-response.dto';
+import { CategoryService } from '../category/category.service';
+import { CategoriesListResponseDto } from '../category/dto/categories-list-response.dto';
+import { CategoryDetailDto } from '../category/dto/category-detail.dto';
+import { CategoryFilterDto } from '../category/dto/category-list-item.dto';
+import { CategoryStatsDto } from '../category/dto/category-stats.dto';
+import { AdminTrafficFilterDto } from '../traffic-events/dto/device.dto';
+import { TrafficEventService } from '../traffic-events/traffic.service';
+import { AdminService } from './admin.service';
+import { DashboardStatsDto } from './dto/dashboard-stats.dto';
+import { HttpResponse } from '../../common/utils/http-response.utils';
+import { CreateCategoryDto } from '../category/dto/create-category.dto';
+import { UpdateCategoryDto } from '../category/dto/update-category.dto';
 
 
 @Admin()
 @Controller('admin')
+@ApiBearerAuth()
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
   constructor(
-    private readonly backfill: ProgressBackfillService,
-    private readonly orderService: OrderService,
-    private readonly paymentService: PaymentService,
-    private readonly trafficService: TrafficEventService
+    private readonly categoryService: CategoryService,
+    private readonly trafficService: TrafficEventService,
+    private readonly adminService: AdminService,
+    private readonly businessesService: BusinessesService
   ) { }
-
-  @Post('payment/verify-and-update')
-  @ApiOperation({
-    summary: 'Verify payment status with gateway and update if needed',
-    description: 'Checks payment status with gateway and updates the order if payment was successful',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Payment verification completed',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Payment verified and updated successfully' },
-        data: {
-          type: 'object',
-          properties: {
-            orderId: { type: 'number', example: 1 },
-            orderReference: { type: 'string', example: 'ORD-12345678' },
-            previousStatus: { type: 'string', example: 'PENDING' },
-            currentStatus: { type: 'string', example: 'PAID' },
-            provider: { type: 'string', example: 'PAYSTACK' },
-            verificationResult: { type: 'object' },
-          },
-        },
-      },
-    },
-  })
-  @ApiBadRequestResponse({
-    description: 'Invalid request data',
-  })
-  @ApiNotFoundResponse({
-    description: 'Order not found',
-  })
-  async verifyAndUpdatePayment(
-    @Body()
-    verifyDto: {
-      orderId: number;
-      transactionReference?: string;
-    },
-  ): Promise<any> {
-    try {
-      const { orderId, transactionReference } = verifyDto;
-
-      // Get the order
-      const order = await this.orderService.findOrderById(orderId);
-
-      // Use transaction reference from DTO or order
-      const txnRef = transactionReference || order.transactionReference;
-
-      this.logger.log(`Verifying payment for order ${order.id}, reference: ${txnRef}`);
-
-      // Verify payment using PaymentService (provider-agnostic)
-      const verificationResult = await this.paymentService.verifyPayment(txnRef);
-
-      this.logger.log(
-        `Verification result: ${verificationResult.paymentStatus} for order ${order.id}`,
-      );
-
-      // Check if payment is successful and order hasn't been marked as paid
-      if (
-        verificationResult.paymentStatus === 'SUCCESS' &&
-        order.paymentStatus !== PaymentStatus.PAID
-      ) {
-        this.logger.log(`Updating order ${order.id} to PAID status`);
-
-        // Create standardized webhook payload
-        const webhookPayload = {
-          eventType: 'MANUAL_VERIFICATION',
-          eventData: {
-            transactionReference: verificationResult.transactionReference,
-            paymentReference: verificationResult.paymentReference,
-            amount: verificationResult.amount,
-            amountPaid: verificationResult.amountPaid,
-            customerName: verificationResult.customerName,
-            customerEmail: verificationResult.customerEmail,
-            paymentStatus: verificationResult.paymentStatus,
-            paymentMethod: verificationResult.paymentMethod,
-            paidOn: verificationResult.paidOn,
-            currency: verificationResult.currency,
-            metadata: {
-              ...verificationResult.metadata,
-              manualVerification: true,
-              verifiedAt: new Date().toISOString(),
-            },
-          },
-          provider: verificationResult.provider,
-        };
-
-        // Process the webhook to update order
-        await this.orderService.processPaymentWebhook(webhookPayload);
-
-        return {
-          success: true,
-          message: 'Payment verified and updated successfully',
-          data: {
-            orderId: order.id,
-            orderReference: order.orderReference,
-            previousStatus: order.paymentStatus,
-            currentStatus: PaymentStatus.PAID,
-            provider: verificationResult.provider,
-            verificationResult: {
-              paymentReference: verificationResult.paymentReference,
-              transactionReference: verificationResult.transactionReference,
-              amount: verificationResult.amountPaid,
-              paymentStatus: verificationResult.paymentStatus,
-              paymentMethod: verificationResult.paymentMethod,
-              paidOn: verificationResult.paidOn,
-            },
-          },
-        };
-      }
-
-      // Payment already processed or not successful
-      return {
-        success: true,
-        message:
-          order.paymentStatus === PaymentStatus.PAID
-            ? 'Order already marked as paid'
-            : 'Payment verification completed, no update needed',
-        data: {
-          orderId: order.id,
-          orderReference: order.orderReference,
-          paymentStatus: order.paymentStatus,
-          provider: verificationResult.provider,
-          verificationResult: {
-            paymentReference: verificationResult.paymentReference,
-            transactionReference: verificationResult.transactionReference,
-            amount: verificationResult.amountPaid,
-            paymentStatus: verificationResult.paymentStatus,
-            paymentMethod: verificationResult.paymentMethod,
-            paidOn: verificationResult.paidOn,
-          },
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Payment verification failed: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  /**
-   * Manually trigger payment webhook processing
-   */
-  @Post('payment/retry-webhook')
-  @ApiOperation({
-    summary: 'Retry webhook processing for a payment',
-    description: 'Manually trigger webhook processing for failed/missed payment notifications',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Webhook processing completed',
-  })
-  async retryWebhook(
-    @Body()
-    retryDto: {
-      orderId: number;
-      webhookPayload: any;
-    },
-  ): Promise<any> {
-    try {
-      const { orderId, webhookPayload } = retryDto;
-
-      this.logger.log(`Manually processing webhook for order ${orderId}`);
-
-      const result = await this.orderService.processPaymentWebhook(webhookPayload);
-
-      return {
-        success: true,
-        message: 'Webhook processed successfully',
-        data: result,
-      };
-    } catch (error) {
-      this.logger.error(`Webhook retry failed: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-  /**
-   * Get order payment status
-   */
-  @Post('payment/status')
-  @ApiOperation({
-    summary: 'Get payment status for an order',
-    description: 'Retrieve current payment status from both database and payment gateway',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Payment status retrieved',
-  })
-  async getPaymentStatus(
-    @Body()
-    statusDto: {
-      orderId: number;
-    },
-  ): Promise<any> {
-    try {
-      const { orderId } = statusDto;
-
-      const order = await this.orderService.findOrderById(orderId);
-
-      // Verify with gateway
-      const gatewayStatus = await this.paymentService.verifyPayment(
-        order.transactionReference,
-      );
-
-      return {
-        success: true,
-        data: {
-          orderId: order.id,
-          orderReference: order.orderReference,
-          databaseStatus: {
-            paymentStatus: order.paymentStatus,
-            orderStatus: order.status,
-            paymentDate: order.paymentDate,
-            total: order.total,
-          },
-          gatewayStatus: {
-            provider: gatewayStatus.provider,
-            paymentStatus: gatewayStatus.paymentStatus,
-            paymentReference: gatewayStatus.paymentReference,
-            transactionReference: gatewayStatus.transactionReference,
-            amountPaid: gatewayStatus.amountPaid,
-            paymentMethod: gatewayStatus.paymentMethod,
-            paidOn: gatewayStatus.paidOn,
-          },
-          statusMatch:
-            order.paymentStatus === PaymentStatus.PAID &&
-            gatewayStatus.paymentStatus === 'SUCCESS',
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get payment status: ${error.message}`, error.stack);
-      throw error;
-    }
-  }
-
-
-  @Post('backfill-progress')
-  async backfillProgress() {
-    return this.backfill.runBackfill();
-  }
-
-
 
   @Get('/business-traffic')
   @ApiOperation({
@@ -275,4 +41,152 @@ export class AdminController {
     return this.trafficService.adminQuery(filters);
   }
 
+
+
+  @Get('dashboard/stats')
+  @ApiOperation({
+    summary: 'Get dashboard statistics',
+    description:
+      'Retrieves overall platform statistics including total orders, merchants, products, categories, and transactions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Dashboard statistics retrieved successfully',
+    type: DashboardStatsDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User does not have admin privileges',
+  })
+  async getDashboardStats(): Promise<DashboardStatsDto> {
+    return this.adminService.getDashboardStats();
+  }
+
+
+  @Get('merchants')
+  @ApiOperation({
+    summary: 'Get paginated and filtered list of merchants',
+    description: `
+      Retrieves a paginated list of merchants with advanced filtering options:
+      - Search by merchant name, store name, or owner email
+      - Filter by business type
+      - Filter by registration date (today, this week, last week, this month, last month, etc.)
+      - Filter by subaccount status
+      - Filter by location
+      - Filter by revenue share percentage range
+      - Filter by minimum orders or sales volume
+    `,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Merchants list retrieved successfully',
+    type: MerchantsListResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid query parameters',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing authentication token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - User does not have admin privileges',
+  })
+  async getMerchants(@Query() filterDto: MerchantFilterDto): Promise<MerchantsListResponseDto> {
+    return this.businessesService.getMerchantsList(filterDto);
+  }
+
+
+  @ApiBearerAuth()
+  @Post('categories/create')
+  async create(@Body() createDto: CreateCategoryDto) {
+    const data = await this.categoryService.create(createDto);
+    return HttpResponse.success({
+      data,
+      message: 'Categories Created successfully',
+      statusCode: 201
+    });
+  }
+
+
+  @Get('categories/stats')
+  @ApiOperation({
+    summary: 'Get category statistics',
+    description: 'Retrieves category statistics including total categories, new categories this month, and total products',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Category statistics retrieved successfully',
+    type: CategoryStatsDto,
+  })
+  async getCategoryStats(): Promise<CategoryStatsDto> {
+    return this.categoryService.getCategoryStats();
+  }
+
+  @Get('categories')
+  @ApiOperation({
+    summary: 'Get paginated list of categories',
+    description: 'Retrieves a paginated list of all categories with product counts, business counts, and filtering options',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories list retrieved successfully',
+    type: CategoriesListResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request - Invalid query parameters',
+  })
+  async getCategories(
+    @Query() filterDto: CategoryFilterDto,
+  ): Promise<CategoriesListResponseDto> {
+    return this.categoryService.getCategoriesList(filterDto);
+  }
+
+  @Get('categories/:id')
+  @ApiOperation({
+    summary: 'Get category details with products',
+    description: 'Retrieves detailed information about a specific category including all products under it',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Category details retrieved successfully',
+    type: CategoryDetailDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Category not found',
+  })
+  async getCategoryDetail(@Param('id') id: number): Promise<CategoryDetailDto> {
+    return this.categoryService.getCategoryDetail(id);
+  }
+
+  @Put('categories/:id')
+  @ApiBearerAuth()
+  async update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: UpdateCategoryDto) {
+    const data = await this.categoryService.update(id, updateDto);
+    return HttpResponse.success({
+      data,
+      message: 'Category updated successfully',
+      statusCode: 200
+    });
+  }
+
+
+  @ApiBearerAuth()
+  @Delete('categories/:id')
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.categoryService.remove(id);
+    return HttpResponse.success({
+      data: null,
+      message: 'Category deleted successfully',
+      statusCode: 204
+    });
+  }
 }
