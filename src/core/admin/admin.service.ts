@@ -15,7 +15,8 @@ import { UserStatus } from "../users/entity/user.entity";
 import { CreateAdminDto } from "./dto/create-admin.dto";
 import { DashboardStatsDto } from "./dto/dashboard-stats.dto";
 import { UpdateAdminDto } from "./dto/update-admin.dto";
-
+import { MerchantMetricsResponse, RecentMerchantWithSales } from "./dto/merchant-metrics.dto";
+import { PaymentStatus } from "../order/interfaces/order.interface";
 
 
 @Injectable()
@@ -290,7 +291,7 @@ export class AdminService {
     }
 
     if (admin.userType !== UserType.ADMIN) {
-      ErrorHelper.BadRequestException('User is not an admin'); ``
+      ErrorHelper.BadRequestException('User is not an admin');
     }
 
     // Prevent deleting Super Admin
@@ -301,5 +302,80 @@ export class AdminService {
     await this.userRepository.delete(adminId);
     this.logger.log(`Admin deleted: ${admin.email} by user ${deletedBy}`);
   }
-}
 
+  async merchantMetrics(): Promise<MerchantMetricsResponse> {
+    try {
+      const totalMerchants = await this.userRepository.count({
+        where: { userType: UserType.USER },
+      });
+
+      const activeMerchantsCount = await this.userRepository.count({
+        where: {
+          userType: UserType.USER,
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      const inactiveMerchantsCount = totalMerchants - activeMerchantsCount;
+
+      // Fetch recent successful orders and calculate sales metrics
+      const salesData = await this.orderRepository
+        .createQueryBuilder('order')
+        .select('order.businessId', 'businessId')
+        .addSelect('SUM(order.total)', 'totalSales')
+        .addSelect('COUNT(order.id)', 'salesVolume')
+        .where('order.paymentStatus = :status', { status: PaymentStatus.PAID })
+        .groupBy('order.businessId')
+        .getRawMany();
+
+      // Get the business IDs from the sales data
+      const businessIds = salesData.map(data => data.businessId);
+
+      let recentMerchantsWithSales: RecentMerchantWithSales[] = [];
+      if (businessIds.length > 0) {
+        // Fetch the merchants (users with userType USER) and their associated businesses
+        const merchants = await this.userRepository
+          .createQueryBuilder('user')
+          .leftJoinAndSelect('user.business', 'business')
+          .where('user.userType = :userType', { userType: UserType.USER })
+          .andWhere('user.status = :status', { status: UserStatus.ACTIVE }) // Only active merchants
+          .andWhere('business.id IN (:...businessIds)', { businessIds })
+          .orderBy('user.createdAt', 'DESC') // Order by merchant creation date to get recent merchants
+          .limit(10) // Limit to 10 recent merchants
+          .getMany();
+
+        // Combine merchant data with sales data
+        recentMerchantsWithSales = merchants.map(merchant => {
+          const merchantSales = salesData.find(
+            data => data.businessId === merchant.business?.id,
+          );
+
+          return {
+            id: merchant.id,
+            firstName: merchant.firstName,
+            lastName: merchant.lastName,
+            email: merchant.email,
+            phone: merchant.phone,
+            businessName: merchant.business?.businessName,
+            totalSales: merchantSales ? parseFloat(merchantSales.totalSales) : 0,
+            salesVolume: merchantSales ? parseInt(merchantSales.salesVolume, 10) : 0,
+            dateCreated: merchant.createdAt,
+          };
+        });
+      }
+
+      return {
+        totalMerchants,
+        activeMerchants: activeMerchantsCount,
+        inactiveMerchants: inactiveMerchantsCount,
+        recentMerchants: recentMerchantsWithSales,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to return merchant metrics: ${error.message}`,
+        error.stack,
+      );
+      ErrorHelper.InternalServerErrorException('Failed to return merchant metrics');
+    }
+  }
+}

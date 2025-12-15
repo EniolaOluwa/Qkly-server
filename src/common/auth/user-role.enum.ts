@@ -4,11 +4,13 @@ export enum UserRole {
   SUPER_ADMIN = 'super_admin',
 }
 
+
 export enum UserType {
   USER = 'user',
   ADMIN = 'admin',
   SUPER_ADMIN = 'super_admin',
 }
+
 
 export enum SystemRole {
   SUPER_ADMIN = 'super_admin',
