@@ -1,17 +1,20 @@
 import { Controller, Get, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { BusinessesService } from "../businesses/businesses.service";
 import { MerchantFilterDto } from "../businesses/dto/merchant-filter.dto";
 import { MerchantsListResponseDto } from "../businesses/dto/merchants-list-response.dto";
-import { UsersService } from "../users/users.service";
+import { AdminService } from "../admin/admin.service";
+import { MerchantMetricsResponse } from "../admin/dto/merchant-metrics.dto";
 
+@ApiTags('Admin/Merchants')
 @Admin()
 @ApiBearerAuth()
 @Controller('admin/merchants')
 export class AdminMerchantsController {
   constructor(
     private readonly businessesService: BusinessesService,
+    private readonly adminService: AdminService,
   ) { }
 
 
@@ -48,5 +51,19 @@ export class AdminMerchantsController {
   })
   async getMerchants(@Query() filterDto: MerchantFilterDto): Promise<MerchantsListResponseDto> {
     return this.businessesService.getMerchantsList(filterDto);
+  }
+
+  @Get('metrics')
+  @ApiOperation({
+    summary: 'Get merchant metrics',
+    description: 'Returns total, active, inactive, and recent active merchants with sales data.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Merchant metrics retrieved successfully',
+    type: MerchantMetricsResponse,
+  })
+  async getMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    return this.adminService.merchantMetrics();
   }
 }

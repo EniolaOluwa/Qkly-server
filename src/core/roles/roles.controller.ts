@@ -53,6 +53,7 @@ export class RolesController {
     const createdBy = req.user.userId;
     const role = await this.rolesService.createRole(createRoleDto, createdBy);
 
+
     return HttpResponse.success({
       message: 'Role created successfully',
       data: role,
@@ -73,7 +74,9 @@ export class RolesController {
     @Query('userType') userType?: UserType,
     @Query('status') status?: RoleStatus,
   ) {
+    
     const roles = await this.rolesService.findAll(userType, status);
+
 
     return HttpResponse.success({
       message: 'Roles retrieved successfully',

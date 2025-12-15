@@ -69,8 +69,6 @@ export class Order {
   @Column({ nullable: false })
   state: string;
 
-
-
   @Column({ nullable: true })
   city: string;
 
