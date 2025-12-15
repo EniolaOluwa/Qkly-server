@@ -21,6 +21,7 @@ export enum UserStatus {
   BANNED = 'banned',
 }
 
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -71,8 +72,10 @@ export class User {
   })
   status: UserStatus;
 
+
   @Column({ nullable: true, comment: 'Reason for suspension/ban' })
   statusReason: string;
+
 
   @Column({ type: 'timestamptz', nullable: true })
   suspendedUntil?: Date | null;

@@ -11,12 +11,13 @@ import { WalletsModule } from '../wallets/wallets.module';
 import { Otp } from './entity/otp.entity';
 import { User } from './entity/user.entity';
 import { UsersController } from './users.controller';
+import { Order } from '../order/entity/order.entity';
 import { UsersService } from './users.service';
 import { UserProgressModule } from '../user-progress/user-progress.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp]),
+    TypeOrmModule.forFeature([User, Otp, Order]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     JwtModule.registerAsync({
