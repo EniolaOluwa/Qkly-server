@@ -242,9 +242,6 @@ export class UsersService {
       permissions: user.role?.permissions || [],
     };
 
-    console.log({ payload });
-
-
     // Generate JWT token
     const accessToken = this.jwtService.sign(payload);
 

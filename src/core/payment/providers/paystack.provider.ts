@@ -79,10 +79,6 @@ export class PaystackProvider extends IPaymentProvider {
         country: 'NG',
       };
 
-
-      console.log({ payload })
-
-
       this.logger.log(`Creating Paystack DVA for ${dto.customerEmail}`);
 
       const response = await firstValueFrom(

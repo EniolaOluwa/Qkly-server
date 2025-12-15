@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { FindOptionsRelations, Repository, SelectQueryBuilder } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
 import { User, UserStatus } from '../users/entity/user.entity';
@@ -29,19 +29,20 @@ import { MerchantStatsDto } from './dto/merchant-stats.dto';
 import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
 import { UserType } from '../../common/auth/user-role.enum';
 import { Role, RoleStatus } from '../roles/entities/role.entity';
+import { LeadForm } from '../lead/entity/leadForm.entity';
 
 @Injectable()
 export class BusinessesService {
   constructor(
     private readonly userProgressService: UserProgressService,
     @InjectRepository(Business)
-    private businessRepository: Repository<Business>,
+    private businessRepo: Repository<Business>,
     @InjectRepository(BusinessType)
-    private businessTypeRepository: Repository<BusinessType>,
+    private businessTypeRepo: Repository<BusinessType>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private userRepos: Repository<User>,
     @InjectRepository(Role)
-    private roleRepository: Repository<Role>,
+    private roleRepo: Repository<Role>,
     private cloudinaryUtil: CloudinaryUtil,
   ) { }
 
@@ -52,7 +53,7 @@ export class BusinessesService {
   async createBusinessType(
     createBusinessTypeDto: CreateBusinessTypeDto,
   ): Promise<BusinessType> {
-    const existingBusinessType = await this.businessTypeRepository.findOne({
+    const existingBusinessType = await this.businessTypeRepo.findOne({
       where: { name: createBusinessTypeDto.name },
     });
 
@@ -62,22 +63,22 @@ export class BusinessesService {
       );
     }
 
-    const businessType = this.businessTypeRepository.create({
+    const businessType = this.businessTypeRepo.create({
       name: createBusinessTypeDto.name,
     });
 
-    return await this.businessTypeRepository.save(businessType);
+    return await this.businessTypeRepo.save(businessType);
   }
 
   async findAllBusinessTypes(): Promise<BusinessType[]> {
-    return this.businessTypeRepository.find({
+    return this.businessTypeRepo.find({
       select: ['id', 'name', 'createdAt', 'updatedAt'],
       order: { name: 'ASC' },
     });
   }
 
   async findBusinessTypeById(id: number): Promise<BusinessType> {
-    const businessType = await this.businessTypeRepository.findOne({
+    const businessType = await this.businessTypeRepo.findOne({
       where: { id },
     });
     if (!businessType) {
@@ -97,7 +98,7 @@ export class BusinessesService {
         updateBusinessTypeDto.name &&
         updateBusinessTypeDto.name !== businessType.name
       ) {
-        const existingBusinessType = await this.businessTypeRepository.findOne({
+        const existingBusinessType = await this.businessTypeRepo.findOne({
           where: { name: updateBusinessTypeDto.name },
         });
 
@@ -109,7 +110,7 @@ export class BusinessesService {
       }
 
       Object.assign(businessType, updateBusinessTypeDto);
-      return await this.businessTypeRepository.save(businessType);
+      return await this.businessTypeRepo.save(businessType);
     } catch (error) {
       if (
         error instanceof ConflictException ||
@@ -123,7 +124,7 @@ export class BusinessesService {
 
   async deleteBusinessType(id: number): Promise<void> {
     const businessType = await this.findBusinessTypeById(id);
-    await this.businessTypeRepository.remove(businessType);
+    await this.businessTypeRepo.remove(businessType);
   }
 
   // ==================== BUSINESS METHODS ====================
@@ -132,7 +133,7 @@ export class BusinessesService {
     userId: number,
   ): Promise<Business> {
     // Find user
-    const user = await this.userRepository.findOne({
+    const user = await this.userRepos.findOne({
       where: { id: userId },
       relations: ['role'],
     });
@@ -149,7 +150,7 @@ export class BusinessesService {
     // Ensure user is of type USER
     if (user.userType !== UserType.USER) {
       user.userType = UserType.USER;
-      await this.userRepository.save(user);
+      await this.userRepos.save(user);
     }
 
     // Check if user already has a business
@@ -181,7 +182,7 @@ export class BusinessesService {
     const logoUrl = await uploadImage(createBusinessDto.logo);
 
 
-    const business = this.businessRepository.create({
+    const business = this.businessRepo.create({
       businessName: createBusinessDto.businessName,
       businessTypeId: createBusinessDto.businessTypeId,
       businessDescription: createBusinessDto.businessDescription,
@@ -190,9 +191,9 @@ export class BusinessesService {
       userId,
     });
 
-    const savedBusiness = await this.businessRepository.save(business);
+    const savedBusiness = await this.businessRepo.save(business);
 
-    await this.userRepository.update(userId, {
+    await this.userRepos.update(userId, {
       onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
       businessId: savedBusiness.id,
     });
@@ -201,14 +202,14 @@ export class BusinessesService {
   }
 
   async findAllBusinesses(): Promise<Business[]> {
-    return await this.businessRepository.find({
+    return await this.businessRepo.find({
       relations: ['businessType', 'user'],
       order: { businessName: 'ASC' },
     });
   }
 
   async findBusinessById(id: number): Promise<Business> {
-    const business = await this.businessRepository.findOne({
+    const business = await this.businessRepo.findOne({
       where: { id },
       relations: ['businessType', 'user', 'trafficEvents'],
     });
@@ -219,7 +220,7 @@ export class BusinessesService {
   }
 
   async findBusinessByUserId(userId: number): Promise<Business | null> {
-    return await this.businessRepository.findOne({
+    return await this.businessRepo.findOne({
       where: { userId },
       relations: ['businessType', 'user', 'trafficEvents'],
     });
@@ -227,7 +228,7 @@ export class BusinessesService {
 
   async deleteBusiness(id: number): Promise<void> {
     const business = await this.findBusinessById(id);
-    await this.businessRepository.remove(business);
+    await this.businessRepo.remove(business);
   }
 
 
@@ -237,7 +238,7 @@ export class BusinessesService {
     businessId: number,
   ): Promise<Business> {
     try {
-      const business = await this.businessRepository.findOne({
+      const business = await this.businessRepo.findOne({
         where: { userId, id: businessId },
         relations: ['businessType'],
       });
@@ -321,7 +322,7 @@ export class BusinessesService {
       }
 
       // Save updated business
-      const saved = await this.businessRepository.save(business);
+      const saved = await this.businessRepo.save(business);
 
       // ===== Detect business info updated =====
 
@@ -359,7 +360,7 @@ export class BusinessesService {
   }
 
   async getBusinessByStoreName(storeName: string): Promise<Business> {
-    const business = await this.businessRepository.findOne({
+    const business = await this.businessRepo.findOne({
       where: { storeName },
       relations: ['businessType', 'user', 'trafficEvents'],
     });
@@ -371,7 +372,7 @@ export class BusinessesService {
 
 
   async getBusinessBySlug(slug: string): Promise<Business> {
-    const business = await this.businessRepository.findOne({
+    const business = await this.businessRepo.findOne({
       where: { slug },
       relations: ['businessType', 'user', 'trafficEvents'],
     });
@@ -381,9 +382,67 @@ export class BusinessesService {
 
 
   async storeNameExists(storeName: string): Promise<boolean> {
-    const count = await this.businessRepository.count({ where: { storeName } });
+    const count = await this.businessRepo.count({ where: { storeName } });
     return count > 0;
   }
+
+  async getFormsByBusinessIdentifier(
+    identifier: number | string,
+  ): Promise<LeadForm[]> {
+    try {
+      const where =
+        typeof identifier === 'number'
+          ? { id: identifier }
+          : [
+            { slug: identifier },
+            { storeName: identifier },
+          ];
+
+      const business = await this.businessRepo.findOne({
+        where,
+        relations: ['forms'],
+      });
+
+      if (!business) {
+        ErrorHelper.NotFoundException('Business not found');
+      }
+
+      return business.forms;
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+
+      ErrorHelper.InternalServerErrorException(
+        `Error fetching business forms: ${error.message}`,
+        error,
+      );
+    }
+  }
+
+
+  async resolveBusinessByIdentifier(
+    identifier: number | string,
+    relations?: FindOptionsRelations<Business>,
+  ): Promise<Business> {
+    const where =
+      typeof identifier === 'number'
+        ? { id: identifier }
+        : [
+          { slug: identifier },
+          { storeName: identifier },
+        ];
+
+    const business = await this.businessRepo.findOne({
+      where,
+      relations,
+    });
+
+    if (!business) {
+      ErrorHelper.NotFoundException('Business not found');
+    }
+
+    return business;
+  }
+
 
 
   // ADMIN USE ONLY
@@ -394,7 +453,7 @@ export class BusinessesService {
     const { skip, limit, order } = filterDto;
 
     // Build the query
-    let queryBuilder = this.businessRepository
+    let queryBuilder = this.businessRepo
       .createQueryBuilder('business')
       .leftJoinAndSelect('business.user', 'user')
       .leftJoinAndSelect('user.role', 'role')
@@ -431,7 +490,7 @@ export class BusinessesService {
       .addGroupBy('businessType.id');
 
     // Get count query before applying pagination
-    const countQueryBuilder = this.businessRepository
+    const countQueryBuilder = this.businessRepo
       .createQueryBuilder('business')
       .leftJoin('business.user', 'user')
       .leftJoin('business.businessType', 'businessType');
@@ -550,7 +609,7 @@ export class BusinessesService {
 
   private async assignMerchantRole(user: User): Promise<void> {
     // Get Merchant role
-    const merchantRole = await this.roleRepository.findOne({
+    const merchantRole = await this.roleRepo.findOne({
       where: {
         name: 'Merchant',
         userType: UserType.USER,
@@ -570,7 +629,7 @@ export class BusinessesService {
     user.userType = UserType.USER;
     user.status = user.status || UserStatus.ACTIVE;
 
-    await this.userRepository.save(user);
+    await this.userRepos.save(user);
   }
 
 }

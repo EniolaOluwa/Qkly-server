@@ -1,14 +1,10 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
-import { BusinessesService } from "../businesses/businesses.service";
-import { UsersService } from "../users/users.service";
-import { Admin } from "../../common/decorators/admin.decorator";
+import { Controller, Get, Query } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { Admin } from "../../common/decorators/admin.decorator";
+import { BusinessesService } from "../businesses/businesses.service";
 import { MerchantFilterDto } from "../businesses/dto/merchant-filter.dto";
 import { MerchantsListResponseDto } from "../businesses/dto/merchants-list-response.dto";
-import { RequirePermissions } from "../../common/decorators/permissions.decorator";
-import { PaginationDto } from "../../common/queries/dto";
-import { HttpResponse } from "../../common/utils/http-response.utils";
-import { JwtAuthGuard, RoleGuard } from "../users";
+import { UsersService } from "../users/users.service";
 
 @Admin()
 @ApiBearerAuth()
@@ -16,27 +12,7 @@ import { JwtAuthGuard, RoleGuard } from "../users";
 export class AdminMerchantsController {
   constructor(
     private readonly businessesService: BusinessesService,
-    private readonly usersService: UsersService,
   ) { }
-  @Get('users')
-  @UseGuards(JwtAuthGuard, RoleGuard)
-  @RequirePermissions('*')
-  @ApiOperation({
-    summary: 'Get all merchant users',
-    description: 'Retrieves all merchant users.',
-  })
-  @ApiResponse({ status: 200, description: 'Merchant users retrieved successfully' })
-  @ApiResponse({ status: 403, description: 'Forbidden' })
-  async getMerchantUsers(
-    @Query() pageOptionsDto: PaginationDto,
-  ) {
-    const result = await this.usersService.getMerchantUsers(pageOptionsDto);
-
-    return HttpResponse.success({
-      ...result,
-      message: 'Merchant users retrieved successfully',
-    });
-  }
 
 
   @Get('list')

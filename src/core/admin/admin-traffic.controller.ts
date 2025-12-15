@@ -11,7 +11,7 @@ export class AdminTrafficController {
   constructor(private readonly trafficService: TrafficEventService) { }
 
 
-  @Get()
+  @Get('list')
   @ApiOperation({
     summary: 'Admin: Query all traffic events',
     description:

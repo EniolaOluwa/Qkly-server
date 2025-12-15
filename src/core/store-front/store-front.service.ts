@@ -41,12 +41,12 @@ export class StoreFrontService {
     return business;
   }
 
-  async getStoreInfo(businessId: number) {
-    const business = await this.businessService.findBusinessById(businessId);
 
-    if (!business) {
-      ErrorHelper.NotFoundException(`Store with ID ${businessId} not found`);
-    }
+  async getStoreInfo(identifier: number | string) {
+    const business =
+      await this.businessService.resolveBusinessByIdentifier(identifier, {
+        businessType: true,
+      });
 
     return {
       id: business.id,
@@ -65,7 +65,6 @@ export class StoreFrontService {
       createdAt: business.createdAt,
     };
   }
-
 
   async getProductDetail(
     businessId: number,

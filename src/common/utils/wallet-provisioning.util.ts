@@ -100,9 +100,6 @@ export class WalletProvisioningUtil {
       const customerName = bvnVerificationData.customerName ||
         `${user.firstName} ${user.lastName}`.trim();
 
-      console.log({ customerName, envName })
-
-
       if (!customerName) {
         return {
           success: false,

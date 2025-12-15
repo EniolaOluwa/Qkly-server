@@ -272,7 +272,6 @@ export class OrdersController {
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getOrderByReference(@Param('reference') reference: string) {
-    console.log({ reference })
     return this.orderService.findOrderByReference(reference);
   }
 
