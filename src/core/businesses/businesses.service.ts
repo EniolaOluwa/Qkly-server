@@ -3,12 +3,13 @@ import {
   ConflictException,
   InternalServerErrorException,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
-import { User } from '../users/entity/user.entity';
+import { User, UserStatus } from '../users/entity/user.entity';
 import { OnboardingStep } from '../users/dto/onboarding-step.enum';
 import {
   CreateBusinessTypeDto,
@@ -26,6 +27,8 @@ import { SubaccountStatusEnum } from '../admin/enums/admin-filter.enum';
 import { MerchantFilterDto } from './dto/merchant-filter.dto';
 import { MerchantStatsDto } from './dto/merchant-stats.dto';
 import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
+import { UserType } from '../../common/auth/user-role.enum';
+import { Role, RoleStatus } from '../roles/entities/role.entity';
 
 @Injectable()
 export class BusinessesService {
@@ -37,8 +40,13 @@ export class BusinessesService {
     private businessTypeRepository: Repository<BusinessType>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private roleRepository: Repository<Role>,
     private cloudinaryUtil: CloudinaryUtil,
   ) { }
+
+  private readonly logger = new Logger(BusinessesService.name);
+
 
   // ==================== BUSINESS TYPE METHODS ====================
   async createBusinessType(
@@ -123,23 +131,32 @@ export class BusinessesService {
     createBusinessDto: CreateBusinessDto,
     userId: number,
   ): Promise<Business> {
-    const existingBusiness = await this.businessRepository.findOne({
-      where: { userId },
-    });
-
-    if (existingBusiness) {
-      ErrorHelper.ConflictException(
-        'User already has a business. Only one business per user is allowed',
-      );
-    }
-
+    // Find user
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      relations: ['role'],
     });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
+
+    if (!user.roleId || !user.role) {
+      await this.assignMerchantRole(user);
+      this.logger.log(`Auto-assigned Merchant role to user ${userId}`);
+    }
+
+    // Ensure user is of type USER
+    if (user.userType !== UserType.USER) {
+      user.userType = UserType.USER;
+      await this.userRepository.save(user);
+    }
+
+    // Check if user already has a business
+    if (user.businessId) {
+      ErrorHelper.BadRequestException('User already has a business registered');
+    }
+
 
     if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
       ErrorHelper.ConflictException(
@@ -380,6 +397,7 @@ export class BusinessesService {
     let queryBuilder = this.businessRepository
       .createQueryBuilder('business')
       .leftJoinAndSelect('business.user', 'user')
+      .leftJoinAndSelect('user.role', 'role')
       .leftJoinAndSelect('business.businessType', 'businessType')
       .leftJoin('orders', 'order', 'order.businessId = business.id')
       .leftJoin('products', 'product', 'product.businessId = business.id')
@@ -395,6 +413,7 @@ export class BusinessesService {
         'business.createdAt',
         'business.updatedAt',
         'user.email',
+        'user.role',
         'businessType.name',
       ])
       .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
@@ -527,6 +546,31 @@ export class BusinessesService {
     }
 
     return queryBuilder;
+  }
+
+  private async assignMerchantRole(user: User): Promise<void> {
+    // Get Merchant role
+    const merchantRole = await this.roleRepository.findOne({
+      where: {
+        name: 'Merchant',
+        userType: UserType.USER,
+        status: RoleStatus.ACTIVE,
+      },
+    });
+
+    if (!merchantRole) {
+      this.logger.error('Merchant role not found in database!');
+      ErrorHelper.InternalServerErrorException(
+        'System configuration error: Merchant role not found',
+      );
+    }
+
+    // Assign role to user
+    user.roleId = merchantRole.id;
+    user.userType = UserType.USER;
+    user.status = user.status || UserStatus.ACTIVE;
+
+    await this.userRepository.save(user);
   }
 
 }

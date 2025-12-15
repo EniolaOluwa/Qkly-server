@@ -5,11 +5,21 @@ import {
   JoinColumn,
   OneToOne,
   PrimaryGeneratedColumn,
-  UpdateDateColumn
+  UpdateDateColumn,
+  ManyToOne
 } from 'typeorm';
-import { UserRole } from '../../../common/auth/user-role.enum';
+import { UserType } from '../../../common/auth/user-role.enum';
 import { Business } from '../../businesses/business.entity';
 import { OnboardingStep } from '../dto/onboarding-step.enum';
+import { Role } from '../../roles/entities/role.entity';
+
+
+export enum UserStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  SUSPENDED = 'suspended',
+  BANNED = 'banned',
+}
 
 @Entity('users')
 export class User {
@@ -39,11 +49,33 @@ export class User {
 
   @Column({
     type: 'enum',
-    enum: UserRole,
-    default: UserRole.MERCHANT,
-    comment: 'User role: merchant or admin'
+    enum: UserType,
+    default: UserType.USER,
+    comment: 'User type: user or admin',
   })
-  role: UserRole;
+  userType: UserType;
+
+  @Column({ nullable: true })
+  roleId: number;
+
+
+  @ManyToOne(() => Role, { nullable: true, eager: false })
+  @JoinColumn({ name: 'roleId' })
+  role: Role;
+
+
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    default: UserStatus.ACTIVE,
+  })
+  status: UserStatus;
+
+  @Column({ nullable: true, comment: 'Reason for suspension/ban' })
+  statusReason: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  suspendedUntil?: Date | null;
 
   @Column({ nullable: true, comment: 'Monnify wallet reference' })
   walletReference: string;
@@ -60,27 +92,24 @@ export class User {
   @Column({ nullable: true, comment: 'Monnify wallet bank code' })
   walletBankCode: string;
 
-
-  @Column({ nullable: true, comment: 'User’s preferred bank account number for payouts' })
+  @Column({ nullable: true })
   personalAccountNumber: string;
 
-  @Column({ nullable: true, comment: 'User’s preferred bank account name for payouts' })
+  @Column({ nullable: true })
   personalAccountName: string;
 
-  @Column({ nullable: true, comment: 'User’s preferred bank name for payouts' })
+  @Column({ nullable: true })
   personalBankName: string;
 
-  @Column({ nullable: true, comment: 'User’s preferred bank code for payouts' })
+  @Column({ nullable: true })
   personalBankCode: string;
 
   @Column({ nullable: true, unique: true })
   businessId: number;
 
   @OneToOne(() => Business, (business) => business.user, { nullable: true })
-
   @JoinColumn({ name: 'businessId' })
   business: Business;
-
 
   @Column({ default: false })
   isEmailVerified: boolean;
@@ -92,11 +121,10 @@ export class User {
     type: 'enum',
     enum: OnboardingStep,
     default: OnboardingStep.PERSONAL_INFORMATION,
-    comment: 'Current onboarding step for the user (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)'
   })
   onboardingStep: OnboardingStep;
 
-  @Column({ default: false, comment: 'Whether user has completed all onboarding steps' })
+  @Column({ default: false })
   isOnboardingCompleted: boolean;
 
   @Column({ nullable: false })
@@ -108,24 +136,17 @@ export class User {
   @Column({ type: 'float', nullable: false })
   latitude: number;
 
-
-  @Column({ nullable: true, comment: 'Paystack customer code' })
+  @Column({ nullable: true })
   paystackCustomerCode: string;
 
-  @Column({ nullable: true, comment: 'Paystack dedicated account ID' })
+  @Column({ nullable: true })
   paystackDedicatedAccountId: string;
 
-  @Column({ type: 'varchar', default: 'PENDING', comment: 'DVA account status' })
+  @Column({ type: 'varchar', default: 'PENDING' })
   paystackAccountStatus: string;
 
-
-  @Column({
-    type: 'varchar',
-    default: 'PAYSTACK',
-    comment: 'Payment provider for this user'
-  })
+  @Column({ type: 'varchar', default: 'PAYSTACK' })
   paymentProvider: string;
-
 
   @Column({ default: 0 })
   pinFailedAttempts: number;
@@ -133,9 +154,21 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   pinLockedUntil?: Date | null;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  lastLoginAt?: Date | null;
+
+  @Column({ nullable: true })
+  lastLoginIp?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ nullable: true })
+  createdBy: number;
+
+  @Column({ nullable: true })
+  suspendedBy?: number;
 }

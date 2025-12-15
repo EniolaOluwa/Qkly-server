@@ -736,12 +736,6 @@ export class UsersController {
     });
   }
 
-
-
-
-
-
-
   // Example admin-only endpoint demonstrating role-based access control
   @Get('admin/dashboard')
   @UseGuards(JwtAuthGuard, RoleGuard)

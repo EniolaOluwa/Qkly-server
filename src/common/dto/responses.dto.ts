@@ -554,13 +554,14 @@ export class LoginDto {
     example: 'ios_device_67890',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   deviceid: string;
 
   @ApiProperty({
     description: 'Longitude coordinate',
     example: -122.406417,
   })
+  @IsOptional()
   @IsNumber()
   longitude: number;
 
@@ -569,6 +570,7 @@ export class LoginDto {
     example: 37.7749,
   })
   @IsNumber()
+  @IsOptional()
   latitude: number;
 }
 
