@@ -419,6 +419,14 @@ export class BusinessResponseDto {
   })
   businessDescription: string;
 
+
+
+  @ApiProperty({
+    description: 'Store URL slug',
+    example: 'fashion-hub',
+  })
+  slug: string | null;
+
   @ApiProperty({
     description: 'Business location',
     example: '123 Main St, New York, NY 10001',
