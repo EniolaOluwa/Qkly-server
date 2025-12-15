@@ -113,35 +113,3 @@ export class IpThrottleGuard extends ThrottlerGuard {
   }
 }
 
-/**
- * Strict throttle guard for form preview/embed endpoints
- */
-@Injectable()
-export class FormAccessThrottleGuard extends ThrottlerGuard {
-  protected async getTracker(req: Request): Promise<string> {
-    const ip = this.getClientIp(req);
-    const formId = req.params?.publicId || 'unknown';
-    return `form-access:${formId}:${ip}`;
-  }
-
-  protected getClientIp(req: Request): string {
-    const headers = [
-      'x-forwarded-for',
-      'x-real-ip',
-      'cf-connecting-ip',
-      'x-client-ip',
-    ];
-
-    for (const header of headers) {
-      const value = req.headers[header];
-      if (value) {
-        const ip = typeof value === 'string'
-          ? value.split(',')[0].trim()
-          : value[0];
-        if (ip) return ip;
-      }
-    }
-
-    return req.socket.remoteAddress || 'unknown';
-  }
-}

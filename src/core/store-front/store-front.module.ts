@@ -9,12 +9,14 @@ import { Category } from '../category/entity/category.entity';
 import { BusinessType } from '../businesses/business-type.entity';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { ProductModule } from '../product/product.module';
+import { BusinessesModule } from '../businesses/businesses.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Product, Business, Category, BusinessType]),
     ConfigModule,
-    ProductModule
+    ProductModule,
+    BusinessesModule
   ],
   controllers: [StoreFrontController],
   providers: [StoreFrontService, CloudinaryUtil],

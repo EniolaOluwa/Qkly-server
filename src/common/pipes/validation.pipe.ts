@@ -9,7 +9,11 @@ export class ValidationPipe extends NestValidationPipe {
         target: false,
         value: false,
       },
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
       stopAtFirstError: false,
+      forbidNonWhitelisted: true,
     });
   }
 }

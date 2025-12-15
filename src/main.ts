@@ -50,7 +50,7 @@ async function bootstrap() {
     jsonDocumentUrl: '/api/docs-json',
     swaggerOptions: {
       tagsSorter: 'alpha',
-      operationsSorter: 'alpha',
+      // operationsSorter: 'alpha',
       persistAuthorization: true,
     },
   });

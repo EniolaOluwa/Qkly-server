@@ -12,6 +12,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
+import { UserType } from '../../common/auth/user-role.enum';
 import {
   CreatePinResponseDto,
   KycVerificationResponseDto,
@@ -22,15 +23,18 @@ import {
 } from '../../common/dto/responses.dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
+import { Role, RoleStatus } from '../roles/entities/role.entity';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
 import { ErrorHelper } from './../../common/utils/error.utils';
+import { ChangeUserStatusDto } from './dto/change-user-status.dto';
 import { OnboardingStep } from './dto/onboarding-step.enum';
+import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
-import { User } from './entity/user.entity';
-
-
+import { User, UserStatus } from './entity/user.entity';
+import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
+import { permission } from 'process';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -46,6 +50,8 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(User)
+    private roleRepository: Repository<Role>,
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
     private jwtService: JwtService,
@@ -54,6 +60,7 @@ export class UsersService {
     private walletProvisioningUtil: WalletProvisioningUtil,
     private userProgressService: UserProgressService,
   ) { }
+
 
 
   async registerUser(
@@ -81,6 +88,16 @@ export class UsersService {
       // Hash the password
       const hashedPassword = CryptoUtil.hashPassword(registerUserDto.password);
 
+      // Get default Merchant role
+      const merchantRole = await this.roleRepository.findOne({
+        where: { name: 'Merchant', userType: UserType.USER },
+      });
+
+      if (!merchantRole) {
+        this.logger.error('Merchant role not found in database!');
+        ErrorHelper.InternalServerErrorException('System configuration error');
+      }
+
       // Create new user
       const user = this.userRepository.create({
         firstName: registerUserDto.firstname,
@@ -91,10 +108,19 @@ export class UsersService {
         deviceId: registerUserDto.deviceid,
         longitude: registerUserDto.longitude,
         latitude: registerUserDto.latitude,
+        userType: UserType.USER, // All registered users are USER type
+        roleId: merchantRole.id,
+        status: UserStatus.ACTIVE,
       });
 
       // Save user to database
       const savedUser = await this.userRepository.save(user);
+
+      // Fetch user with role
+      const userWithRole = await this.userRepository.findOne({
+        where: { id: savedUser.id },
+        relations: ['role'],
+      });
 
       // Generate JWT payload
       const payload = {
@@ -103,16 +129,12 @@ export class UsersService {
         firstName: savedUser.firstName,
         lastName: savedUser.lastName,
         deviceId: registerUserDto.deviceid,
-        role: savedUser.role,
+        userType: savedUser.userType,
+        roleName: userWithRole?.role?.name,
       };
-
 
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
-
-      /**
-       * TODO: Send Email to user
-      */
 
       // Return user information with token
       return {
@@ -130,10 +152,10 @@ export class UsersService {
         onboardingStep: savedUser.onboardingStep,
       };
     } catch (error) {
-
       if (error instanceof ConflictException) {
         throw error;
       }
+      this.logger.error('Registration failed:', error);
       ErrorHelper.InternalServerErrorException('Failed to register user');
     }
   }
@@ -147,15 +169,40 @@ export class UsersService {
   }
 
   async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
-
-    // Find user by email
+    // Find user by email with role
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
+      relations: ['role'],
     });
-
 
     if (!user) {
       ErrorHelper.UnauthorizedException('Invalid email or password');
+    }
+
+    // Check user status
+    if (user.status === UserStatus.SUSPENDED) {
+      if (user.suspendedUntil && user.suspendedUntil > new Date()) {
+        const remainingTime = Math.ceil(
+          (user.suspendedUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+        );
+        ErrorHelper.UnauthorizedException(
+          `Account suspended until ${user.suspendedUntil.toISOString()}. ${user.statusReason || ''}`,
+        );
+      } else if (!user.suspendedUntil) {
+        ErrorHelper.UnauthorizedException(
+          `Account suspended indefinitely. ${user.statusReason || 'Contact support for assistance.'}`,
+        );
+      }
+    }
+
+    if (user.status === UserStatus.BANNED) {
+      ErrorHelper.UnauthorizedException(
+        `Account has been banned. ${user.statusReason || 'Contact support for assistance.'}`,
+      );
+    }
+
+    if (user.status === UserStatus.INACTIVE) {
+      ErrorHelper.UnauthorizedException('Account is inactive. Contact support for assistance.');
     }
 
     // Verify password
@@ -163,8 +210,11 @@ export class UsersService {
       ErrorHelper.UnauthorizedException('Invalid email or password');
     }
 
-    // Update user's device ID and location if provided
-    const updateData: Partial<User> = {};
+    // Update user's device ID, location, and last login
+    const updateData: Partial<User> = {
+      lastLoginAt: new Date(),
+    };
+
     if (loginDto.deviceid) {
       updateData.deviceId = loginDto.deviceid;
     }
@@ -187,7 +237,9 @@ export class UsersService {
       firstName: user.firstName,
       lastName: user.lastName,
       deviceId: loginDto.deviceid,
-      role: user.role,
+      userType: user.userType,
+      role: user.role?.userType,
+      permissions: user.role?.permissions || [],
     };
 
     // Generate JWT token
@@ -198,7 +250,7 @@ export class UsersService {
       message: 'User logged in successfully',
       accessToken,
       tokenType: 'Bearer',
-      expiresIn: 3600, // 1 hour in seconds
+      expiresIn: 3600,
       userId: user.id,
       email: user.email,
       firstName: user.firstName,
@@ -209,6 +261,7 @@ export class UsersService {
       onboardingStep: user.onboardingStep,
     };
   }
+
 
   // Termii sms otp
   async generatePhoneOtp(
@@ -746,72 +799,6 @@ export class UsersService {
     };
   }
 
-  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
-    const termiiBaseUrl = this.configService.get<string>(
-      'TERMII_BASE_URL',
-      'https://api.ng.termii.com',
-    );
-    const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
-    const senderId = this.configService.get<string>(
-      'TERMII_SENDER_ID',
-      'NQkly',
-    );
-    const channel = this.configService.get<string>(
-      'TERMII_CHANNEL',
-      'generic',
-    );
-
-    if (!termiiApiKey) {
-      ErrorHelper.InternalServerErrorException(
-        'Termii SMS API key not configured',
-      );
-    }
-
-    const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
-
-    // Format payload according to Termii SMS API documentation
-    const payload = {
-      to: phoneNumber,
-      from: senderId,
-      sms: message,
-      type: 'plain',
-      channel: channel,
-      api_key: termiiApiKey,
-    };
-
-
-    const response = await firstValueFrom(
-      this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }),
-    );
-
-    if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
-      ErrorHelper.InternalServerErrorException(
-        'Failed to send SMS via Termii API',
-      );
-    }
-  }
-
-  private maskPhoneNumber(phone: string): string {
-    // Remove any non-digit characters
-    const cleanPhone = phone.replace(/\D/g, '');
-
-    if (cleanPhone.length < 6) {
-      return phone; // Return original if too short to mask
-    }
-
-    // Mask middle digits, showing first 4 and last 2 digits
-    // Example: 08123456789 becomes 0812*****89
-    const firstPart = cleanPhone.substring(0, 4);
-    const lastPart = cleanPhone.substring(cleanPhone.length - 2);
-    const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
-
-    return `${firstPart}${maskedMiddle}${lastPart}`;
-  }
-
   async verifyPasswordResetOtp(
     email: string,
     otpCode: string,
@@ -1111,9 +1098,6 @@ export class UsersService {
 
   }
 
-
-
-
   async checkUser(
     identifier: string | number,
     identifierType: 'id' | 'email' | 'phone' = 'id',
@@ -1151,11 +1135,16 @@ export class UsersService {
 
     const user = await this.userRepository.findOne({
       where: { phone },
+      relations: ['role'],
     });
-
 
     if (!user) {
       ErrorHelper.UnauthorizedException('Invalid credentials');
+    }
+
+    // Check user status
+    if (user.status !== UserStatus.ACTIVE) {
+      ErrorHelper.UnauthorizedException('Account is not active. Contact support.');
     }
 
     if (!user.pin) {
@@ -1181,7 +1170,6 @@ export class UsersService {
       }
 
       await this.userRepository.update(user.id, updates);
-
       ErrorHelper.UnauthorizedException('Invalid credentials');
     }
 
@@ -1189,6 +1177,7 @@ export class UsersService {
       await this.userRepository.update(user.id, {
         pinFailedAttempts: 0,
         pinLockedUntil: null,
+        lastLoginAt: new Date(),
       });
     }
 
@@ -1198,8 +1187,12 @@ export class UsersService {
       firstName: user.firstName,
       lastName: user.lastName,
       deviceId: user.deviceId,
-      role: user.role,
+      userType: user.userType,
+      role: user.role?.userType,
+      permissions: user.role?.permissions || [],
+
     };
+
 
     const accessToken = this.jwtService.sign(payload);
 
@@ -1217,7 +1210,287 @@ export class UsersService {
       isPhoneVerified: user.isPhoneVerified,
       onboardingStep: user.onboardingStep,
     };
-
   }
 
+  async suspendUser(
+    userId: number,
+    suspendDto: SuspendUserDto,
+    suspendedBy: number,
+  ): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (user.userType === UserType.ADMIN) {
+      // Check if the person suspending has higher privileges
+      const suspendingUser = await this.userRepository.findOne({
+        where: { id: suspendedBy },
+        relations: ['role'],
+      });
+
+      if (!suspendingUser || suspendingUser.role?.name !== 'Super Admin') {
+        ErrorHelper.ForbiddenException('Only Super Admin can suspend administrative users');
+      }
+    }
+
+    user.status = UserStatus.SUSPENDED;
+    user.statusReason = suspendDto.reason;
+    user.suspendedBy = suspendedBy;
+
+    if (suspendDto.suspendedUntil) {
+      user.suspendedUntil = new Date(suspendDto.suspendedUntil);
+    }
+
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`User ${userId} suspended by user ${suspendedBy}`);
+
+    return updatedUser;
+  }
+
+  async reactivateUser(userId: number, reactivatedBy: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    user.status = UserStatus.ACTIVE;
+    user.statusReason = 'Account reactivated';
+    user.suspendedUntil = null;
+    user.suspendedBy = undefined;
+
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`User ${userId} reactivated by user ${reactivatedBy}`);
+
+    return updatedUser;
+  }
+
+  async changeUserStatus(
+    userId: number,
+    changeStatusDto: ChangeUserStatusDto,
+    changedBy: number,
+  ): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    // Check permissions for administrative users
+    if (user.userType === UserType.ADMIN) {
+      const changingUser = await this.userRepository.findOne({
+        where: { id: changedBy },
+        relations: ['role'],
+      });
+
+      if (!changingUser || changingUser.role?.name !== 'Super Admin') {
+        ErrorHelper.ForbiddenException('Only Super Admin can change status of administrative users');
+      }
+    }
+
+    user.status = changeStatusDto.status;
+
+    if (changeStatusDto.reason) {
+      user.statusReason = changeStatusDto.reason;
+    }
+
+    // Clear suspension fields if status is not suspended
+    if (changeStatusDto.status !== UserStatus.SUSPENDED) {
+      user.suspendedUntil = null;
+      user.suspendedBy = undefined;
+    }
+
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`User ${userId} status changed to ${changeStatusDto.status} by user ${changedBy}`);
+
+    return updatedUser;
+  }
+
+  async assignRole(
+    userId: number,
+    roleId: number,
+    assignedBy: number,
+  ): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    const role = await this.roleRepository.findOne({ where: { id: roleId } });
+
+    if (!role) {
+      ErrorHelper.NotFoundException('Role not found');
+    }
+
+    if (role.status !== RoleStatus.ACTIVE) {
+      ErrorHelper.BadRequestException('Cannot assign an inactive or suspended role');
+    }
+
+    // Check if role type matches user type
+    if (user.userType !== role.userType) {
+      ErrorHelper.BadRequestException(
+        `Cannot assign ${role.userType} role to ${user.userType} user`,
+      );
+    }
+
+    user.roleId = roleId;
+
+    const updatedUser = await this.userRepository.save(user);
+    this.logger.log(`Role ${roleId} assigned to user ${userId} by user ${assignedBy}`);
+
+    return updatedUser;
+  }
+
+  async getAllUsers(
+    pageOptionsDto: PaginationDto,
+    userTypes?: UserType[],
+    statuses?: UserStatus[],
+    roleId?: number,
+  ): Promise<PaginationResultDto<User>> {
+    const query = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.business', 'business');
+
+    if (userTypes?.length) {
+      query.andWhere('user.userType IN (:...userTypes)', { userTypes });
+    }
+
+    if (statuses?.length) {
+      query.andWhere('user.status IN (:...statuses)', { statuses });
+    }
+
+    if (roleId !== undefined) {
+      query.andWhere('user.roleId = :roleId', { roleId });
+    }
+
+    query
+      .orderBy('user.createdAt', pageOptionsDto.order)
+      .skip(pageOptionsDto.skip)
+      .take(pageOptionsDto.limit);
+
+    const [users, itemCount] = await query.getManyAndCount();
+
+    const sanitizedUsers = users.map(({ password, pin, ...rest }) => rest as User);
+
+    return new PaginationResultDto(sanitizedUsers, {
+      itemCount,
+      pageOptionsDto,
+    });
+  }
+
+
+
+  async getAdminUsers(
+    pageOptionsDto: PaginationDto,
+  ): Promise<PaginationResultDto<User>> {
+    return this.getAllUsers(
+      pageOptionsDto,
+      [UserType.ADMIN, UserType.SUPER_ADMIN],
+    );
+  }
+
+  async getMerchantUsers(
+    pageOptionsDto: PaginationDto,
+  ): Promise<PaginationResultDto<User>> {
+    return this.getAllUsers(
+      pageOptionsDto,
+      [UserType.USER],
+    );
+  }
+
+  async getActiveAdmins(
+    pageOptionsDto: PaginationDto,
+  ): Promise<PaginationResultDto<User>> {
+    return this.getAllUsers(
+      pageOptionsDto,
+      [UserType.ADMIN],
+      [UserStatus.ACTIVE],
+    );
+  }
+
+
+  async getInactiveAdmins(
+    pageOptionsDto: PaginationDto,
+  ): Promise<PaginationResultDto<User>> {
+    return this.getAllUsers(
+      pageOptionsDto,
+      [UserType.ADMIN],
+      [
+        UserStatus.INACTIVE,
+        UserStatus.SUSPENDED,
+        UserStatus.BANNED,
+      ],
+    );
+  }
+
+
+  private async sendOtpViaTermii(phoneNumber: string, otp: string): Promise<void> {
+    const termiiBaseUrl = this.configService.get<string>(
+      'TERMII_BASE_URL',
+      'https://api.ng.termii.com',
+    );
+    const termiiApiKey = this.configService.get<string>('TERMII_API_KEY');
+    const senderId = this.configService.get<string>(
+      'TERMII_SENDER_ID',
+      'NQkly',
+    );
+    const channel = this.configService.get<string>(
+      'TERMII_CHANNEL',
+      'generic',
+    );
+
+    if (!termiiApiKey) {
+      ErrorHelper.InternalServerErrorException(
+        'Termii SMS API key not configured',
+      );
+    }
+
+    const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+
+    // Format payload according to Termii SMS API documentation
+    const payload = {
+      to: phoneNumber,
+      from: senderId,
+      sms: message,
+      type: 'plain',
+      channel: channel,
+      api_key: termiiApiKey,
+    };
+
+
+    const response = await firstValueFrom(
+      this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }),
+    );
+
+    if (!response.data.message_id || response.data.message !== 'Successfully Sent') {
+      ErrorHelper.InternalServerErrorException(
+        'Failed to send SMS via Termii API',
+      );
+    }
+  }
+
+  private maskPhoneNumber(phone: string): string {
+    // Remove any non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+
+    if (cleanPhone.length < 6) {
+      return phone; // Return original if too short to mask
+    }
+
+    // Mask middle digits, showing first 4 and last 2 digits
+    // Example: 08123456789 becomes 0812*****89
+    const firstPart = cleanPhone.substring(0, 4);
+    const lastPart = cleanPhone.substring(cleanPhone.length - 2);
+    const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
+
+    return `${firstPart}${maskedMiddle}${lastPart}`;
+  }
 }

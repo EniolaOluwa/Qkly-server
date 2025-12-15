@@ -14,6 +14,7 @@ import {
   PublicProductDetailDto,
   StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
+import { BusinessesService } from '../businesses/businesses.service';
 
 
 @Injectable()
@@ -25,14 +26,13 @@ export class StoreFrontService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Category)
     private readonly categoryRepository: Repository<Category>,
-    private readonly productService: ProductService
+    private readonly productService: ProductService,
+    private readonly businessService: BusinessesService
 
   ) { }
 
   async getBusinessByUserId(userId: number): Promise<Business> {
-    const business = await this.businessRepository.findOne({
-      where: { userId },
-    });
+    const business = await this.businessService.findBusinessByUserId(userId);
 
     if (!business) {
       ErrorHelper.NotFoundException('Business not found for this user');
@@ -41,15 +41,12 @@ export class StoreFrontService {
     return business;
   }
 
-  async getStoreInfo(businessId: number) {
-    const business = await this.businessRepository.findOne({
-      where: { id: businessId },
-      relations: ['businessType'],
-    });
 
-    if (!business) {
-      ErrorHelper.NotFoundException(`Store with ID ${businessId} not found`);
-    }
+  async getStoreInfo(identifier: number | string) {
+    const business =
+      await this.businessService.resolveBusinessByIdentifier(identifier, {
+        businessType: true,
+      });
 
     return {
       id: business.id,
@@ -58,6 +55,7 @@ export class StoreFrontService {
       location: business.location,
       logo: business.logo,
       storeName: business.storeName,
+      slug: business.slug,
       storeColor: business.storeColor,
       coverImage: business.coverImage,
       businessType: {
@@ -67,103 +65,6 @@ export class StoreFrontService {
       createdAt: business.createdAt,
     };
   }
-
-  // async getStoreProducts(
-  //   businessId: number,
-  //   query: StoreFrontProductQueryDto
-  // ): Promise<PaginatedProductsDto> {
-  //   // Verify business exists
-  //   const business = await this.businessRepository.findOne({
-  //     where: { id: businessId }
-  //   });
-
-  //   if (!business) {
-  //     ErrorHelper.NotFoundException(`Store with ID ${businessId} not found`);
-  //   }
-
-  //   const {
-  //     page = 1,
-  //     limit = 20,
-  //     categoryId,
-  //     search,
-  //     minPrice,
-  //     maxPrice,
-  //     sortBy = 'createdAt',
-  //     sortOrder = 'DESC'
-  //   } = query;
-
-  //   // Build query
-  //   const qb = this.productRepository
-  //     .createQueryBuilder('product')
-  //     .leftJoinAndSelect('product.category', 'category')
-  //     .where('product.businessId = :businessId', { businessId })
-  //     .andWhere('product.quantityInStock > 0');
-
-  //   // Apply filters
-  //   if (categoryId) {
-  //     qb.andWhere('product.categoryId = :categoryId', { categoryId });
-  //   }
-
-  //   if (search) {
-  //     qb.andWhere(
-  //       '(LOWER(product.name) LIKE LOWER(:search) OR LOWER(product.description) LIKE LOWER(:search))',
-  //       { search: `%${search}%` }
-  //     );
-  //   }
-
-  //   if (minPrice !== undefined) {
-  //     qb.andWhere('product.price >= :minPrice', { minPrice });
-  //   }
-
-  //   if (maxPrice !== undefined) {
-  //     qb.andWhere('product.price <= :maxPrice', { maxPrice });
-  //   }
-
-  //   // Apply sorting
-  //   const allowedSortFields = ['name', 'price', 'createdAt'];
-  //   const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
-  //   qb.orderBy(`product.${validSortBy}`, sortOrder);
-
-  //   // Get total count
-  //   const totalItems = await qb.getCount();
-
-  //   // Apply pagination
-  //   const skip = (page - 1) * limit;
-  //   const products = await qb.skip(skip).take(limit).getMany();
-
-  //   // Transform to public DTO (remove sensitive data)
-  //   const data: PublicProductDto[] = products.map(product => ({
-  //     id: product.id,
-  //     name: product.name,
-  //     description: product.description,
-  //     price: product.price,
-  //     quantityInStock: product.quantityInStock,
-  //     hasVariation: product.hasVariation,
-  //     colors: product.colors,
-  //     sizes: product.sizes,
-  //     images: product.images || [],
-  //     category: {
-  //       id: product.category.id,
-  //       name: product.category.name,
-  //     },
-  //     createdAt: product.createdAt,
-  //   }));
-
-  //   // Calculate pagination metadata
-  //   const totalPages = Math.ceil(totalItems / limit);
-
-  //   return {
-  //     data,
-  //     meta: {
-  //       page,
-  //       limit,
-  //       totalItems,
-  //       totalPages,
-  //       hasNextPage: page < totalPages,
-  //       hasPreviousPage: page > 1,
-  //     },
-  //   };
-  // }
 
   async getProductDetail(
     businessId: number,
@@ -247,9 +148,6 @@ export class StoreFrontService {
 
     return this.getStoreProducts(businessId, { ...query, categoryId });
   }
-
-
-
 
   async getStoreProducts(
     businessId: number,

@@ -1,14 +1,20 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+    BadRequestException,
+    Injectable,
+    NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { ErrorHelper } from '../../common/utils';
-import { CreateLeadDto, CreateLeadFormDto, UpdateLeadDto, UpdateLeadFormDto } from './dto/lead.dto';
+import {
+    CreateLeadDto,
+    CreateLeadFormDto,
+    UpdateLeadDto,
+    UpdateLeadFormDto,
+} from './dto/lead.dto';
 import { LeadForm } from './entity/leadForm.entity';
 import { Leads } from './entity/leads.entity';
-import { Business } from '../businesses/business.entity';
-
-
 
 @Injectable()
 export class LeadService {
@@ -25,12 +31,6 @@ export class LeadService {
         businessId: number,
     ): Promise<LeadForm> {
         try {
-            // if (!dto.title || !dto.buttonText || !dto.inputs || dto.inputs.length === 0) {
-            //     ErrorHelper.BadRequestException(
-            //         'Title, buttonText, and at least one input field are required',
-            //     );
-            // }
-
             const form = this.leadFormRepo.create({
                 ...dto,
                 businessId,
@@ -298,7 +298,10 @@ export class LeadService {
         }
     }
 
-    async getLeadCountByFormId(formId: number, businessId: number): Promise<number> {
+    async getLeadCountByFormId(
+        formId: number,
+        businessId: number,
+    ): Promise<number> {
         try {
             await this.getLeadFormById(formId, businessId);
             return await this.leadsRepo.count({ where: { formId, businessId } });
@@ -393,7 +396,9 @@ export class LeadService {
             }
 
             if (!form.canAcceptSubmissions()) {
-                ErrorHelper.BadRequestException('This form has reached its submission limit');
+                ErrorHelper.BadRequestException(
+                    'This form has reached its submission limit',
+                );
             }
 
             // this.validateFormInputs(dto, form.inputs);
@@ -443,7 +448,9 @@ export class LeadService {
     }
 
     private validateFormInputs(dto: CreateLeadDto, inputs: any[]): void {
-        const requiredFields = inputs.filter((input) => input.required).map((input) => input.type);
+        const requiredFields = inputs
+            .filter((input) => input.required)
+            .map((input) => input.type);
 
         for (const field of requiredFields) {
             if (field === 'email' && !dto.email) {
@@ -463,7 +470,10 @@ export class LeadService {
         }
     }
 
-    private async sendLeadNotification(form: LeadForm, lead: Leads): Promise<void> {
+    private async sendLeadNotification(
+        form: LeadForm,
+        lead: Leads,
+    ): Promise<void> {
         try {
             // TODO: Implement Notification both mail and App
         } catch (error) {
@@ -501,7 +511,8 @@ export class LeadService {
                 totalLeads,
                 newLeads,
                 contactedLeads,
-                conversionRate: totalLeads > 0 ? (contactedLeads / totalLeads) * 100 : 0,
+                conversionRate:
+                    totalLeads > 0 ? (contactedLeads / totalLeads) * 100 : 0,
                 leadsBySource,
                 leadsByDevice,
             };

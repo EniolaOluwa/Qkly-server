@@ -24,7 +24,9 @@
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/ormconfig.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/database/ormconfig.ts",
     "db:drop": "yes | typeorm-ts-node-commonjs schema:drop -d src/database/ormconfig.ts",
-    "db:reset": "npm run db:drop && npm run migration:run"
+    "db:reset": "npm run db:drop && npm run migration:run",
+    "seed": "ts-node -r tsconfig-paths/register src/cli/seed.command.ts",
+    "seed:prod": "node dist/cli/seed.command.js"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
@@ -66,9 +68,10 @@
     "@nestjs/testing": "^11.0.1",
     "@swc/cli": "^0.6.0",
     "@swc/core": "^1.10.7",
-    "@types/express": "^5.0.0",
+    "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
     "@types/luxon": "^3.7.1",
+    "@types/multer": "^2.0.0",
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.15.4",
