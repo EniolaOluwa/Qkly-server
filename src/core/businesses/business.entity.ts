@@ -93,7 +93,6 @@ export class Business {
   @OneToMany(() => LeadForm, (form) => form.business)
   forms: LeadForm[];
 
-
   @BeforeInsert()
   @BeforeUpdate()
   generateSlug() {
