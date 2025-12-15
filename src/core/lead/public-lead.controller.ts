@@ -25,12 +25,15 @@ import { CreateLeadDto } from './dto/lead.dto';
 import { LeadSubmissionThrottleGuard } from './guards/throttle.guards';
 import { LeadService } from './lead.service';
 import { FormResponseDto, LeadSubmissionResponseDto } from './dto/lead-response';
+import { BusinessesService } from '../businesses/businesses.service';
 
 
 @ApiTags('Public Forms')
 @Controller('forms')
 export class PublicLeadController {
-  constructor(private readonly leadService: LeadService) { }
+  constructor(private readonly leadService: LeadService,
+    private readonly businessService: BusinessesService
+  ) { }
 
 
   @Public()
@@ -89,8 +92,8 @@ export class PublicLeadController {
 
   @Public()
   @Post('submit/:publicId')
- // @UseGuards(LeadSubmissionThrottleGuard)
-//  @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
+  @UseGuards(LeadSubmissionThrottleGuard)
+  @Throttle({ 'lead-submission': { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Submit a lead (Public)',
     description: 'Public endpoint for submitting leads. Rate limited to 5 submissions per minute per IP address. Collects tracking information including IP, device type, browser, referrer, and UTM parameters.',
@@ -170,7 +173,7 @@ export class PublicLeadController {
       utmParameters,
     );
 
-    
+
     return HttpResponse.success({
       data: {
         id: data.id,
@@ -181,6 +184,36 @@ export class PublicLeadController {
     });
   }
 
+
+
+  @Get('business/:identifier/forms')
+  @ApiOperation({
+    summary: 'Get forms by business identifier',
+    description: 'Retrieve all forms belonging to a business using id, slug, or store name',
+  })
+  async getBusinessForms(@Param('identifier') identifier: string) {
+    const parsedIdentifier = Number(identifier);
+    const key = isNaN(parsedIdentifier) ? identifier : parsedIdentifier;
+
+    const forms = await this.businessService.getFormsByBusinessIdentifier(key);
+
+    return HttpResponse.success({
+      data: forms.map((form) => ({
+        id: form.publicId,
+        title: form.title,
+        description: form.description,
+        buttonText: form.buttonText,
+        inputs: form.inputs,
+        logoUrl: form.logoUrl,
+        successMessage: form.successMessage,
+        customStyling: form.customStyling,
+        canSubmit: form.canAcceptSubmissions(),
+        requireEmailVerification: form.requireEmailVerification,
+        enableCaptcha: form.enableCaptcha,
+      })),
+      message: 'Business forms retrieved successfully',
+    });
+  }
 
 
 

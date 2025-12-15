@@ -16,6 +16,7 @@ import {
 import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
 import slugify from 'slugify';
+import { LeadForm } from '../lead/entity/leadForm.entity';
 
 
 
@@ -88,6 +89,9 @@ export class Business {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToMany(() => LeadForm, (form) => form.business)
+  forms: LeadForm[];
 
 
   @BeforeInsert()

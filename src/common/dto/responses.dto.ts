@@ -419,6 +419,14 @@ export class BusinessResponseDto {
   })
   businessDescription: string;
 
+
+
+  @ApiProperty({
+    description: 'Store URL slug',
+    example: 'fashion-hub',
+  })
+  slug: string | null;
+
   @ApiProperty({
     description: 'Business location',
     example: '123 Main St, New York, NY 10001',
@@ -554,13 +562,14 @@ export class LoginDto {
     example: 'ios_device_67890',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   deviceid: string;
 
   @ApiProperty({
     description: 'Longitude coordinate',
     example: -122.406417,
   })
+  @IsOptional()
   @IsNumber()
   longitude: number;
 
@@ -569,6 +578,7 @@ export class LoginDto {
     example: 37.7749,
   })
   @IsNumber()
+  @IsOptional()
   latitude: number;
 }
 

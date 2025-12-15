@@ -487,6 +487,7 @@ export class BusinessesController {
       storeName: business.storeName,
       heroText: business.heroText,
       storeColor: business.storeColor,
+      slug: business.slug,
       createdAt: business.createdAt,
       updatedAt: business.updatedAt,
     };

@@ -30,17 +30,33 @@ import {
 export class StoreFrontController {
   constructor(private readonly storeFrontService: StoreFrontService) { }
 
-  @Get(':businessId')
+
+
+  @Get(':identifier')
   @Public()
   @ApiOperation({
     summary: 'Get store information',
-    description: 'Retrieves public information about a store/business. This endpoint returns only non-sensitive data suitable for public display.'
+    description:
+      'Retrieves public information about a store/business using business ID, slug, or store name.',
   })
   @ApiParam({
-    name: 'businessId',
-    type: Number,
-    description: 'The ID of the business/store',
-    example: 1
+    name: 'identifier',
+    type: String,
+    description: 'Business ID, slug, or store name',
+    examples: {
+      id: {
+        summary: 'By business ID',
+        value: '1',
+      },
+      slug: {
+        summary: 'By slug',
+        value: 'techstore-inc',
+      },
+      storeName: {
+        summary: 'By store name',
+        value: 'TechStore',
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -53,23 +69,33 @@ export class StoreFrontController {
         businessDescription: 'Premium electronics and gadgets store',
         location: 'Lagos, Nigeria',
         logo: 'https://cloudinary.com/qkly/logo.jpg',
+        storeName: 'TechStore',
+        slug: 'techstore-inc',
+        storeColor: '#0A2540',
+        coverImage: 'https://cloudinary.com/qkly/cover.jpg',
         businessType: {
           id: 1,
-          name: 'Electronics'
+          name: 'Electronics',
         },
-        createdAt: '2024-01-15T10:30:00Z'
-      }
-    }
+        createdAt: '2024-01-15T10:30:00Z',
+      },
+    },
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Store not found'
+    description: 'Store not found',
   })
   async getStoreInfo(
-    @Param('businessId', ParseIntPipe) businessId: number
+    @Param('identifier') identifier: string,
   ): Promise<PublicBusinessInfoDto> {
-    return this.storeFrontService.getStoreInfo(businessId);
+    const parsedIdentifier = Number(identifier);
+    const resolvedIdentifier = isNaN(parsedIdentifier)
+      ? identifier
+      : parsedIdentifier;
+
+    return this.storeFrontService.getStoreInfo(resolvedIdentifier);
   }
+
 
   @Get(':businessId/products')
   @Public()

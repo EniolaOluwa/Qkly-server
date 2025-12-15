@@ -8,10 +8,11 @@ import { BusinessesController } from './businesses.controller';
 import { BusinessesService } from './businesses.service';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { UserProgressModule } from '../user-progress/user-progress.module';
+import { Role } from '../roles/entities/role.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Business, BusinessType, User]),
+    TypeOrmModule.forFeature([Business, BusinessType, User, Role]),
     ConfigModule,
     UserProgressModule
   ],
