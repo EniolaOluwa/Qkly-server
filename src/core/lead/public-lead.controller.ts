@@ -29,6 +29,7 @@ import { BusinessesService } from '../businesses/businesses.service';
 
 
 @ApiTags('Public Forms')
+@Public()
 @Controller('forms')
 export class PublicLeadController {
   constructor(private readonly leadService: LeadService,
