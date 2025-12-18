@@ -9,6 +9,8 @@ import { PaymentDtoAdapter } from './dto/payment-dto-adapter.service';
 import { OrdersController } from './order.controller';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
+import { OrderMetricsService } from './order-metric.service';
+import { OrderMetricsController } from './order-metrics.controller';
 
 
 
@@ -22,8 +24,8 @@ import { RefundService } from './refund.service';
     WalletsModule,
     PaymentModule,
   ],
-  controllers: [OrdersController],
-  providers: [OrderService, PaymentDtoAdapter, RefundService],
-  exports: [OrderService],
+  controllers: [OrdersController, OrderMetricsController],
+  providers: [OrderService, PaymentDtoAdapter, RefundService, OrderMetricsService],
+  exports: [OrderService, OrderMetricsService],
 })
 export class OrderModule { }

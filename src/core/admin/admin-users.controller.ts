@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards, ValidationPipe } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { RequirePermissions } from "../../common/decorators/permissions.decorator";
 import { PaginationDto } from "../../common/queries/dto";
@@ -11,6 +11,7 @@ import { CreateAdminDto } from "./dto/create-admin.dto";
 import { UpdateAdminDto } from "./dto/update-admin.dto";
 
 @Admin()
+@ApiTags('Admin')
 @ApiBearerAuth()
 @Controller('admin')
 export class AdminUsersController {

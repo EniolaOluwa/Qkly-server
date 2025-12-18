@@ -1,10 +1,11 @@
 import { Controller, Get, Query } from "@nestjs/common";
 import { TrafficEventService } from "../traffic-events/traffic.service";
 import { Admin } from "../../common/decorators/admin.decorator";
-import { ApiBearerAuth, ApiOperation } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AdminTrafficFilterDto } from "../traffic-events/dto/device.dto";
 
 @Admin()
+@ApiTags('Admin Traffics')
 @ApiBearerAuth()
 @Controller('admin/traffic')
 export class AdminTrafficController {

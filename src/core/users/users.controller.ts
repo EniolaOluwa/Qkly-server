@@ -735,34 +735,4 @@ export class UsersController {
       data: data,
     });
   }
-
-  // Example admin-only endpoint demonstrating role-based access control
-  @Get('admin/dashboard')
-  @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Get admin dashboard data (Admin Only)',
-    description: 'Retrieves dashboard data that only admin users can access',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Admin dashboard data retrieved successfully',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Token required',
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - Admin role required',
-  })
-  async getAdminDashboard(@Request() req: any) {
-    return {
-      message: 'Welcome to the admin dashboard!',
-      data: {
-        userRole: req.user.role,
-      }
-    };
-  }
 }

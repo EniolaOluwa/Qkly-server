@@ -1,5 +1,5 @@
 import { Body, Controller, Param, Patch, UseGuards, ValidationPipe, Request } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { HttpResponse } from "../../common/utils/http-response.utils";
 import { JwtAuthGuard, RoleGuard, Roles, UserRole } from "../users";
@@ -8,6 +8,7 @@ import { UsersService } from "../users/users.service";
 import { AssignRoleDto } from "../roles/dto/assign-role.dto";
 
 @Admin()
+@ApiTags('Admin Users')
 @ApiBearerAuth()
 @Controller('admin/users')
 export class AdminActionsController {
