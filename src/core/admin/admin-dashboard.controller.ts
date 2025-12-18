@@ -1,11 +1,12 @@
 import { Controller, Get } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { HttpResponse } from "../../common/utils/http-response.utils";
 import { AdminService } from "./admin.service";
 import { DashboardStatsDto } from "./dto/dashboard-stats.dto";
 
 @Admin()
+@ApiTags('Admin Dashboard')
 @ApiBearerAuth()
 @Controller('admin/dashboard')
 export class AdminDashboardController {

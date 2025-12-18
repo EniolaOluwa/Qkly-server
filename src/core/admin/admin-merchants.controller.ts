@@ -7,7 +7,7 @@ import { MerchantsListResponseDto } from "../businesses/dto/merchants-list-respo
 import { AdminService } from "../admin/admin.service";
 import { MerchantMetricsResponse } from "../admin/dto/merchant-metrics.dto";
 
-@ApiTags('Admin/Merchants')
+@ApiTags('Admin Merchants')
 @Admin()
 @ApiBearerAuth()
 @Controller('admin/merchants')

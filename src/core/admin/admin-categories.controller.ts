@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from "@nestjs/common";
 import { Admin } from "../../common/decorators/admin.decorator";
-import { ApiBearerAuth, ApiOperation, ApiResponse } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { HttpResponse } from "../../common/utils/http-response.utils";
 import { CreateCategoryDto } from "../category/dto/create-category.dto";
 import { CategoryService } from "../category/category.service";
@@ -11,6 +11,7 @@ import { CategoryDetailDto } from "../category/dto/category-detail.dto";
 import { UpdateCategoryDto } from "../category/dto/update-category.dto";
 
 @Admin()
+@ApiTags('Admin Categories')
 @ApiBearerAuth()
 @Controller('admin/categories')
 export class AdminCategoriesController {

@@ -140,23 +140,6 @@ export class OrdersController {
     return await this.orderService.getOrderStatusHistory(id);
   }
 
-
-  @Get()
-  @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(UserRole.ADMIN)
-  @ApiAuth()
-  @ApiPaginatedResponse(
-    Order,
-    'Find all orders with filtering and pagination (Admin only)',
-    'Retrieves all orders with optional filters and pagination',
-  )
-  async findAllOrders(
-    @Query() query: FindAllOrdersDto,
-  ): Promise<PaginationResultDto<Order>> {
-    return await this.orderService.findAllOrders(query);
-  }
-
-
   @Get('business/:businessId')
   @UseGuards(JwtAuthGuard, BusinessGuard)
   @ApiAuth()
@@ -173,7 +156,6 @@ export class OrdersController {
       query,
     );
   }
-
 
 
   @Patch(':id/accept')

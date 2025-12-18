@@ -23,6 +23,7 @@ import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminMerchantsController } from './admin-merchants.controller';
 import { AdminTrafficController } from './admin-traffic.controller';
 import { AdminUsersController } from './admin-users.controller';
+import { AdminOrderController } from './admin-order.controller';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { AdminUsersController } from './admin-users.controller';
     AdminMerchantsController,
     AdminCategoriesController,
     AdminTrafficController,
+    AdminOrderController
   ],
   providers: [AdminService],
   exports: [AdminService],
