@@ -5,7 +5,7 @@ import { BusinessesService } from "../businesses/businesses.service";
 import { MerchantFilterDto } from "../businesses/dto/merchant-filter.dto";
 import { MerchantsListResponseDto } from "../businesses/dto/merchants-list-response.dto";
 import { AdminService } from "../admin/admin.service";
-import { MerchantMetricsResponse } from "../admin/dto/merchant-metrics.dto";
+import { MerchantMetricsResponse, RecentMerchantMetricsQueryDto } from "../admin/dto/merchant-metrics.dto";
 
 @ApiTags('Admin Merchants')
 @Admin()
@@ -55,18 +55,21 @@ export class AdminMerchantsController {
 
   @Get('recent-merchant-metrics')
   @ApiOperation({
-    summary: 'Get merchant metrics',
-    description: 'Returns recent active merchants with sales data.',
+    summary: 'Get recent merchant metrics',
+    description: 'Returns recent active merchants with sales data, supports pagination, filtering, sorting, and search.',
   })
   @ApiResponse({
     status: 200,
-    description: 'recent merchant metrics retrieved successfully'
+    description: 'Recent merchant metrics retrieved successfully',
   })
-  async getMerchantMetrics(): Promise<any> {
-    return this.adminService.recentMerchantMetrics();
+  async getMerchantMetrics(
+    @Query() query: RecentMerchantMetricsQueryDto, // <-- accept query params
+  ): Promise<any> {
+    return this.adminService.recentMerchantMetrics(query);
   }
-
   
+
+
 
   @Get('total-merchant-metrics')
   @ApiOperation({
