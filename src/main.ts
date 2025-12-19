@@ -9,6 +9,7 @@ import { HttpExceptionFilter } from './filters';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import * as express from 'express';
+import { MulterExceptionFilter } from './common/utils/multerError';
 
 
 async function bootstrap() {
@@ -29,6 +30,8 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter(app.get(ConfigService)));
+  app.useGlobalFilters(new MulterExceptionFilter());
+
 
   app.setGlobalPrefix('v1');
 

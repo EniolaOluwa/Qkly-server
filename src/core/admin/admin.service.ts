@@ -303,21 +303,9 @@ export class AdminService {
     this.logger.log(`Admin deleted: ${admin.email} by user ${deletedBy}`);
   }
 
-  async merchantMetrics(): Promise<MerchantMetricsResponse> {
+  async recentMerchantMetrics(): Promise<any> {
     try {
-      const totalMerchants = await this.userRepository.count({
-        where: { userType: UserType.USER },
-      });
-
-      const activeMerchantsCount = await this.userRepository.count({
-        where: {
-          userType: UserType.USER,
-          status: UserStatus.ACTIVE,
-        },
-      });
-
-      const inactiveMerchantsCount = totalMerchants - activeMerchantsCount;
-
+    
       // Fetch recent successful orders and calculate sales metrics
       const salesData = await this.orderRepository
         .createQueryBuilder('order')
@@ -356,6 +344,7 @@ export class AdminService {
             lastName: merchant.lastName,
             email: merchant.email,
             phone: merchant.phone,
+            profilePicture: merchant.profilePicture,
             businessName: merchant.business?.businessName,
             totalSales: merchantSales ? parseFloat(merchantSales.totalSales) : 0,
             salesVolume: merchantSales ? parseInt(merchantSales.salesVolume, 10) : 0,
@@ -365,9 +354,6 @@ export class AdminService {
       }
 
       return {
-        totalMerchants,
-        activeMerchants: activeMerchantsCount,
-        inactiveMerchants: inactiveMerchantsCount,
         recentMerchants: recentMerchantsWithSales,
       };
     } catch (error) {
@@ -378,4 +364,34 @@ export class AdminService {
       ErrorHelper.InternalServerErrorException('Failed to return merchant metrics');
     }
   }
+
+ async totalMerchantMetrics():Promise<MerchantMetricsResponse>{
+  try{
+
+    const [totalMerchants, activeMerchants] = await Promise.all([
+      this.userRepository.count({
+        where: { userType: UserType.USER },
+      }),
+      this.userRepository.count({
+        where: {
+          userType: UserType.USER,
+          status: UserStatus.ACTIVE,
+        },
+      }),
+    ]);
+
+    const inactiveMerchants = Math.max(
+      totalMerchants - activeMerchants,
+      0,
+    );
+
+    return {
+      totalMerchants,
+      activeMerchants,
+      inactiveMerchants,
+    };
+  }catch(error){
+    ErrorHelper.InternalServerErrorException('Failed to return total merchant metrics')
+  }
+ }
 }

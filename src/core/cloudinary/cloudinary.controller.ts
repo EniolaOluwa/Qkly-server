@@ -48,7 +48,7 @@ export class CloudinaryController {
   @ApiBadRequestResponse({ description: 'No file provided' })
   @UseInterceptors(FileInterceptor('file', {
     limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB limit
+      fileSize: 7 * 1024 * 1024, // 7MB limit
     },
     fileFilter: (req, file, cb) => {
       const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff'];

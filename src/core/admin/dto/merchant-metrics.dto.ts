@@ -60,9 +60,4 @@ export class MerchantMetricsResponse {
   })
   inactiveMerchants: number;
 
-  @ApiProperty({
-    type: [RecentMerchantWithSales],
-    description: 'List of 10 recent active merchants with sales data',
-  })
-  recentMerchants: RecentMerchantWithSales[];
 }

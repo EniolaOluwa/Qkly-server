@@ -53,7 +53,22 @@ export class AdminMerchantsController {
     return this.businessesService.getMerchantsList(filterDto);
   }
 
-  @Get('metrics')
+  @Get('recent-merchant-metrics')
+  @ApiOperation({
+    summary: 'Get merchant metrics',
+    description: 'Returns recent active merchants with sales data.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'recent merchant metrics retrieved successfully'
+  })
+  async getMerchantMetrics(): Promise<any> {
+    return this.adminService.recentMerchantMetrics();
+  }
+
+  
+
+  @Get('total-merchant-metrics')
   @ApiOperation({
     summary: 'Get merchant metrics',
     description: 'Returns total, active, inactive, and recent active merchants with sales data.',
@@ -63,7 +78,7 @@ export class AdminMerchantsController {
     description: 'Merchant metrics retrieved successfully',
     type: MerchantMetricsResponse,
   })
-  async getMerchantMetrics(): Promise<MerchantMetricsResponse> {
-    return this.adminService.merchantMetrics();
+  async gettotalMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    return this.adminService.totalMerchantMetrics();
   }
 }
