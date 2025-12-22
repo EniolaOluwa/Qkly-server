@@ -95,7 +95,7 @@ export class AdminService {
       isEmailVerified: true,
       isPhoneVerified: true,
       isOnboardingCompleted: true,
-      deviceId: 'web-admin', // Admin users access via web dashboard
+      deviceId: `web-admin-${createAdminDto.phone}`,
       longitude: 0,
       latitude: 0,
       createdBy,
