@@ -42,6 +42,9 @@ export class User {
   @Column({ length: 20, nullable: false, unique: true })
   phone: string;
 
+  @Column({ name: 'profile_picture', nullable: true})
+  profilePicture?: string
+
   @Column({ length: 11, nullable: true })
   bvn: string;
 

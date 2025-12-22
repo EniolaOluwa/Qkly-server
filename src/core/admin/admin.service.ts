@@ -15,7 +15,7 @@ import { UserStatus } from "../users/entity/user.entity";
 import { CreateAdminDto } from "./dto/create-admin.dto";
 import { DashboardStatsDto } from "./dto/dashboard-stats.dto";
 import { UpdateAdminDto } from "./dto/update-admin.dto";
-import { MerchantMetricsResponse, RecentMerchantWithSales } from "./dto/merchant-metrics.dto";
+import { MerchantMetricsResponse, RecentMerchantMetricsQueryDto, RecentMerchantWithSales } from "./dto/merchant-metrics.dto";
 import { PaymentStatus } from "../order/interfaces/order.interface";
 
 
@@ -327,79 +327,171 @@ export class AdminService {
     }
   }
 
-  async merchantMetrics(): Promise<MerchantMetricsResponse> {
+  async recentMerchantMetrics(
+    query: RecentMerchantMetricsQueryDto,
+  ): Promise<any> {
     try {
-      const totalMerchants = await this.userRepository.count({
-        where: { userType: UserType.USER },
-      });
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'DESC',
+        fromDate,
+        toDate,
+      } = query;
 
-      const activeMerchantsCount = await this.userRepository.count({
-        where: {
-          userType: UserType.USER,
-          status: UserStatus.ACTIVE,
-        },
-      });
+      const offset = (page - 1) * limit;
 
-      const inactiveMerchantsCount = totalMerchants - activeMerchantsCount;
-
-      // Fetch recent successful orders and calculate sales metrics
-      const salesData = await this.orderRepository
+      /* ---------------------------------------------
+         SALES AGGREGATION QUERY
+      ----------------------------------------------*/
+      const salesQuery = this.orderRepository
         .createQueryBuilder('order')
         .select('order.businessId', 'businessId')
         .addSelect('SUM(order.total)', 'totalSales')
         .addSelect('COUNT(order.id)', 'salesVolume')
-        .where('order.paymentStatus = :status', { status: PaymentStatus.PAID })
+        .where('order.paymentStatus = :status', {
+          status: PaymentStatus.PAID,
+        });
+
+      if (fromDate) {
+        salesQuery.andWhere('order.createdAt >= :fromDate', { fromDate });
+      }
+
+      if (toDate) {
+        salesQuery.andWhere('order.createdAt <= :toDate', { toDate });
+      }
+
+      const salesData = await salesQuery
         .groupBy('order.businessId')
         .getRawMany();
 
-      // Get the business IDs from the sales data
-      const businessIds = salesData.map(data => data.businessId);
+      const businessIds = salesData.map(d => d.businessId);
 
-      let recentMerchantsWithSales: RecentMerchantWithSales[] = [];
-      if (businessIds.length > 0) {
-        // Fetch the merchants (users with userType USER) and their associated businesses
-        const merchants = await this.userRepository
-          .createQueryBuilder('user')
-          .leftJoinAndSelect('user.business', 'business')
-          .where('user.userType = :userType', { userType: UserType.USER })
-          .andWhere('user.status = :status', { status: UserStatus.ACTIVE }) // Only active merchants
-          .andWhere('business.id IN (:...businessIds)', { businessIds })
-          .orderBy('user.createdAt', 'DESC') // Order by merchant creation date to get recent merchants
-          .limit(10) // Limit to 10 recent merchants
-          .getMany();
-
-        // Combine merchant data with sales data
-        recentMerchantsWithSales = merchants.map(merchant => {
-          const merchantSales = salesData.find(
-            data => data.businessId === merchant.business?.id,
-          );
-
-          return {
-            id: merchant.id,
-            firstName: merchant.firstName,
-            lastName: merchant.lastName,
-            email: merchant.email,
-            phone: merchant.phone,
-            businessName: merchant.business?.businessName,
-            totalSales: merchantSales ? parseFloat(merchantSales.totalSales) : 0,
-            salesVolume: merchantSales ? parseInt(merchantSales.salesVolume, 10) : 0,
-            dateCreated: merchant.createdAt,
-          };
-        });
+      if (!businessIds.length) {
+        return {
+          data: [],
+          meta: {
+            page,
+            limit,
+            total: 0,
+          },
+        };
       }
 
+      /* ---------------------------------------------
+         MERCHANT QUERY
+      ----------------------------------------------*/
+      const merchantQuery = this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.business', 'business')
+        .where('user.userType = :userType', { userType: UserType.USER })
+        .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
+        .andWhere('business.id IN (:...businessIds)', { businessIds });
+
+      if (search) {
+        merchantQuery.andWhere(
+          `(
+            LOWER(user.firstName) LIKE LOWER(:search) OR
+            LOWER(user.lastName) LIKE LOWER(:search) OR
+            LOWER(user.email) LIKE LOWER(:search) OR
+            LOWER(business.businessName) LIKE LOWER(:search)
+          )`,
+          { search: `%${search}%` },
+        );
+      }
+
+      const total = await merchantQuery.getCount();
+
+      merchantQuery
+        .orderBy(
+          sortBy === 'createdAt'
+            ? 'user.createdAt'
+            : sortBy === 'totalSales'
+              ? 'sales.totalSales'
+              : 'sales.salesVolume',
+          sortOrder,
+        )
+        .offset(offset)
+        .limit(limit);
+
+      const merchants = await merchantQuery.getMany();
+
+      /* ---------------------------------------------
+         MERGE SALES DATA
+      ----------------------------------------------*/
+      const data: RecentMerchantWithSales[] = merchants.map(merchant => {
+        const merchantSales = salesData.find(
+          d => d.businessId === merchant.business?.id,
+        );
+
+        return {
+          id: merchant.id,
+          firstName: merchant.firstName,
+          lastName: merchant.lastName,
+          email: merchant.email,
+          phone: merchant.phone,
+          profilePicture: merchant.profilePicture,
+          businessName: merchant.business?.businessName,
+          totalSales: merchantSales
+            ? Number(merchantSales.totalSales)
+            : 0,
+          salesVolume: merchantSales
+            ? Number(merchantSales.salesVolume)
+            : 0,
+          dateCreated: merchant.createdAt,
+        };
+      });
+
       return {
-        totalMerchants,
-        activeMerchants: activeMerchantsCount,
-        inactiveMerchants: inactiveMerchantsCount,
-        recentMerchants: recentMerchantsWithSales,
+        data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
       this.logger.error(
-        `Failed to return merchant metrics: ${error.message}`,
+        `Failed to return recent merchant metrics: ${error.message}`,
         error.stack,
       );
-      ErrorHelper.InternalServerErrorException('Failed to return merchant metrics');
+      throw ErrorHelper.InternalServerErrorException(
+        'Failed to return merchant metrics',
+      );
+    }
+  }
+
+
+  async totalMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    try {
+
+      const [totalMerchants, activeMerchants] = await Promise.all([
+        this.userRepository.count({
+          where: { userType: UserType.USER },
+        }),
+        this.userRepository.count({
+          where: {
+            userType: UserType.USER,
+            status: UserStatus.ACTIVE,
+          },
+        }),
+      ]);
+
+      const inactiveMerchants = Math.max(
+        totalMerchants - activeMerchants,
+        0,
+      );
+
+      return {
+        totalMerchants,
+        activeMerchants,
+        inactiveMerchants,
+      };
+    } catch (error) {
+      ErrorHelper.InternalServerErrorException('Failed to return total merchant metrics')
     }
   }
 }

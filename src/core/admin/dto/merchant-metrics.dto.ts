@@ -60,9 +60,18 @@ export class MerchantMetricsResponse {
   })
   inactiveMerchants: number;
 
-  @ApiProperty({
-    type: [RecentMerchantWithSales],
-    description: 'List of 10 recent active merchants with sales data',
-  })
-  recentMerchants: RecentMerchantWithSales[];
 }
+
+export class RecentMerchantMetricsQueryDto {
+  page?: number = 1;
+  limit?: number = 10;
+
+  search?: string; // firstName, lastName, email, businessName
+
+  sortBy?: 'createdAt' | 'totalSales' | 'salesVolume' = 'createdAt';
+  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+
+  fromDate?: string; // ISO date
+  toDate?: string;   // ISO date
+}
+
