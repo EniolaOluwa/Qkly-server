@@ -258,7 +258,6 @@ export class BusinessesController {
       ErrorHelper.BadRequestException('Logo is required for business creation');
     }
 
-    // if (files.logo) createBusinessDto.logo = files.logo[0];
 
     // Attach uploaded files to DTO
     createBusinessDto.logo = files.logo[0];
