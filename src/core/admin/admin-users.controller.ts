@@ -23,6 +23,50 @@ export class AdminUsersController {
   ) { }
 
 
+  @Get('assignable-roles')
+  @RequirePermissions('*')
+  @ApiOperation({
+    summary: 'Get list of assignable admin roles',
+    description: 'Retrieves all active admin roles that can be assigned when creating or updating admin users. Only Super Admin can access this endpoint.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Assignable roles retrieved successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Assignable admin roles retrieved successfully',
+        data: [
+          {
+            id: 1,
+            name: 'Admin',
+            description: 'Standard admin user with limited permissions',
+            permissions: ['users.read', 'products.read'],
+            userType: 'admin',
+            status: 'active',
+          },
+          {
+            id: 2,
+            name: 'Super Admin',
+            description: 'Full system access',
+            permissions: ['*'],
+            userType: 'admin',
+            status: 'active',
+          },
+        ],
+      },
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden - Super Admin only' })
+  async getAssignableRoles() {
+    const roles = await this.adminService.getAssignableRoles();
+
+    return HttpResponse.success({
+      message: 'Assignable admin roles retrieved successfully',
+      data: roles,
+    });
+  }
+
   @Post()
   @RequirePermissions('*')
   @ApiOperation({

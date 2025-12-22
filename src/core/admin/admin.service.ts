@@ -95,7 +95,7 @@ export class AdminService {
       isEmailVerified: true,
       isPhoneVerified: true,
       isOnboardingCompleted: true,
-      deviceId: createAdminDto.deviceId || 'admin-device',
+      deviceId: `web-admin-${createAdminDto.phone}`,
       longitude: 0,
       latitude: 0,
       createdBy,
@@ -303,6 +303,30 @@ export class AdminService {
     this.logger.log(`Admin deleted: ${admin.email} by user ${deletedBy}`);
   }
 
+  async getAssignableRoles(): Promise<Role[]> {
+    try {
+      const roles = await this.roleRepository.find({
+        where: {
+          userType: UserType.ADMIN,
+          status: RoleStatus.ACTIVE,
+        },
+        select: ['id', 'name', 'description', 'permissions', 'userType', 'status'],
+        order: {
+          name: 'ASC',
+        },
+      });
+
+      this.logger.log(`Retrieved ${roles.length} assignable admin roles`);
+      return roles;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch assignable roles: ${error.message}`,
+        error.stack,
+      );
+      ErrorHelper.InternalServerErrorException('Failed to fetch assignable roles');
+    }
+  }
+
   async recentMerchantMetrics(
     query: RecentMerchantMetricsQueryDto,
   ): Promise<any> {
@@ -316,9 +340,9 @@ export class AdminService {
         fromDate,
         toDate,
       } = query;
-  
+
       const offset = (page - 1) * limit;
-  
+
       /* ---------------------------------------------
          SALES AGGREGATION QUERY
       ----------------------------------------------*/
@@ -330,21 +354,21 @@ export class AdminService {
         .where('order.paymentStatus = :status', {
           status: PaymentStatus.PAID,
         });
-  
+
       if (fromDate) {
         salesQuery.andWhere('order.createdAt >= :fromDate', { fromDate });
       }
-  
+
       if (toDate) {
         salesQuery.andWhere('order.createdAt <= :toDate', { toDate });
       }
-  
+
       const salesData = await salesQuery
         .groupBy('order.businessId')
         .getRawMany();
-  
+
       const businessIds = salesData.map(d => d.businessId);
-  
+
       if (!businessIds.length) {
         return {
           data: [],
@@ -355,7 +379,7 @@ export class AdminService {
           },
         };
       }
-  
+
       /* ---------------------------------------------
          MERCHANT QUERY
       ----------------------------------------------*/
@@ -365,7 +389,7 @@ export class AdminService {
         .where('user.userType = :userType', { userType: UserType.USER })
         .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
         .andWhere('business.id IN (:...businessIds)', { businessIds });
-  
+
       if (search) {
         merchantQuery.andWhere(
           `(
@@ -377,23 +401,23 @@ export class AdminService {
           { search: `%${search}%` },
         );
       }
-  
+
       const total = await merchantQuery.getCount();
-  
+
       merchantQuery
         .orderBy(
           sortBy === 'createdAt'
             ? 'user.createdAt'
             : sortBy === 'totalSales'
-            ? 'sales.totalSales'
-            : 'sales.salesVolume',
+              ? 'sales.totalSales'
+              : 'sales.salesVolume',
           sortOrder,
         )
         .offset(offset)
         .limit(limit);
-  
+
       const merchants = await merchantQuery.getMany();
-  
+
       /* ---------------------------------------------
          MERGE SALES DATA
       ----------------------------------------------*/
@@ -401,7 +425,7 @@ export class AdminService {
         const merchantSales = salesData.find(
           d => d.businessId === merchant.business?.id,
         );
-  
+
         return {
           id: merchant.id,
           firstName: merchant.firstName,
@@ -419,7 +443,7 @@ export class AdminService {
           dateCreated: merchant.createdAt,
         };
       });
-  
+
       return {
         data,
         meta: {
@@ -439,35 +463,35 @@ export class AdminService {
       );
     }
   }
-  
 
- async totalMerchantMetrics():Promise<MerchantMetricsResponse>{
-  try{
 
-    const [totalMerchants, activeMerchants] = await Promise.all([
-      this.userRepository.count({
-        where: { userType: UserType.USER },
-      }),
-      this.userRepository.count({
-        where: {
-          userType: UserType.USER,
-          status: UserStatus.ACTIVE,
-        },
-      }),
-    ]);
+  async totalMerchantMetrics(): Promise<MerchantMetricsResponse> {
+    try {
 
-    const inactiveMerchants = Math.max(
-      totalMerchants - activeMerchants,
-      0,
-    );
+      const [totalMerchants, activeMerchants] = await Promise.all([
+        this.userRepository.count({
+          where: { userType: UserType.USER },
+        }),
+        this.userRepository.count({
+          where: {
+            userType: UserType.USER,
+            status: UserStatus.ACTIVE,
+          },
+        }),
+      ]);
 
-    return {
-      totalMerchants,
-      activeMerchants,
-      inactiveMerchants,
-    };
-  }catch(error){
-    ErrorHelper.InternalServerErrorException('Failed to return total merchant metrics')
+      const inactiveMerchants = Math.max(
+        totalMerchants - activeMerchants,
+        0,
+      );
+
+      return {
+        totalMerchants,
+        activeMerchants,
+        inactiveMerchants,
+      };
+    } catch (error) {
+      ErrorHelper.InternalServerErrorException('Failed to return total merchant metrics')
+    }
   }
- }
 }
