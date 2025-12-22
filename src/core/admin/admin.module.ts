@@ -24,10 +24,12 @@ import { AdminMerchantsController } from './admin-merchants.controller';
 import { AdminTrafficController } from './admin-traffic.controller';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminOrderController } from './admin-order.controller';
+import { AdminProductsController } from './admin-products.controller';
+import { OrderItem } from '../order/entity/order-items.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, Business, Product, Category, User, Transaction, Role]),
+    TypeOrmModule.forFeature([Order, OrderItem, Business, Product, Category, User, Transaction, Role]),
     OrderModule,
     WalletsModule,
     PaymentModule,
@@ -45,7 +47,8 @@ import { AdminOrderController } from './admin-order.controller';
     AdminMerchantsController,
     AdminCategoriesController,
     AdminTrafficController,
-    AdminOrderController
+    AdminOrderController,
+    AdminProductsController
   ],
   providers: [AdminService],
   exports: [AdminService],

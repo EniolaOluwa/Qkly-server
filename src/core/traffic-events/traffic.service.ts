@@ -8,6 +8,7 @@ import { Business } from '../businesses/business.entity';
 import { detectSource } from './detect-source.util';
 import { AdminTrafficFilterDto, RecordTrafficDto } from './dto/device.dto';
 import { TrafficEvent } from './entity/traffic-events.entity';
+import { TrafficSource } from './types/traffic-source.types';
 
 @Injectable()
 export class TrafficEventService {
@@ -52,16 +53,26 @@ export class TrafficEventService {
   }
 
   // ===== INSIGHTS =====
-
   async insightsBySource(businessId: number) {
-    return this.repo
+    const raw = await this.repo
       .createQueryBuilder('e')
       .select('e.source', 'source')
       .addSelect('COUNT(*)', 'count')
       .where('e.businessId = :businessId', { businessId })
       .groupBy('e.source')
-      .orderBy('count', 'DESC')
-      .getRawMany();
+      .getRawMany<{ source: TrafficSource; count: string }>();
+
+    // Convert DB result into a map
+    const countMap = raw.reduce<Record<TrafficSource, number>>((acc, row) => {
+      acc[row.source] = Number(row.count);
+      return acc;
+    }, {} as any);
+
+    // Ensure ALL platforms exist
+    return Object.values(TrafficSource).map((source) => ({
+      source,
+      count: countMap[source] ?? 0,
+    }));
   }
 
   async insightsByDate(businessId: number) {
