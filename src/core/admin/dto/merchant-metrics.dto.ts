@@ -1,4 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsOptional, IsNumber, Min, IsString, IsIn, IsDateString } from 'class-validator';
 
 export class RecentMerchantWithSales {
   @ApiProperty({ example: 1, description: 'Unique identifier of the merchant' })
@@ -61,17 +63,36 @@ export class MerchantMetricsResponse {
   inactiveMerchants: number;
 
 }
-
 export class RecentMerchantMetricsQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
   page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
   limit?: number = 10;
 
-  search?: string; // firstName, lastName, email, businessName
+  @IsOptional()
+  @IsString()
+  search?: string;
 
+  @IsOptional()
+  @IsIn(['createdAt', 'totalSales', 'salesVolume'])
   sortBy?: 'createdAt' | 'totalSales' | 'salesVolume' = 'createdAt';
+
+  @IsOptional()
+  @IsIn(['ASC', 'DESC'])
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
 
-  fromDate?: string; // ISO date
-  toDate?: string;   // ISO date
-}
+  @IsOptional()
+  @IsDateString()
+  fromDate?: string;
 
+  @IsOptional()
+  @IsDateString()
+  toDate?: string;
+}
