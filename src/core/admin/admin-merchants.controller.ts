@@ -1,5 +1,5 @@
 import { Controller, Get, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { BusinessesService } from "../businesses/businesses.service";
 import { MerchantFilterDto } from "../businesses/dto/merchant-filter.dto";
@@ -53,21 +53,39 @@ export class AdminMerchantsController {
     return this.businessesService.getMerchantsList(filterDto);
   }
 
+
   @Get('recent-merchant-metrics')
   @ApiOperation({
     summary: 'Get recent merchant metrics',
-    description: 'Returns recent active merchants with sales data, supports pagination, filtering, sorting, and search.',
+    description:
+      'Returns recent active merchants with sales data, supports pagination, filtering, sorting, and search.',
   })
   @ApiResponse({
     status: 200,
     description: 'Recent merchant metrics retrieved successfully',
   })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number for pagination (default 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of items per page (default 10)' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: 'Search by firstName, lastName, email, or businessName' })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['createdAt', 'totalSales', 'salesVolume'], description: 'Field to sort by (default createdAt)' })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['ASC', 'DESC'], description: 'Sort order (default DESC)' })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, description: 'Filter from this date (ISO string)' })
+  @ApiQuery({ name: 'toDate', required: false, type: String, description: 'Filter up to this date (ISO string)' })
   async getMerchantMetrics(
-    @Query() query: RecentMerchantMetricsQueryDto, // <-- accept query params
+    @Query() query: RecentMerchantMetricsQueryDto,
   ): Promise<any> {
-    return this.adminService.recentMerchantMetrics(query);
+    const queryWithDefaults = {
+      page: query.page ?? 1,
+      limit: query.limit ?? 10,
+      search: query.search,
+      sortBy: query.sortBy ?? 'createdAt',
+      sortOrder: query.sortOrder ?? 'DESC',
+      fromDate: query.fromDate,
+      toDate: query.toDate,
+    };
+
+    return this.adminService.recentMerchantMetrics(queryWithDefaults);
   }
-  
 
 
 
