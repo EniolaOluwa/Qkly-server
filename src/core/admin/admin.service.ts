@@ -95,7 +95,7 @@ export class AdminService {
       isEmailVerified: true,
       isPhoneVerified: true,
       isOnboardingCompleted: true,
-      deviceId: createAdminDto.deviceId || 'admin-device',
+      deviceId: `web-admin-${createAdminDto.phone}`,
       longitude: 0,
       latitude: 0,
       createdBy,
@@ -301,6 +301,30 @@ export class AdminService {
 
     await this.userRepository.delete(adminId);
     this.logger.log(`Admin deleted: ${admin.email} by user ${deletedBy}`);
+  }
+
+  async getAssignableRoles(): Promise<Role[]> {
+    try {
+      const roles = await this.roleRepository.find({
+        where: {
+          userType: UserType.ADMIN,
+          status: RoleStatus.ACTIVE,
+        },
+        select: ['id', 'name', 'description', 'permissions', 'userType', 'status'],
+        order: {
+          name: 'ASC',
+        },
+      });
+
+      this.logger.log(`Retrieved ${roles.length} assignable admin roles`);
+      return roles;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch assignable roles: ${error.message}`,
+        error.stack,
+      );
+      ErrorHelper.InternalServerErrorException('Failed to fetch assignable roles');
+    }
   }
 
   async merchantMetrics(): Promise<MerchantMetricsResponse> {
