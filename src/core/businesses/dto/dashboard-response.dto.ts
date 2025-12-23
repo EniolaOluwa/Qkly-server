@@ -257,6 +257,9 @@ export class DashboardMetricsDto {
 
   @ApiProperty({ description: 'Average rating from all reviews', example: 4.5 })
   averageRating: number;
+
+  @ApiProperty({ description: 'Total wallet balance for the business', example: 50000.00 })
+  totalWalletBalance: number;
 }
 
 export class CompleteDashboardDto {

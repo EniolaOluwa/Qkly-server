@@ -8,6 +8,7 @@ import { OrderStatus, PaymentStatus } from '../order/interfaces/order.interface'
 import { Product } from '../product/entity/product.entity';
 import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
 import { Review } from '../review/entity/review.entity';
+import { Transaction, TransactionStatus } from '../transaction/entity/transaction.entity';
 import {
   CompleteDashboardDto,
   DashboardMetricsDto,
@@ -34,6 +35,8 @@ export class DashboardService {
     private businessRepository: Repository<Business>,
     @InjectRepository(Review)
     private reviewRepository: Repository<Review>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
   ) { }
 
   async getCompleteDashboard(
@@ -96,6 +99,7 @@ export class DashboardService {
       topLandingPages,
       timeBasedMetrics,
       reviewMetrics,
+      walletBalance,
     ] = await Promise.all([
       this.getOrdersInPeriod(businessId, finalStartDate, finalEndDate),
       this.getOrdersInPeriod(businessId, previousStartDate, previousEndDate),
@@ -111,6 +115,7 @@ export class DashboardService {
       this.getTopLandingPages(businessId, finalStartDate, finalEndDate),
       this.getTimeBasedMetrics(businessId),
       this.getReviewMetrics(businessId, finalStartDate, finalEndDate),
+      this.getWalletBalance(businessId),
     ]);
 
     // Calculate growth percentages
@@ -192,6 +197,9 @@ export class DashboardService {
       // Reviews
       totalReviews: reviewMetrics.totalReviews,
       averageRating: reviewMetrics.averageRating,
+
+      // Wallet
+      totalWalletBalance: walletBalance,
     };
   }
 
@@ -622,5 +630,16 @@ export class DashboardService {
       totalReviews,
       averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
     };
+  }
+
+  private async getWalletBalance(businessId: number): Promise<number> {
+    const result = await this.transactionRepository
+      .createQueryBuilder('transaction')
+      .select('MAX(transaction.balanceAfter)', 'balance')
+      .where('transaction.businessId = :businessId', { businessId })
+      .andWhere('transaction.status = :status', { status: TransactionStatus.SUCCESS })
+      .getRawOne();
+
+    return Number(result?.balance || 0);
   }
 }
