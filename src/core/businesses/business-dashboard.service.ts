@@ -628,7 +628,7 @@ export class DashboardService {
 
     return {
       totalReviews,
-      averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal place
+      averageRating: Math.round(averageRating * 10) / 10,
     };
   }
 
