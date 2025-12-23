@@ -7,6 +7,8 @@ import { Order } from '../order/entity/order.entity';
 import { OrderStatus, PaymentStatus } from '../order/interfaces/order.interface';
 import { Product } from '../product/entity/product.entity';
 import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
+import { Review } from '../review/entity/review.entity';
+import { Transaction, TransactionStatus } from '../transaction/entity/transaction.entity';
 import {
   CompleteDashboardDto,
   DashboardMetricsDto,
@@ -31,6 +33,10 @@ export class DashboardService {
     private trafficRepository: Repository<TrafficEvent>,
     @InjectRepository(Business)
     private businessRepository: Repository<Business>,
+    @InjectRepository(Review)
+    private reviewRepository: Repository<Review>,
+    @InjectRepository(Transaction)
+    private transactionRepository: Repository<Transaction>,
   ) { }
 
   async getCompleteDashboard(
@@ -92,6 +98,8 @@ export class DashboardService {
       trafficBySource,
       topLandingPages,
       timeBasedMetrics,
+      reviewMetrics,
+      walletBalance,
     ] = await Promise.all([
       this.getOrdersInPeriod(businessId, finalStartDate, finalEndDate),
       this.getOrdersInPeriod(businessId, previousStartDate, previousEndDate),
@@ -106,6 +114,8 @@ export class DashboardService {
       this.getTrafficBySource(businessId, finalStartDate, finalEndDate),
       this.getTopLandingPages(businessId, finalStartDate, finalEndDate),
       this.getTimeBasedMetrics(businessId),
+      this.getReviewMetrics(businessId, finalStartDate, finalEndDate),
+      this.getWalletBalance(businessId),
     ]);
 
     // Calculate growth percentages
@@ -183,6 +193,13 @@ export class DashboardService {
       revenueToday: timeBasedMetrics.revenueToday,
       revenueThisWeek: timeBasedMetrics.revenueThisWeek,
       revenueThisMonth: timeBasedMetrics.revenueThisMonth,
+
+      // Reviews
+      totalReviews: reviewMetrics.totalReviews,
+      averageRating: reviewMetrics.averageRating,
+
+      // Wallet
+      totalWalletBalance: walletBalance,
     };
   }
 
@@ -593,5 +610,36 @@ export class DashboardService {
   private calculateGrowth(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / previous) * 100;
+  }
+
+  private async getReviewMetrics(businessId: number, startDate: Date, endDate: Date) {
+    const reviews = await this.reviewRepository.find({
+      where: {
+        businessId,
+        createdAt: Between(startDate, endDate),
+        isVisible: true,
+      },
+    });
+
+    const totalReviews = reviews.length;
+    const averageRating = totalReviews > 0
+      ? reviews.reduce((sum, review) => sum + review.ratings, 0) / totalReviews
+      : 0;
+
+    return {
+      totalReviews,
+      averageRating: Math.round(averageRating * 10) / 10,
+    };
+  }
+
+  private async getWalletBalance(businessId: number): Promise<number> {
+    const result = await this.transactionRepository
+      .createQueryBuilder('transaction')
+      .select('MAX(transaction.balanceAfter)', 'balance')
+      .where('transaction.businessId = :businessId', { businessId })
+      .andWhere('transaction.status = :status', { status: TransactionStatus.SUCCESS })
+      .getRawOne();
+
+    return Number(result?.balance || 0);
   }
 }

@@ -14,10 +14,12 @@ import { DashboardService } from './business-dashboard.service';
 import { Order } from '../order/entity/order.entity';
 import { Product } from '../product/entity/product.entity';
 import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
+import { Review } from '../review/entity/review.entity';
+import { Transaction } from '../transaction/entity/transaction.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Business, BusinessType, User, Role, Order, Product, TrafficEvent]),
+    TypeOrmModule.forFeature([Business, BusinessType, User, Role, Order, Product, TrafficEvent, Review, Transaction]),
     ConfigModule,
     UserProgressModule
   ],
