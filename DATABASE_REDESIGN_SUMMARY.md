@@ -17,31 +17,31 @@ This document outlines the comprehensive database architecture redesign for the 
 - ✅ `UserOnboarding` - Progress tracking
 - ✅ `Wallet` - Virtual account for receiving payments
 - ✅ `BankAccount` - Personal bank accounts for withdrawals
-- 🔄 `User` (existing, needs cleanup) - Core authentication only
+- ✅ `User` (existing, cleaned up) - Reduced from 42 to 17 columns, all relationships added
 
 #### **2. Business Domain** (3 entities)
 - ✅ `BusinessPaymentAccount` - Paystack subaccount for split payments
 - ✅ `BusinessSettlementConfig` - When and how businesses get paid
-- 🔄 `Business` (existing, needs minor updates)
+- ✅ `Business` (existing, updated) - Removed payment/settlement columns, relationships added
 
 #### **3. Product Domain** (5 entities)
 - ✅ `ProductVariant` - SKU management with inventory per variant
 - ✅ `ProductImage` - Multiple images with ordering
 - ✅ `InventoryLog` - Audit trail for stock changes
 - ✅ `StockReservation` - Prevent overselling during checkout
-- 🔄 `Product` (existing, needs refactoring for variants)
+- ✅ `Product` (existing, refactored) - Added variants & images relationships, deprecated imageUrls
 
 #### **4. Order Domain** (5 entities)
 - ✅ `OrderStatusHistory` - Replaces statusHistory JSON array
 - ✅ `OrderPayment` - Replaces paymentDetails JSON
 - ✅ `OrderShipment` - Replaces deliveryDetails JSON
 - ✅ `OrderRefund` - Replaces refundDetails JSON
-- 🔄 `Order` (existing, needs major cleanup)
-- 🔄 `OrderItem` (existing, needs variant linkage)
+- ✅ `Order` (existing, cleaned up) - Removed 12 redundant columns + statusHistory JSON
+- ✅ `OrderItem` (existing, updated) - Added variant linkage with ProductVariant foreign key
 
 #### **5. Payment & Settlement Domain** (2 entities)
 - ✅ `Settlement` - Replaces Order.settlementDetails JSON
-- 🔄 `Transaction` (existing, review needed)
+- ✅ `Transaction` (existing, kept as-is) - General ledger/audit trail for all financial transactions
 
 #### **6. Cart Domain** (3 entities)
 - ✅ `Cart` - Persistent cart for users, session-based for guests
