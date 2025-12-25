@@ -19,11 +19,6 @@ import {
   PaymentStatus,
   PaymentMethod,
   DeliveryMethod,
-  PaymentDetails,
-  DeliveryDetails,
-  SettlementDetails,
-  RefundDetails,
-  OrderStatusHistory as OrderStatusHistoryInterface,
 } from '../interfaces/order.interface';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -134,21 +129,6 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   total: number;
 
-  @Column({ nullable: true })
-  paymentDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  paymentDetails: PaymentDetails;
-
-  @Column({ nullable: true })
-  estimatedDeliveryDate: Date;
-
-  @Column({ nullable: true })
-  deliveryDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  deliveryDetails: DeliveryDetails;
-
   @Column({ type: 'text', nullable: true })
   notes: string;
 
@@ -159,40 +139,7 @@ export class Order {
   items: OrderItem[];
 
   @Column({ type: 'boolean', default: false })
-  isBusinessSettled: boolean;
-
-  @Column({ nullable: true })
-  settlementReference: string;
-
-  @Column({ nullable: true })
-  settlementDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  settlementDetails: SettlementDetails;
-
-
-  @Column({ type: 'boolean', default: false })
-  isRefunded: boolean;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  refundedAmount: number;
-
-  @Column({ nullable: true })
-  refundReference: string;
-
-  @Column({ nullable: true })
-  refundDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  refundDetails: RefundDetails;
-
-
-  @Column({ type: 'boolean', default: false })
   isGuestOrder: boolean;
-
-
-  @Column({ type: 'json', nullable: true, default: '[]' })
-  statusHistory: OrderStatusHistoryInterface[];
 
   // Relationships to new entities
   @OneToMany(() => OrderStatusHistory, (history) => history.order, { cascade: true })
@@ -226,10 +173,6 @@ export class Order {
     }
     if (!this.transactionReference) {
       this.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
-    }
-
-    if (!this.statusHistory) {
-      this.statusHistory = [];
     }
   }
 }
