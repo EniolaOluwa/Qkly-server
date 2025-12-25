@@ -4,6 +4,7 @@ import {
   Entity,
   JoinColumn,
   OneToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   ManyToOne
@@ -12,6 +13,12 @@ import { UserType } from '../../../common/auth/user-role.enum';
 import { Business } from '../../businesses/business.entity';
 import { OnboardingStep } from '../dto/onboarding-step.enum';
 import { Role } from '../../roles/entities/role.entity';
+import { UserProfile } from '../entities/user-profile.entity';
+import { UserKYC } from '../entities/user-kyc.entity';
+import { UserSecurity } from '../entities/user-security.entity';
+import { UserOnboarding } from '../entities/user-onboarding.entity';
+import { Wallet } from '../../wallets/entities/wallet.entity';
+import { BankAccount } from '../../bank-accounts/entities/bank-account.entity';
 
 
 export enum UserStatus {
@@ -177,4 +184,23 @@ export class User {
 
   @Column({ nullable: true })
   suspendedBy?: number;
+
+  // Relationships to new separated entities
+  @OneToOne(() => UserProfile, (profile) => profile.user, { cascade: true })
+  profile: UserProfile;
+
+  @OneToOne(() => UserKYC, (kyc) => kyc.user, { cascade: true })
+  kyc: UserKYC;
+
+  @OneToOne(() => UserSecurity, (security) => security.user, { cascade: true })
+  security: UserSecurity;
+
+  @OneToOne(() => UserOnboarding, (onboarding) => onboarding.user, { cascade: true })
+  onboarding: UserOnboarding;
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet: Wallet;
+
+  @OneToMany(() => BankAccount, (account) => account.user)
+  bankAccounts: BankAccount[];
 }

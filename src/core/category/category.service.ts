@@ -259,7 +259,7 @@ export class CategoryService {
       name: product.name,
       price: product.price.toString(),
       quantityInStock: product.quantityInStock,
-      images: product.images || [],
+      images: product.imageUrls || [],
       businessName: product.business?.businessName || 'N/A',
       businessId: product.businessId,
       createdAt: product.createdAt,

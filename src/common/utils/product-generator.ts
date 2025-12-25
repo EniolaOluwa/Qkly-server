@@ -170,7 +170,7 @@ export const generateRandomProduct = (
     description,
     price: parseFloat((Math.random() * 100 + 10).toFixed(2)),
     quantityInStock: Math.floor(Math.random() * 100) + 1,
-    images: [image],
+    imageUrls: [image],
     hasVariation,
     sizes,
     colors

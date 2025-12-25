@@ -239,7 +239,7 @@ export class DashboardService {
       .addSelect('product.name', 'name')
       .addSelect('product.price', 'price')
       .addSelect('product.quantityInStock', 'quantityInStock')
-      .addSelect('product.images', 'images')
+      .addSelect('product.imageUrls', 'images')
       .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
       .addSelect('SUM(item.quantity * item.price)', 'revenue')
       .where('order.businessId = :businessId', { businessId })
@@ -248,7 +248,7 @@ export class DashboardService {
       .addGroupBy('product.name')
       .addGroupBy('product.price')
       .addGroupBy('product.quantityInStock')
-      .addGroupBy('product.images')
+      .addGroupBy('product.imageUrls')
       .orderBy('revenue', 'DESC')
       .limit(limit)
       .getRawMany();

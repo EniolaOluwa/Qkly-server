@@ -17,6 +17,9 @@ import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
 import slugify from 'slugify';
 import { LeadForm } from '../lead/entity/leadForm.entity';
+import { BusinessPaymentAccount } from './entities/business-payment-account.entity';
+import { BusinessSettlementConfig } from './entities/business-settlement-config.entity';
+import { Settlement } from '../settlements/entities/settlement.entity';
 
 
 
@@ -92,6 +95,16 @@ export class Business {
 
   @OneToMany(() => LeadForm, (form) => form.business)
   forms: LeadForm[];
+
+  // Relationships to new separated entities
+  @OneToOne(() => BusinessPaymentAccount, (account) => account.business, { cascade: true })
+  paymentAccount: BusinessPaymentAccount;
+
+  @OneToOne(() => BusinessSettlementConfig, (config) => config.business, { cascade: true })
+  settlementConfig: BusinessSettlementConfig;
+
+  @OneToMany(() => Settlement, (settlement) => settlement.business)
+  settlements: Settlement[];
 
   @BeforeInsert()
   @BeforeUpdate()

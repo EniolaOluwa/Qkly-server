@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
@@ -22,10 +23,15 @@ import {
   DeliveryDetails,
   SettlementDetails,
   RefundDetails,
-  OrderStatusHistory,
+  OrderStatusHistory as OrderStatusHistoryInterface,
 } from '../interfaces/order.interface';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { OrderStatusHistory } from './order-status-history.entity';
+import { OrderPayment } from './order-payment.entity';
+import { OrderShipment } from './order-shipment.entity';
+import { OrderRefund } from './order-refund.entity';
+import { Settlement } from '../../settlements/entities/settlement.entity';
 
 @Entity('orders')
 @Index(['userId', 'businessId'])
@@ -186,8 +192,23 @@ export class Order {
 
 
   @Column({ type: 'json', nullable: true, default: '[]' })
-  statusHistory: OrderStatusHistory[];
+  statusHistory: OrderStatusHistoryInterface[];
 
+  // Relationships to new entities
+  @OneToMany(() => OrderStatusHistory, (history) => history.order, { cascade: true })
+  statusHistoryRecords: OrderStatusHistory[];
+
+  @OneToOne(() => OrderPayment, (payment) => payment.order, { cascade: true })
+  payment: OrderPayment;
+
+  @OneToMany(() => OrderShipment, (shipment) => shipment.order, { cascade: true })
+  shipments: OrderShipment[];
+
+  @OneToMany(() => OrderRefund, (refund) => refund.order, { cascade: true })
+  refunds: OrderRefund[];
+
+  @OneToOne(() => Settlement, (settlement) => settlement.order)
+  settlement: Settlement;
 
   @CreateDateColumn()
   createdAt: Date;

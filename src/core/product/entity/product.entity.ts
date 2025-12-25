@@ -14,6 +14,8 @@ import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { ProductSize } from './productSize.entity';
 import { Category } from '../../category/entity/category.entity';
+import { ProductVariant } from './product-variant.entity';
+import { ProductImage } from './product-image.entity';
 
 @Entity('products')
 @Index(['userId', 'businessId'])
@@ -38,8 +40,8 @@ export class Product {
   @JoinColumn({ name: 'businessId' })
   business: Business;
 
-  @Column('simple-array', { nullable: true, comment: 'Array of image URLs' })
-  images: string[];
+  @Column('simple-array', { nullable: true, comment: 'Array of image URLs (deprecated - use images relation)' })
+  imageUrls: string[];
 
   @Column({ nullable: false })
   @Index()
@@ -72,6 +74,13 @@ export class Product {
 
   @OneToMany(() => ProductSize, size => size.product, { cascade: true })
   sizes: ProductSize[];
+
+  // Relationships to new entities
+  @OneToMany(() => ProductVariant, (variant) => variant.product, { cascade: true })
+  variants: ProductVariant[];
+
+  @OneToMany(() => ProductImage, (image) => image.product, { cascade: true })
+  images: ProductImage[];
 
   @CreateDateColumn()
   createdAt: Date;

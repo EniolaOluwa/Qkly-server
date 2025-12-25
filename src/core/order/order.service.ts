@@ -1154,7 +1154,7 @@ export class OrderService {
           subtotal: itemSubtotal,
           color,
           size,
-          imageUrls: product.images ? [...product.images].slice(0, 3) : [],
+          imageUrls: product.imageUrls ? [...product.imageUrls].slice(0, 3) : [],
         });
 
         orderItems.push(orderItem);
