@@ -3,19 +3,24 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
+import { DeliveryMethod, OrderItemStatus, OrderStatus, RefundMethod, RefundStatus, RefundType } from '../../common/enums/order.enum';
+import { PaymentMethod, PaymentStatus } from '../../common/enums/payment.enum';
+import { SettlementStatus } from '../../common/enums/settlement.enum';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { PaymentService } from '../payment/payment.service';
 import { Product } from '../product/entity/product.entity';
+import { Settlement } from '../settlements/entities/settlement.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { FindAllOrdersDto, FindBusinessOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import { FindAllOrdersDto, FindBusinessOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
-import { RefundMethod, RefundType } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
+import { OrderPayment } from './entity/order-payment.entity';
+import { OrderRefund } from './entity/order-refund.entity';
+import { OrderStatusHistory } from './entity/order-status-history.entity';
 import { Order } from './entity/order.entity';
-import { DeliveryMethod, OrderItemStatus, OrderStatus, OrderStatusHistory, PaymentDetails, PaymentMethod, PaymentStatus, RefundDetails, RefundStatus, RefundTransactionStatus, RefundTransactionType, SettlementDetails } from './interfaces/order.interface';
 
 const SETTLEMENT_PERCENTAGE = 0.00;
 const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
@@ -31,6 +36,14 @@ export class OrderService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(OrderPayment)
+    private readonly orderPaymentRepository: Repository<OrderPayment>,
+    @InjectRepository(OrderRefund)
+    private readonly orderRefundRepository: Repository<OrderRefund>,
+    @InjectRepository(OrderStatusHistory)
+    private readonly orderStatusHistoryRepository: Repository<OrderStatusHistory>,
+    @InjectRepository(Settlement)
+    private readonly settlementRepository: Repository<Settlement>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     @InjectRepository(User)
@@ -95,7 +108,7 @@ export class OrderService {
   async getOrderStatusHistory(orderId: number): Promise<OrderStatusHistory[]> {
     try {
       const order = await this.findOrderById(orderId);
-      return order.statusHistory || [];
+      return order.statusHistoryRecords || [];
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -392,7 +405,7 @@ export class OrderService {
 
       const order = await queryRunner.manager.findOne(Order, {
         where: { id: orderId },
-        relations: ['items'],
+        relations: ['items', 'payment'],
       });
 
       if (!order) {
@@ -416,23 +429,13 @@ export class OrderService {
         ErrorHelper.ConflictException('Business not found');
       }
 
-      // Update order: paid + confirmed (not processing yet)
-      order.paymentStatus = PaymentStatus.PAID;
-      order.status = OrderStatus.CONFIRMED;
-      order.paymentDate = new Date();
-
-      // Add history entry (duplicate check inside)
-      this.addStatusToHistory(
-        order,
-        OrderStatus.CONFIRMED,
-        null,
-        'Payment confirmed - awaiting merchant acceptance'
-      );
+      // Update order: payment initiated
+      order.paymentStatus = PaymentStatus.INITIATED;
 
       await queryRunner.manager.save(order);
       await queryRunner.commitTransaction();
 
-      this.logger.log(`Payment confirmed for order ${order.id}`);
+      this.logger.log(`Payment initiated for order ${order.id}`);
 
       return await this.orderRepository.findOne({
         where: { id: order.id },
@@ -720,13 +723,6 @@ export class OrderService {
         );
       }
 
-      // Prevent accepting already processed orders
-      if ([OrderStatus.PROCESSING, OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.COMPLETED].includes(order.status)) {
-        ErrorHelper.BadRequestException(
-          `Order has already been accepted and is in ${order.status} status`
-        );
-      }
-
       // Update order status to PROCESSING
       order.status = OrderStatus.PROCESSING;
       if (notes) {
@@ -812,34 +808,27 @@ export class OrderService {
       // Return inventory
       await this.returnInventoryForOrder(order, queryRunner.manager);
 
-      // Build refundDetails
-      order.refundDetails = {
-        refundReference: `RFD-${Date.now()}-${orderId}`,
+      // Create OrderRefund entity
+      const refundReference = `RFD-${Date.now()}-${orderId}`;
+      const orderRefund = queryRunner.manager.create(OrderRefund, {
+        orderId: order.id,
+        refundReference,
+        refundType: RefundType.FULL,
+        refundMethod: RefundMethod.ORIGINAL_PAYMENT,
+        status: RefundStatus.APPROVED, // Auto-approved for business rejection
         amountRequested: order.total,
         amountApproved: order.total,
         amountRefunded: 0,
-        remainingAmount: order.total,
-        status: RefundStatus.REQUESTED,
-        reason: `Order rejected by business: ${reason}`,
-        refundType: RefundType.FULL,
-        refundMethod: RefundMethod.ORIGINAL_PAYMENT,
-        customerNote: undefined,
-        merchantNote: reason,
+        currency: 'NGN',
+        reason: 'MERCHANT_CANCELLED' as any,
+        reasonNotes: `Order rejected by business: ${reason}`,
         requestedBy: businessId,
         approvedBy: businessId,
-        refundedBy: undefined,
         requestedAt: new Date(),
         approvedAt: new Date(),
-        processingAt: null,
-        refundedAt: null,
-        failedAt: null,
-        cancelledAt: null,
-        transactions: [],
-        meta: {},
-      };
+      });
 
-      order.isRefunded = false;
-
+      await queryRunner.manager.save(OrderRefund, orderRefund);
       await queryRunner.manager.save(Order, order);
       await queryRunner.commitTransaction();
 
@@ -1174,16 +1163,6 @@ export class OrderService {
       const orderReference = `ORD-${uuidv4().substring(0, 8).toUpperCase()}`;
       const transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-      // Create initial status history
-      const initialStatusHistory: OrderStatusHistory[] = [
-        {
-          status: OrderStatus.PENDING,
-          timestamp: new Date(),
-          updatedBy: userId,
-          notes: isGuestOrder ? 'Order created by guest user' : 'Order created',
-        },
-      ];
-
       // Create order
       const order = this.orderRepository.create({
         ...orderData,
@@ -1199,11 +1178,20 @@ export class OrderService {
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.PENDING,
         isGuestOrder,
-        statusHistory: initialStatusHistory,
       });
 
       // Save order
       const savedOrder = await queryRunner.manager.save(Order, order);
+
+      // Create initial status history record
+      const initialStatusHistory = this.orderStatusHistoryRepository.create({
+        orderId: savedOrder.id,
+        status: OrderStatus.PENDING,
+        triggeredBy: isGuestOrder ? 'USER' : 'USER',
+        triggeredByUserId: userId ?? undefined,
+        notes: isGuestOrder ? 'Order created by guest user' : 'Order created',
+      });
+      await queryRunner.manager.save(OrderStatusHistory, initialStatusHistory);
 
       // Associate order items with the saved order
       for (const item of orderItems) {
@@ -1214,12 +1202,17 @@ export class OrderService {
       // If payment method is Cash on Delivery, change status to confirmed
       if (createOrderDto.paymentMethod === PaymentMethod.CASH_ON_DELIVERY) {
         savedOrder.status = OrderStatus.CONFIRMED;
-        this.addStatusToHistory(
-          savedOrder,
-          OrderStatus.CONFIRMED,
-          userId,
-          'Payment method: Cash on Delivery',
-        );
+
+        // Create status history for COD confirmation
+        const codStatusHistory = this.orderStatusHistoryRepository.create({
+          orderId: savedOrder.id,
+          status: OrderStatus.CONFIRMED,
+          previousStatus: OrderStatus.PENDING,
+          triggeredBy: 'SYSTEM',
+          triggeredByUserId: userId ?? undefined,
+          notes: 'Payment method: Cash on Delivery',
+        });
+        await queryRunner.manager.save(OrderStatusHistory, codStatusHistory);
         await queryRunner.manager.save(Order, savedOrder);
       }
 
@@ -1300,25 +1293,40 @@ export class OrderService {
         return order;
       }
 
-      // Construct payment details
-      const paymentDetails: PaymentDetails = {
-        paymentMethod: paymentData.paymentMethod,
-        paymentReference: paymentData.paymentReference || order.transactionReference,
-        transactionReference: paymentData.transactionReference || order.transactionReference,
-        paymentDate: paymentData.paymentDate || new Date(),
-        amount: paymentData.amount || order.total,
-        currency: 'NGN',
-        meta: paymentData.meta || {},
-        provider: paymentData.provider,
-        providerResponse: paymentData.providerResponse,
-      };
-
       // Update order with payment information
       order.paymentStatus = paymentData.paymentStatus;
       order.status = paymentData.orderStatus;
       order.paymentMethod = paymentData.paymentMethod;
-      order.paymentDate = paymentData.paymentDate || new Date();
-      order.paymentDetails = paymentDetails;
+
+      // Create or update OrderPayment entity
+      let orderPayment = await entityManager.findOne(OrderPayment, {
+        where: { orderId: order.id },
+      });
+
+      if (!orderPayment) {
+        orderPayment = entityManager.create(OrderPayment, {
+          orderId: order.id,
+          paymentReference: paymentData.paymentReference || `PAY-${uuidv4().substring(0, 8).toUpperCase()}`,
+          provider: paymentData.provider as any, // Will need to map to PaymentProvider enum
+          providerReference: paymentData.transactionReference || order.transactionReference,
+          paymentMethod: paymentData.paymentMethod,
+          status: paymentData.paymentStatus,
+          amount: paymentData.amount || order.total,
+          fee: 0, // Can be calculated from provider response
+          netAmount: paymentData.amount || order.total,
+          currency: 'NGN',
+          providerResponse: paymentData.providerResponse,
+          initiatedAt: new Date(),
+        });
+      }
+
+      // Update payment status and timestamps
+      orderPayment.status = paymentData.paymentStatus;
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        orderPayment.paidAt = paymentData.paymentDate || new Date();
+      }
+
+      await entityManager.save(OrderPayment, orderPayment);
 
       // If payment is successful, update order items and handle settlement
       if (paymentData.paymentStatus === PaymentStatus.PAID) {
@@ -1350,14 +1358,16 @@ export class OrderService {
     try {
       const order = await entityManager.findOne(Order, {
         where: { id: orderId },
-        relations: ['business', 'items', 'business.user'],
+        relations: ['business', 'items', 'business.user', 'settlement'],
       });
 
       if (!order || order.paymentStatus !== PaymentStatus.PAID) {
         return;
       }
 
-      if (order.isBusinessSettled) {
+      // Check if settlement already exists
+      if (order.settlement) {
+        this.logger.log(`Settlement already exists for order ${orderId}`);
         return;
       }
 
@@ -1368,28 +1378,39 @@ export class OrderService {
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-      const settlementDetails: SettlementDetails = {
+      // Create Settlement entity
+      const settlement = entityManager.create(Settlement, {
+        settlementReference,
         businessId: business.id,
-        businessName: business.businessName,
-        amount: order.total,
+        orderId: order.id,
+        status: SettlementStatus.PENDING,
+        orderAmount: order.total,
         platformFee,
+        gatewayFee: 0, // Can be calculated from payment gateway response
         settlementAmount: payoutAmount,
-        reference: settlementReference,
-        status: 'PENDING',
-        settlementDate: new Date(),
-      };
+        currency: 'NGN',
+        transferProvider: 'PAYSTACK',
+      });
 
-      // Mark order as PENDING settlement
-      order.isBusinessSettled = true;
-      order.settlementReference = settlementReference;
-      order.settlementDate = new Date();
-      order.settlementDetails = settlementDetails;
-
-      await entityManager.save(Order, order);
+      await entityManager.save(Settlement, settlement);
 
       this.logger.log(
         `Business settlement initiated for order ${orderId}, business ${business.id}, amount ${payoutAmount}`,
       );
+
+      // Get business owner's primary bank account for settlement
+      const businessUser = await entityManager.findOne(User, {
+        where: { id: business.userId },
+        relations: ['bankAccounts'],
+      });
+
+      const primaryBankAccount = businessUser?.bankAccounts?.find(
+        account => account.isPrimary
+      ) || businessUser?.bankAccounts?.[0];
+
+      if (!primaryBankAccount) {
+        throw new Error('Business owner has no bank account configured for settlement');
+      }
 
       // Use PaymentService to transfer to business account
       this.paymentService
@@ -1397,11 +1418,9 @@ export class OrderService {
           amount: payoutAmount,
           reference: settlementReference,
           narration: `Settlement for order ${order.orderReference}`,
-          destinationAccountNumber:
-            business.user.personalAccountNumber || business.user.walletAccountNumber,
-          destinationBankCode: business.user.personalBankCode || business.user.walletBankCode,
-          destinationAccountName:
-            business.user.personalAccountName || business.user.walletAccountName,
+          destinationAccountNumber: primaryBankAccount.accountNumber,
+          destinationBankCode: primaryBankAccount.bankCode,
+          destinationAccountName: primaryBankAccount.accountName,
           sourceWalletReference:
             this.configService.get<string>('PLATFORM_WALLET_REFERENCE') ||
             process.env.PLATFORM_WALLET_REFERENCE,
@@ -1409,21 +1428,26 @@ export class OrderService {
         })
         .then(async (transferResponse) => {
           if (transferResponse.status === 'SUCCESS') {
-            order.settlementDetails.status = 'COMPLETED';
+            settlement.status = SettlementStatus.COMPLETED;
+            settlement.settledAt = new Date();
+            settlement.transferReference = settlementReference;
+            settlement.providerMetadata = transferResponse;
             this.logger.log(
               `Business settlement successful for order ${orderId}, reference: ${settlementReference}`,
             );
           } else {
-            order.settlementDetails.status = 'FAILED';
+            settlement.status = SettlementStatus.FAILED;
+            settlement.failureReason = JSON.stringify(transferResponse);
             this.logger.error(
               `Business settlement failed for order ${orderId}: ${JSON.stringify(transferResponse)}`,
             );
           }
-          await entityManager.save(Order, order);
+          await entityManager.save(Settlement, settlement);
         })
         .catch(async (err) => {
-          order.settlementDetails.status = 'FAILED';
-          await entityManager.save(Order, order);
+          settlement.status = SettlementStatus.FAILED;
+          settlement.failureReason = err.message;
+          await entityManager.save(Settlement, settlement);
           this.logger.error(
             `Settlement transfer error for order ${orderId}: ${err.message}`,
             err.stack,
@@ -1577,28 +1601,38 @@ export class OrderService {
 
   private async initiateRefund(orderId: number): Promise<void> {
     try {
-      const order = await this.findOrderById(orderId);
+      const order = await this.orderRepository.findOne({
+        where: { id: orderId },
+        relations: ['refunds'],
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found`);
+        return;
+      }
 
       if (order.paymentStatus !== PaymentStatus.PAID) {
         this.logger.warn(`Order ${orderId} is not paid, skipping refund`);
         return;
       }
 
-      if (order.isRefunded) {
-        this.logger.warn(`Order ${orderId} already refunded`);
+      // Find pending refund
+      const pendingRefund = order.refunds?.find(
+        r => r.status === RefundStatus.REQUESTED || r.status === RefundStatus.APPROVED
+      );
+
+      if (!pendingRefund) {
+        this.logger.warn(`No pending refund found for order ${orderId}`);
         return;
       }
 
       // TODO: Implement actual refund logic with payment provider
       this.logger.log(`Refund process initiated for order ${orderId}`);
 
-      // Update order refund status
-      await this.orderRepository.update(orderId, {
-        refundDetails: {
-          ...order.refundDetails,
-          status: RefundStatus.PROCESSING,
-        },
-      });
+      // Update refund status to processing
+      pendingRefund.status = RefundStatus.PROCESSING;
+      pendingRefund.processedAt = new Date();
+      await this.orderRefundRepository.save(pendingRefund);
     } catch (error) {
       this.logger.error(`Failed to initiate refund: ${error.message}`, error.stack);
       throw error;
@@ -1613,7 +1647,15 @@ export class OrderService {
     try {
       this.logger.log(`Initiating automatic refund for rejected order ${orderId}`);
 
-      const order = await this.findOrderById(orderId);
+      const order = await this.orderRepository.findOne({
+        where: { id: orderId },
+        relations: ['refunds'],
+      });
+
+      if (!order) {
+        this.logger.warn(`Order ${orderId} not found`);
+        return;
+      }
 
       // Eligibility checks
       if (order.paymentStatus !== PaymentStatus.PAID) {
@@ -1621,76 +1663,98 @@ export class OrderService {
         return;
       }
 
-      if (order.isRefunded) {
-        this.logger.warn(`Order ${orderId} already refunded`);
+      // Check if refund already exists
+      const existingRefund = order.refunds?.find(r =>
+        r.status !== RefundStatus.FAILED && r.status !== RefundStatus.REJECTED
+      );
+
+      if (existingRefund) {
+        this.logger.warn(`Order ${orderId} already has a refund`);
         return;
+      }
+
+      // Create OrderRefund entity if it doesn't exist yet
+      const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+      let orderRefund = order.refunds?.find(r =>
+        r.status === RefundStatus.REQUESTED || r.status === RefundStatus.APPROVED
+      );
+
+      if (!orderRefund) {
+        orderRefund = await this.orderRefundRepository.save(
+          this.orderRefundRepository.create({
+            orderId: order.id,
+            refundReference,
+            refundType: RefundType.FULL,
+            refundMethod: RefundMethod.ORIGINAL_PAYMENT,
+            status: RefundStatus.PROCESSING,
+            amountRequested: order.total,
+            amountApproved: order.total,
+            amountRefunded: 0,
+            currency: 'NGN',
+            reason: 'MERCHANT_CANCELLED' as any,
+            reasonNotes: `Order rejected: ${reason}`,
+            requestedBy: order.userId || 0,
+            approvedBy: businessId,
+            requestedAt: new Date(),
+            approvedAt: new Date(),
+            processedAt: new Date(),
+          })
+        );
+      } else {
+        orderRefund.status = RefundStatus.PROCESSING;
+        orderRefund.processedAt = new Date();
       }
 
       // Calculate refund split
       const platformFee = order.total * (PLATFORM_FEE_PERCENTAGE / 100);
       const businessAmount = order.total - platformFee;
 
-      // References
+      // References for tracking platform and business refunds
       const platformRefundRef = `REF-PLAT-${uuidv4().substring(0, 8).toUpperCase()}`;
       const businessRefundRef = `REF-BIZ-${uuidv4().substring(0, 8).toUpperCase()}`;
-      const globalRefundRef = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-      // Build refund object
-      const refundDetails: RefundDetails = {
-        refundReference: globalRefundRef,
-        amountRequested: order.total,
-        amountApproved: order.total, // Auto-approve
-        amountRefunded: 0,
-        remainingAmount: order.total,
+      // Track refund transactions
+      const refundTransactions: Array<{
+        type: string;
+        amount: number;
+        reference: string;
+        status: 'SUCCESS' | 'FAILED';
+        processedAt?: Date;
+        error?: string;
+      }> = [];
 
-        status: RefundStatus.PROCESSING,
-
-        reason: `Order rejected: ${reason}`,
-        refundType: RefundType.FULL,
-        refundMethod: RefundMethod.ORIGINAL_PAYMENT,
-
-        customerNote:
-          'The merchant rejected your order. A full refund has been initiated to your original payment method.',
-        merchantNote: reason,
-
-        requestedBy: order.userId || 0,
-        approvedBy: businessId,
-
-        requestedAt: order.refundDetails?.requestedAt || new Date(),
-        approvedAt: new Date(),
-        processingAt: new Date(),
-
-        transactions: [],
-        meta: {
-          platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
-        },
-      };
+      let totalRefunded = 0;
+      let hasFailures = false;
 
       //
       // 1️⃣ PROCESS PLATFORM REFUND (if applicable)
       //
       if (platformFee > 0) {
         try {
-          refundDetails.transactions.push({
-            type: RefundTransactionType.PLATFORM_REFUND,
+          // Platform refund logic - directly credit platform wallet or account
+          // This is internal bookkeeping, so mark as successful
+          refundTransactions.push({
+            type: 'PLATFORM_REFUND',
             amount: platformFee,
             reference: platformRefundRef,
-            status: RefundTransactionStatus.SUCCESS,
+            status: 'SUCCESS',
             processedAt: new Date(),
           });
 
-          refundDetails.amountRefunded += platformFee;
-          refundDetails.remainingAmount -= platformFee;
+          totalRefunded += platformFee;
 
           this.logger.log(
             `Platform refund successful for order ${orderId}: ${platformFee} (${platformRefundRef})`,
           );
         } catch (err) {
-          refundDetails.transactions.push({
-            type: RefundTransactionType.PLATFORM_REFUND,
+          hasFailures = true;
+          refundTransactions.push({
+            type: 'PLATFORM_REFUND',
             amount: platformFee,
             reference: platformRefundRef,
-            status: RefundTransactionStatus.FAILED,
+            status: 'FAILED',
+            error: err.message,
           });
 
           this.logger.error(
@@ -1700,66 +1764,71 @@ export class OrderService {
       }
 
       //
-      // 2️⃣ PROCESS BUSINESS REFUND
+      // 2️⃣ PROCESS BUSINESS/CUSTOMER REFUND via Paystack
       //
       if (businessAmount > 0) {
         try {
           const customer = order.user;
 
-          const accountNumber =
-            customer.personalAccountNumber || customer.walletAccountNumber;
-          const bankCode =
-            customer.personalBankCode || customer.walletBankCode;
-          const accountName =
-            customer.personalAccountName || customer.walletAccountName;
+          // Get customer's primary bank account
+          const primaryBankAccount = customer?.bankAccounts?.find(
+            account => account.isPrimary
+          ) || customer?.bankAccounts?.[0];
 
-          if (!accountNumber || !bankCode) {
-            // fallback – wallet refund
-            refundDetails.transactions.push({
-              type: RefundTransactionType.BUSINESS_REFUND,
+          if (!primaryBankAccount) {
+            // Fallback - wallet refund (manual credit to wallet)
+            // For now, mark as successful but store metadata for manual processing
+            refundTransactions.push({
+              type: 'WALLET_REFUND',
               amount: businessAmount,
               reference: businessRefundRef,
-              status: RefundTransactionStatus.SUCCESS,
+              status: 'SUCCESS',
               processedAt: new Date(),
             });
 
+            totalRefunded += businessAmount;
+
             this.logger.log(
-              `Wallet-based business refund successful for order ${orderId}`,
+              `Wallet-based refund queued for order ${orderId} - manual processing required`,
             );
           } else {
-            // Bank transfer
+            // Use Paystack to transfer refund to customer's bank account
+            // Source: Platform wallet (refunds come from platform funds)
             await this.paymentService.transferToBank({
               amount: businessAmount,
               reference: businessRefundRef,
               narration: `Refund for order ${order.orderReference}`,
-              destinationAccountNumber: accountNumber,
-              destinationBankCode: bankCode,
-              destinationAccountName: accountName,
-              sourceWalletReference: order.business.user.walletReference,
+              destinationAccountNumber: primaryBankAccount.accountNumber,
+              destinationBankCode: primaryBankAccount.bankCode,
+              destinationAccountName: primaryBankAccount.accountName,
+              sourceWalletReference:
+                this.configService.get<string>('PLATFORM_WALLET_REFERENCE') ||
+                process.env.PLATFORM_WALLET_REFERENCE,
               currency: 'NGN',
             });
 
-            refundDetails.transactions.push({
-              type: RefundTransactionType.BUSINESS_REFUND,
+            refundTransactions.push({
+              type: 'BANK_TRANSFER_REFUND',
               amount: businessAmount,
               reference: businessRefundRef,
-              status: RefundTransactionStatus.SUCCESS,
+              status: 'SUCCESS',
               processedAt: new Date(),
             });
+
+            totalRefunded += businessAmount;
+
+            this.logger.log(
+              `Bank transfer refund successful for order ${orderId}: ${businessAmount} (${businessRefundRef})`,
+            );
           }
-
-          refundDetails.amountRefunded += businessAmount;
-          refundDetails.remainingAmount -= businessAmount;
-
-          this.logger.log(
-            `Business refund successful for order ${orderId}: ${businessAmount} (${businessRefundRef})`,
-          );
         } catch (err) {
-          refundDetails.transactions.push({
-            type: RefundTransactionType.BUSINESS_REFUND,
+          hasFailures = true;
+          refundTransactions.push({
+            type: 'BANK_TRANSFER_REFUND',
             amount: businessAmount,
             reference: businessRefundRef,
-            status: RefundTransactionStatus.FAILED,
+            status: 'FAILED',
+            error: err.message,
           });
 
           this.logger.error(
@@ -1769,34 +1838,38 @@ export class OrderService {
       }
 
       //
-      // 3️⃣ FINAL REFUND STATUS CALCULATION
+      // 3️⃣ UPDATE OrderRefund ENTITY WITH RESULTS
       //
-      const allSuccess = refundDetails.transactions.every(
-        (t) => t.status === RefundTransactionStatus.SUCCESS,
-      );
+      const allSuccess = !hasFailures && totalRefunded === order.total;
+      const someSuccess = totalRefunded > 0;
 
-      const someSuccess = refundDetails.transactions.some(
-        (t) => t.status === RefundTransactionStatus.SUCCESS,
-      );
+      orderRefund.amountRefunded = totalRefunded;
+      orderRefund.platformRefundReference = platformRefundRef;
+      orderRefund.businessRefundReference = businessRefundRef;
+      orderRefund.providerMetadata = {
+        transactions: refundTransactions,
+        platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
+      };
 
       if (allSuccess) {
-        refundDetails.status = RefundStatus.COMPLETED;
-        refundDetails.refundedAt = new Date();
+        orderRefund.status = RefundStatus.COMPLETED;
+        orderRefund.completedAt = new Date();
       } else if (someSuccess) {
-        refundDetails.status = RefundStatus.PARTIALLY_COMPLETED;
+        orderRefund.status = RefundStatus.PARTIALLY_COMPLETED;
       } else {
-        refundDetails.status = RefundStatus.FAILED;
-        refundDetails.failedAt = new Date();
+        orderRefund.status = RefundStatus.FAILED;
+        orderRefund.failureReason = refundTransactions
+          .filter(t => t.status === 'FAILED')
+          .map(t => `${t.type}: ${t.error}`)
+          .join('; ');
       }
 
+      await this.orderRefundRepository.save(orderRefund);
+
       //
-      // 4️⃣ SAVE TO DATABASE
+      // 4️⃣ UPDATE ORDER STATUS
       //
       await this.orderRepository.update(orderId, {
-        isRefunded: allSuccess,
-        refundedAmount: refundDetails.amountRefunded,
-        refundReference: globalRefundRef,
-        refundDetails,
         status: allSuccess ? OrderStatus.REFUNDED : OrderStatus.CANCELLED,
       });
 
@@ -1810,7 +1883,8 @@ export class OrderService {
         this.logger.error(
           `Refund incomplete for order ${orderId}. Manual intervention required.`,
         );
-        this.sendRefundFailureAlert(orderId, refundDetails);
+        // Pass null since refund details are now in OrderRefund entity in database
+        this.sendRefundFailureAlert(orderId, null, `Refund partially completed or failed. Check OrderRefund entity for details.`);
       }
     } catch (error) {
       this.logger.error(
@@ -1849,7 +1923,7 @@ export class OrderService {
 
   private async sendRefundFailureAlert(
     orderId: number,
-    refundDetails?: RefundDetails | null,
+    refundData?: any | null,
     errorMessage?: string,
   ): Promise<void> {
     try {
@@ -1857,7 +1931,9 @@ export class OrderService {
       this.logger.error(
         `REFUND FAILURE ALERT - Order ${orderId}: ${errorMessage || 'Some transactions failed'}`,
       );
-      this.logger.error(`Refund details: ${JSON.stringify(refundDetails)}`);
+      if (refundData) {
+        this.logger.error(`Refund details: ${JSON.stringify(refundData)}`);
+      }
     } catch (error) {
       this.logger.error(`Failed to send refund failure alert: ${error.message}`);
     }
@@ -1897,10 +1973,10 @@ export class OrderService {
   }
 
   private hasStatusInHistory(order: Order, status: OrderStatus): boolean {
-    if (!order.statusHistory || order.statusHistory.length === 0) {
+    if (!order.statusHistoryRecords || order.statusHistoryRecords.length === 0) {
       return false;
     }
-    return order.statusHistory.some(entry => entry.status === status);
+    return order.statusHistoryRecords.some(entry => entry.status === status);
   }
 
   private addStatusToHistory(
@@ -1910,8 +1986,8 @@ export class OrderService {
     notes?: string,
     metadata?: Record<string, any>,
   ): void {
-    if (!order.statusHistory) {
-      order.statusHistory = [];
+    if (!order.statusHistoryRecords) {
+      order.statusHistoryRecords = [];
     }
 
     // Prevent duplicate status entries
@@ -1922,15 +1998,27 @@ export class OrderService {
       return;
     }
 
-    const historyEntry: OrderStatusHistory = {
+    // Determine who triggered this change
+    let triggeredBy = 'SYSTEM';
+    let triggeredByUserId: number | undefined = userId ?? undefined;
+
+    if (userId) {
+      // If userId is provided, it could be customer, merchant, or admin
+      // For now, we'll mark it as USER (can be refined based on context)
+      triggeredBy = 'USER';
+    }
+
+    const historyEntry = this.orderStatusHistoryRepository.create({
+      orderId: order.id,
       status: newStatus,
-      timestamp: new Date(),
-      updatedBy: userId,
+      previousStatus: order.status,
+      triggeredBy,
+      triggeredByUserId,
       notes,
       metadata,
-    };
+    });
 
-    order.statusHistory.push(historyEntry);
+    order.statusHistoryRecords.push(historyEntry);
   }
 
   private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
@@ -1941,20 +2029,28 @@ export class OrderService {
 
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.PENDING]: [
-        OrderStatus.CONFIRMED,    // After payment
-        OrderStatus.CANCELLED,    // User cancels before payment
+        OrderStatus.PAYMENT_INITIATED, // Payment process started
+        OrderStatus.CANCELLED,          // User cancels before payment
+      ],
+      [OrderStatus.PAYMENT_INITIATED]: [
+        OrderStatus.PAID,              // Payment successful
+        OrderStatus.CANCELLED,         // Payment failed/expired
+      ],
+      [OrderStatus.PAID]: [
+        OrderStatus.CONFIRMED,         // Merchant confirms order
+        OrderStatus.CANCELLED,         // Merchant rejects order
       ],
       [OrderStatus.CONFIRMED]: [
-        OrderStatus.PROCESSING,   // Merchant accepts
-        OrderStatus.CANCELLED,    // Merchant rejects
+        OrderStatus.PROCESSING,        // Merchant starts processing
+        OrderStatus.CANCELLED,         // Merchant cancels
       ],
       [OrderStatus.PROCESSING]: [
         OrderStatus.SHIPPED,
-        OrderStatus.CANCELLED,    // Only if not yet shipped
+        OrderStatus.CANCELLED,         // Only if not yet shipped
       ],
       [OrderStatus.SHIPPED]: [
         OrderStatus.DELIVERED,
-        OrderStatus.RETURNED,     // Customer returns
+        OrderStatus.RETURNED,          // Customer returns
       ],
       [OrderStatus.DELIVERED]: [
         OrderStatus.COMPLETED,

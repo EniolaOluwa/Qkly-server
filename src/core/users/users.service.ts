@@ -28,11 +28,16 @@ import { UserProgressEvent } from '../user-progress/entities/user-progress.entit
 import { UserProgressService } from '../user-progress/user-progress.service';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
-import { OnboardingStep } from './dto/onboarding-step.enum';
+import { OnboardingStep } from '../../common/enums/user.enum';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User, UserStatus } from './entity/user.entity';
+import { UserProfile } from './entities/user-profile.entity';
+import { UserKYC } from './entities/user-kyc.entity';
+import { UserSecurity } from './entities/user-security.entity';
+import { UserOnboarding } from './entities/user-onboarding.entity';
+import { UserMapper, MappedUser } from './mappers/user.mapper';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { permission } from 'process';
 
@@ -50,10 +55,18 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    @InjectRepository(User)
+    @InjectRepository(Role)
     private roleRepository: Repository<Role>,
     @InjectRepository(Otp)
     private otpRepository: Repository<Otp>,
+    @InjectRepository(UserProfile)
+    private userProfileRepository: Repository<UserProfile>,
+    @InjectRepository(UserKYC)
+    private userKycRepository: Repository<UserKYC>,
+    @InjectRepository(UserSecurity)
+    private userSecurityRepository: Repository<UserSecurity>,
+    @InjectRepository(UserOnboarding)
+    private userOnboardingRepository: Repository<UserOnboarding>,
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
@@ -77,7 +90,7 @@ export class UsersService {
       }
 
       // Check if user with phone already exists
-      const existingUserByPhone = await this.userRepository.findOne({
+      const existingUserByPhone = await this.userProfileRepository.findOne({
         where: { phone: registerUserDto.phone },
       });
 
@@ -98,16 +111,10 @@ export class UsersService {
         ErrorHelper.InternalServerErrorException('System configuration error');
       }
 
-      // Create new user
+      // Create new user (core authentication data only)
       const user = this.userRepository.create({
-        firstName: registerUserDto.firstname,
-        lastName: registerUserDto.lastname,
-        phone: registerUserDto.phone,
         email: registerUserDto.email,
         password: hashedPassword,
-        deviceId: registerUserDto.deviceid,
-        longitude: registerUserDto.longitude,
-        latitude: registerUserDto.latitude,
         userType: UserType.USER, // All registered users are USER type
         roleId: merchantRole.id,
         status: UserStatus.ACTIVE,
@@ -116,18 +123,46 @@ export class UsersService {
       // Save user to database
       const savedUser = await this.userRepository.save(user);
 
-      // Fetch user with role
+      // Create user profile
+      const userProfile = this.userProfileRepository.create({
+        userId: savedUser.id,
+        firstName: registerUserDto.firstname,
+        lastName: registerUserDto.lastname,
+        phone: registerUserDto.phone,
+        isPhoneVerified: false,
+      });
+      await this.userProfileRepository.save(userProfile);
+
+      // Create user security record
+      const userSecurity = this.userSecurityRepository.create({
+        userId: savedUser.id,
+        deviceId: registerUserDto.deviceid,
+        longitude: registerUserDto.longitude,
+        latitude: registerUserDto.latitude,
+      });
+      await this.userSecurityRepository.save(userSecurity);
+
+      // Create user onboarding record
+      const userOnboarding = this.userOnboardingRepository.create({
+        userId: savedUser.id,
+        currentStep: OnboardingStep.PERSONAL_INFORMATION,
+        isCompleted: false,
+        progressPercentage: 0,
+      });
+      await this.userOnboardingRepository.save(userOnboarding);
+
+      // Fetch user with role and related entities
       const userWithRole = await this.userRepository.findOne({
         where: { id: savedUser.id },
-        relations: ['role'],
+        relations: ['role', 'profile', 'onboarding'],
       });
 
       // Generate JWT payload
       const payload = {
         sub: savedUser.id,
         email: savedUser.email,
-        firstName: savedUser.firstName,
-        lastName: savedUser.lastName,
+        firstName: userProfile.firstName,
+        lastName: userProfile.lastName,
         deviceId: registerUserDto.deviceid,
         userType: savedUser.userType,
         roleName: userWithRole?.role?.name,
@@ -144,12 +179,12 @@ export class UsersService {
         expiresIn: EXPIRATION_TIME_SECONDS,
         userId: savedUser.id,
         email: savedUser.email,
-        firstName: savedUser.firstName,
-        lastName: savedUser.lastName,
-        phone: savedUser.phone,
+        firstName: userProfile.firstName,
+        lastName: userProfile.lastName,
+        phone: userProfile.phone,
         isEmailVerified: savedUser.isEmailVerified,
-        isPhoneVerified: savedUser.isPhoneVerified,
-        onboardingStep: savedUser.onboardingStep,
+        isPhoneVerified: userProfile.isPhoneVerified,
+        onboardingStep: userOnboarding.currentStep,
       };
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -169,10 +204,10 @@ export class UsersService {
   }
 
   async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
-    // Find user by email with role
+    // Find user by email with role and related entities
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email },
-      relations: ['role'],
+      relations: ['role', 'profile', 'security', 'onboarding'],
     });
 
     if (!user) {
@@ -210,32 +245,31 @@ export class UsersService {
       ErrorHelper.UnauthorizedException('Invalid email or password');
     }
 
-    // Update user's device ID, location, and last login
-    const updateData: Partial<User> = {
-      lastLoginAt: new Date(),
-    };
+    // Update user security data (device ID, location, last login)
+    if (user.security) {
+      const securityUpdateData: any = {};
 
-    if (loginDto.deviceid) {
-      updateData.deviceId = loginDto.deviceid;
-    }
-    if (loginDto.longitude !== undefined) {
-      updateData.longitude = loginDto.longitude;
-    }
-    if (loginDto.latitude !== undefined) {
-      updateData.latitude = loginDto.latitude;
-    }
+      if (loginDto.deviceid) {
+        securityUpdateData.deviceId = loginDto.deviceid;
+      }
+      if (loginDto.longitude !== undefined) {
+        securityUpdateData.longitude = loginDto.longitude;
+      }
+      if (loginDto.latitude !== undefined) {
+        securityUpdateData.latitude = loginDto.latitude;
+      }
 
-    // Update user if there's data to update
-    if (Object.keys(updateData).length > 0) {
-      await this.userRepository.update(user.id, updateData);
+      if (Object.keys(securityUpdateData).length > 0) {
+        await this.userSecurityRepository.update(user.security.id, securityUpdateData);
+      }
     }
 
     // Generate JWT payload
     const payload = {
       sub: user.id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      firstName: user.profile?.firstName || '',
+      lastName: user.profile?.lastName || '',
       deviceId: loginDto.deviceid,
       userType: user.userType,
       role: user.role?.userType,
@@ -253,12 +287,12 @@ export class UsersService {
       expiresIn: 3600,
       userId: user.id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
+      firstName: user.profile?.firstName || '',
+      lastName: user.profile?.lastName || '',
+      phone: user.profile?.phone || '',
       isEmailVerified: user.isEmailVerified,
-      isPhoneVerified: user.isPhoneVerified,
-      onboardingStep: user.onboardingStep,
+      isPhoneVerified: user.profile?.isPhoneVerified || false,
+      onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
     };
   }
 
@@ -269,10 +303,11 @@ export class UsersService {
     phone: string,
   ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
     const user = await this.userRepository.findOne({
-      where: { id: userId, phone },
+      where: { id: userId },
+      relations: ['profile'],
     });
 
-    if (!user) {
+    if (!user || user.profile?.phone !== phone) {
       ErrorHelper.NotFoundException(
         'User with this ID and phone number not found',
       );
@@ -314,12 +349,13 @@ export class UsersService {
     otpCode: string,
   ): Promise<{ message: string; verified: boolean }> {
     try {
-      // Find user by ID and phone number
+      // Find user by ID with profile and onboarding
       const user = await this.userRepository.findOne({
-        where: { id: userId, phone },
+        where: { id: userId },
+        relations: ['profile', 'onboarding'],
       });
 
-      if (!user) {
+      if (!user || user.profile?.phone !== phone) {
         ErrorHelper.NotFoundException(
           'User with this ID and phone number not found',
         );
@@ -353,11 +389,19 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Update user as phone verified and set onboarding step to 1 (PHONE_VERIFICATION)
-      await this.userRepository.update(userId, {
-        isPhoneVerified: true,
-        onboardingStep: OnboardingStep.PHONE_VERIFICATION,
-      });
+      // Update user profile as phone verified
+      if (user.profile) {
+        await this.userProfileRepository.update(user.profile.id, {
+          isPhoneVerified: true,
+        });
+      }
+
+      // Update onboarding step to PHONE_VERIFICATION
+      if (user.onboarding) {
+        await this.userOnboardingRepository.update(user.onboarding.id, {
+          currentStep: OnboardingStep.PHONE_VERIFICATION,
+        });
+      }
 
       return {
         message: 'Phone number verified successfully',
@@ -395,8 +439,11 @@ export class UsersService {
         );
       }
 
-      // Find user by ID
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+      // Find user by ID with KYC and onboarding
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['kyc', 'onboarding'],
+      });
       if (!user) {
         ErrorHelper.NotFoundException('User not found');
       }
@@ -469,12 +516,35 @@ export class UsersService {
       const selfieVerification = verificationData.selfie_verification;
       const isVerified = selfieVerification?.match === true;
 
-      // If verification is successful, update user's BVN and onboarding step
+      // If verification is successful, update user's KYC and onboarding step
       if (isVerified) {
-        await this.userRepository.update(userId, {
-          bvn: bvn,
-          onboardingStep: OnboardingStep.KYC_VERIFICATION,
-        });
+        // Create or update UserKYC record
+        if (user.kyc) {
+          await this.userKycRepository.update(user.kyc.id, {
+            bvn: bvn,
+            status: 'verified' as any,
+            verificationProvider: 'dojah' as any,
+            verificationResponse: verificationData,
+            verifiedAt: new Date(),
+          });
+        } else {
+          const userKyc = this.userKycRepository.create({
+            userId,
+            bvn: bvn,
+            status: 'verified' as any,
+            verificationProvider: 'dojah' as any,
+            verificationResponse: verificationData,
+            verifiedAt: new Date(),
+          });
+          await this.userKycRepository.save(userKyc);
+        }
+
+        // Update onboarding step
+        if (user.onboarding) {
+          await this.userOnboardingRepository.update(user.onboarding.id, {
+            currentStep: OnboardingStep.KYC_VERIFICATION,
+          });
+        }
 
         // Try to provision wallet if utilities are available
         try {
@@ -550,8 +620,11 @@ export class UsersService {
         ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
       }
 
-      // Find user by ID
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+      // Find user by ID with security
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['security'],
+      });
 
       if (!user) {
         ErrorHelper.NotFoundException('User not found');
@@ -560,10 +633,18 @@ export class UsersService {
       // Encrypt the PIN
       const encryptedPin = CryptoUtil.encryptPin(pin);
 
-      // Update user with encrypted PIN
-      await this.userRepository.update(userId, {
-        pin: encryptedPin,
-      });
+      // Create or update user security with PIN
+      if (user.security) {
+        await this.userSecurityRepository.update(user.security.id, {
+          pin: encryptedPin,
+        });
+      } else {
+        const userSecurity = this.userSecurityRepository.create({
+          userId,
+          pin: encryptedPin,
+        });
+        await this.userSecurityRepository.save(userSecurity);
+      }
 
       return {
         message: 'PIN created successfully',
@@ -585,20 +666,22 @@ export class UsersService {
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
-    // Find user by ID
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-
+    // Find user by ID with related entities
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['profile', 'security'],
+    });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
 
-    if (!user.phone) {
+    if (!user.profile?.phone) {
       ErrorHelper.BadRequestException('User has no phone number on file');
     }
 
     // Check if user already has a PIN
-    if (user.pin) {
+    if (user.security?.pin) {
       ErrorHelper.BadRequestException('User already has a PIN set');
     }
 
@@ -621,11 +704,11 @@ export class UsersService {
     await this.otpRepository.save(otp);
 
     // Send OTP via Termii SMS
-    await this.sendOtpViaTermii(user.phone, otpCode);
+    await this.sendOtpViaTermii(user.profile.phone, otpCode);
 
     return {
       message: 'OTP sent successfully to your phone number',
-      maskedPhone: this.maskPhoneNumber(user.phone),
+      maskedPhone: this.maskPhoneNumber(user.profile.phone),
       expiryInMinutes: 5,
     };
   }
@@ -691,15 +774,18 @@ export class UsersService {
       ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
     }
 
-    // Find user by ID
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+    // Find user by ID with related entities
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['security', 'onboarding'],
+    });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
 
     // Check if user already has a PIN
-    if (user.pin) {
+    if (user.security?.pin) {
       ErrorHelper.BadRequestException('User already has a PIN set');
     }
 
@@ -730,12 +816,28 @@ export class UsersService {
     // Encrypt the PIN
     const encryptedPin = CryptoUtil.encryptPin(pin);
 
-    // Update user with encrypted PIN and advance onboarding step
-    await this.userRepository.update(userId, {
-      pin: encryptedPin,
-      onboardingStep: OnboardingStep.AUTHENTICATION_PIN,
-      isOnboardingCompleted: true, // PIN creation is the final step
-    });
+    // Create or update user security record with PIN
+    if (user.security) {
+      await this.userSecurityRepository.update(user.security.id, {
+        pin: encryptedPin,
+      });
+    } else {
+      const userSecurity = this.userSecurityRepository.create({
+        userId,
+        pin: encryptedPin,
+      });
+      await this.userSecurityRepository.save(userSecurity);
+    }
+
+    // Update onboarding step
+    if (user.onboarding) {
+      await this.userOnboardingRepository.update(user.onboarding.id, {
+        currentStep: OnboardingStep.AUTHENTICATION_PIN,
+        isCompleted: true,
+        completedAt: new Date(),
+        progressPercentage: 100,
+      });
+    }
 
     try {
       await this.userProgressService.addProgress(userId, UserProgressEvent.TRANSACTION_PIN_CREATED);
@@ -756,14 +858,17 @@ export class UsersService {
     maskedPhone: string;
     expiryInMinutes: number;
   }> {
-    // Find user by email
-    const user = await this.userRepository.findOne({ where: { email } });
+    // Find user by email with profile
+    const user = await this.userRepository.findOne({
+      where: { email },
+      relations: ['profile'],
+    });
 
     if (!user) {
       ErrorHelper.NotFoundException('User with this email not found');
     }
 
-    if (!user.phone) {
+    if (!user.profile?.phone) {
       ErrorHelper.BadRequestException('User has no phone number on file');
     }
 
@@ -787,10 +892,10 @@ export class UsersService {
     await this.otpRepository.save(otp);
 
     // Send OTP via Termii SMS
-    await this.sendOtpViaTermii(user.phone, otpCode);
+    await this.sendOtpViaTermii(user.profile.phone, otpCode);
 
     // Return masked phone number
-    const maskedPhone = this.maskPhoneNumber(user.phone);
+    const maskedPhone = this.maskPhoneNumber(user.profile.phone);
 
     return {
       message: 'OTP sent successfully to your phone number',
@@ -984,9 +1089,12 @@ export class UsersService {
   async updateUserProfile(
     userId: number,
     updateUserProfileDto: UpdateUserProfileDto,
-  ): Promise<{ message: string; user: Partial<User> }> {
-    // Find user by ID
-    const user = await this.userRepository.findOne({ where: { id: userId } });
+  ): Promise<{ message: string; user: any }> {
+    // Find user by ID with profile
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['profile'],
+    });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
@@ -1004,44 +1112,56 @@ export class UsersService {
     }
 
     // Check if phone is being updated and if it's already taken
-    if (updateUserProfileDto.phone && updateUserProfileDto.phone !== user.phone) {
-      const existingUser = await this.userRepository.findOne({
+    if (updateUserProfileDto.phone && updateUserProfileDto.phone !== user.profile?.phone) {
+      const existingProfile = await this.userProfileRepository.findOne({
         where: { phone: updateUserProfileDto.phone },
       });
 
-      if (existingUser) {
+      if (existingProfile) {
         ErrorHelper.ConflictException('Phone number already in use by another user');
       }
     }
 
-    // Update user fields
-    if (updateUserProfileDto.firstName !== undefined) {
-      user.firstName = updateUserProfileDto.firstName;
+    // Update profile fields
+    if (user.profile) {
+      const profileUpdateData: any = {};
+
+      if (updateUserProfileDto.firstName !== undefined) {
+        profileUpdateData.firstName = updateUserProfileDto.firstName;
+      }
+      if (updateUserProfileDto.lastName !== undefined) {
+        profileUpdateData.lastName = updateUserProfileDto.lastName;
+      }
+      if (updateUserProfileDto.phone !== undefined) {
+        profileUpdateData.phone = updateUserProfileDto.phone;
+        // Reset phone verification if phone is changed
+        profileUpdateData.isPhoneVerified = false;
+      }
+
+      if (Object.keys(profileUpdateData).length > 0) {
+        await this.userProfileRepository.update(user.profile.id, profileUpdateData);
+      }
     }
-    if (updateUserProfileDto.lastName !== undefined) {
-      user.lastName = updateUserProfileDto.lastName;
-    }
+
+    // Update user email if provided
     if (updateUserProfileDto.email !== undefined) {
-      user.email = updateUserProfileDto.email;
-      // Reset email verification if email is changed
-      user.isEmailVerified = false;
+      await this.userRepository.update(userId, {
+        email: updateUserProfileDto.email,
+        isEmailVerified: false, // Reset email verification if email is changed
+      });
     }
-    if (updateUserProfileDto.phone !== undefined) {
-      user.phone = updateUserProfileDto.phone;
-      // Reset phone verification if phone is changed
-      user.isPhoneVerified = false;
-    }
-
-    const updatedUser = await this.userRepository.save(user);
-
-    // Return user without sensitive data
-    const { password, pin, ...userWithoutSensitiveData } = updatedUser;
 
     this.logger.log(`User profile updated successfully for user ${userId}`);
 
     return {
       message: 'User profile updated successfully',
-      user: userWithoutSensitiveData,
+      user: {
+        id: user.id,
+        email: updateUserProfileDto.email || user.email,
+        firstName: updateUserProfileDto.firstName || user.profile?.firstName,
+        lastName: updateUserProfileDto.lastName || user.profile?.lastName,
+        phone: updateUserProfileDto.phone || user.profile?.phone,
+      },
     };
   }
 
@@ -1062,21 +1182,22 @@ export class UsersService {
       ErrorHelper.BadRequestException('New PIN must be different from old PIN');
     }
 
-    // Find user by ID
+    // Find user by ID with security
     const user = await this.userRepository.findOne({
       where: { id: changePinDto.userId },
+      relations: ['security'],
     });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
 
-    if (!user.pin) {
+    if (!user.security?.pin) {
       ErrorHelper.BadRequestException('User does not have a PIN set. Please create a PIN first.');
     }
 
     // Verify old PIN
-    const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.pin);
+    const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.security.pin);
     if (!isOldPinValid) {
       ErrorHelper.UnauthorizedException('Invalid current PIN');
     }
@@ -1084,8 +1205,8 @@ export class UsersService {
     // Encrypt the new PIN
     const encryptedPin = CryptoUtil.encryptPin(changePinDto.newPin);
 
-    // Update user with new encrypted PIN
-    await this.userRepository.update(changePinDto.userId, {
+    // Update user security with new encrypted PIN
+    await this.userSecurityRepository.update(user.security.id, {
       pin: encryptedPin,
     });
 
@@ -1102,21 +1223,30 @@ export class UsersService {
     identifier: string | number,
     identifierType: 'id' | 'email' | 'phone' = 'id',
   ): Promise<User> {
-    // Build where clause based on identifier type
-    let whereClause: any;
+    let user: User | null = null;
 
     if (identifierType === 'id') {
-      whereClause = { id: Number(identifier) };
+      user = await this.userRepository.findOne({
+        where: { id: Number(identifier) },
+      });
     } else if (identifierType === 'email') {
-      whereClause = { email: identifier };
+      user = await this.userRepository.findOne({
+        where: { email: identifier as string },
+      });
     } else if (identifierType === 'phone') {
-      whereClause = { phone: identifier };
+      // Find by phone in profile
+      const userProfile = await this.userProfileRepository.findOne({
+        where: { phone: identifier as string },
+      });
+
+      if (userProfile) {
+        user = await this.userRepository.findOne({
+          where: { id: userProfile.userId },
+        });
+      }
     } else {
       ErrorHelper.BadRequestException(`Invalid identifier type: ${identifierType}`);
     }
-
-    // Find user
-    const user = await this.userRepository.findOne({ where: whereClause });
 
     if (!user) {
       ErrorHelper.NotFoundException(
@@ -1133,9 +1263,18 @@ export class UsersService {
       ErrorHelper.BadRequestException('Phone and PIN are required');
     }
 
-    const user = await this.userRepository.findOne({
+    // Find user profile by phone, then load user with relations
+    const userProfile = await this.userProfileRepository.findOne({
       where: { phone },
-      relations: ['role'],
+    });
+
+    if (!userProfile) {
+      ErrorHelper.UnauthorizedException('Invalid credentials');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userProfile.userId },
+      relations: ['role', 'profile', 'security', 'onboarding'],
     });
 
     if (!user) {
@@ -1147,46 +1286,44 @@ export class UsersService {
       ErrorHelper.UnauthorizedException('Account is not active. Contact support.');
     }
 
-    if (!user.pin) {
+    if (!user.security?.pin) {
       ErrorHelper.UnauthorizedException('Invalid credentials');
     }
 
-    if (user.pinLockedUntil && user.pinLockedUntil > new Date()) {
-      const remainingMs = user.pinLockedUntil.getTime() - Date.now();
+    if (user.security.pinLockedUntil && user.security.pinLockedUntil > new Date()) {
+      const remainingMs = user.security.pinLockedUntil.getTime() - Date.now();
       const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
       ErrorHelper.UnauthorizedException(
         `Account locked due to too many failed PIN attempts. Try again in ${remainingMinutes} minute(s).`,
       );
     }
 
-    const isPinValid = CryptoUtil.verifyPin(pin, user.pin);
+    const isPinValid = CryptoUtil.verifyPin(pin, user.security.pin);
     if (!isPinValid) {
-      const newAttempts = (user.pinFailedAttempts || 0) + 1;
-      const updates: Partial<User> = { pinFailedAttempts: newAttempts };
+      const newAttempts = (user.security.pinFailedAttempts || 0) + 1;
+      const securityUpdates: any = { pinFailedAttempts: newAttempts };
 
       if (newAttempts >= this.MAX_PIN_ATTEMPTS) {
         const lockUntil = new Date(Date.now() + this.PIN_LOCK_MINUTES * 60 * 1000);
-        updates.pinLockedUntil = lockUntil;
+        securityUpdates.pinLockedUntil = lockUntil;
       }
 
-      await this.userRepository.update(user.id, updates);
+      await this.userSecurityRepository.update(user.security.id, securityUpdates);
       ErrorHelper.UnauthorizedException('Invalid credentials');
     }
 
-    if (user.pinFailedAttempts && user.pinFailedAttempts > 0) {
-      await this.userRepository.update(user.id, {
+    if (user.security.pinFailedAttempts && user.security.pinFailedAttempts > 0) {
+      await this.userSecurityRepository.update(user.security.id, {
         pinFailedAttempts: 0,
-        pinLockedUntil: null,
-        lastLoginAt: new Date(),
       });
     }
 
     const payload = {
       sub: user.id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      deviceId: user.deviceId,
+      firstName: user.profile?.firstName || '',
+      lastName: user.profile?.lastName || '',
+      deviceId: user.security?.deviceId,
       userType: user.userType,
       role: user.role?.userType,
       permissions: user.role?.permissions || [],
@@ -1203,12 +1340,12 @@ export class UsersService {
       expiresIn: EXPIRATION_TIME_SECONDS,
       userId: user.id,
       email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
+      firstName: user.profile?.firstName || '',
+      lastName: user.profile?.lastName || '',
+      phone: user.profile?.phone || '',
       isEmailVerified: user.isEmailVerified,
-      isPhoneVerified: user.isPhoneVerified,
-      onboardingStep: user.onboardingStep,
+      isPhoneVerified: user.profile?.isPhoneVerified || false,
+      onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
     };
   }
 
@@ -1349,11 +1486,15 @@ export class UsersService {
     userTypes?: UserType[],
     statuses?: UserStatus[],
     roleId?: number,
-  ): Promise<PaginationResultDto<User>> {
+  ): Promise<PaginationResultDto<MappedUser>> {
     const query = this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
-      .leftJoinAndSelect('user.business', 'business');
+      .leftJoinAndSelect('user.business', 'business')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('user.kyc', 'kyc')
+      .leftJoinAndSelect('user.security', 'security')
+      .leftJoinAndSelect('user.onboarding', 'onboarding');
 
     if (userTypes?.length) {
       query.andWhere('user.userType IN (:...userTypes)', { userTypes });
@@ -1374,9 +1515,10 @@ export class UsersService {
 
     const [users, itemCount] = await query.getManyAndCount();
 
-    const sanitizedUsers = users.map(({ password, pin, ...rest }) => rest as User);
+    // Map users to frontend-compatible format
+    const mappedUsers = UserMapper.toMappedUsers(users);
 
-    return new PaginationResultDto(sanitizedUsers, {
+    return new PaginationResultDto(mappedUsers, {
       itemCount,
       pageOptionsDto,
     });
@@ -1386,7 +1528,7 @@ export class UsersService {
 
   async getAdminUsers(
     pageOptionsDto: PaginationDto,
-  ): Promise<PaginationResultDto<User>> {
+  ): Promise<PaginationResultDto<MappedUser>> {
     return this.getAllUsers(
       pageOptionsDto,
       [UserType.ADMIN, UserType.SUPER_ADMIN],
@@ -1395,7 +1537,7 @@ export class UsersService {
 
   async getMerchantUsers(
     pageOptionsDto: PaginationDto,
-  ): Promise<PaginationResultDto<User>> {
+  ): Promise<PaginationResultDto<MappedUser>> {
     return this.getAllUsers(
       pageOptionsDto,
       [UserType.USER],
@@ -1404,7 +1546,7 @@ export class UsersService {
 
   async getActiveAdmins(
     pageOptionsDto: PaginationDto,
-  ): Promise<PaginationResultDto<User>> {
+  ): Promise<PaginationResultDto<MappedUser>> {
     return this.getAllUsers(
       pageOptionsDto,
       [UserType.ADMIN],
@@ -1415,7 +1557,7 @@ export class UsersService {
 
   async getInactiveAdmins(
     pageOptionsDto: PaginationDto,
-  ): Promise<PaginationResultDto<User>> {
+  ): Promise<PaginationResultDto<MappedUser>> {
     return this.getAllUsers(
       pageOptionsDto,
       [UserType.ADMIN],

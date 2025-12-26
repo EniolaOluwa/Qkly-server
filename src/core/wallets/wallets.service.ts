@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateOrReject } from 'class-validator';
 import { User } from '../users/entity/user.entity';
+import { Wallet } from './entities/wallet.entity';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
@@ -30,6 +31,8 @@ export class WalletsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
     private readonly paymentService: PaymentService,
   ) { }
 
@@ -41,37 +44,54 @@ export class WalletsService {
     generateWalletDto: GenerateWalletDto,
   ): Promise<GenerateWalletResponseDto> {
     try {
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['wallet'],
+      });
 
       if (!user) {
         ErrorHelper.NotFoundException('User not found');
       }
 
-      if (user.walletReference) {
+      // Check if user already has a wallet
+      const existingWallet = await this.walletRepository.findOne({
+        where: { userId },
+      });
+
+      if (existingWallet) {
         ErrorHelper.BadRequestException('User already has a wallet');
       }
 
-      // Use PaymentService to create virtual account
+      // Use PaymentService to create virtual account (Paystack DVA)
       const virtualAccount = await this.paymentService.createVirtualAccount({
         walletReference: generateWalletDto.walletReference ?? '',
         walletName: generateWalletDto.walletName,
         customerEmail: generateWalletDto.customerEmail,
-        customerName:
-          generateWalletDto.customerName ??
-          `${user.firstName} ${user.lastName}`,
+        customerName: generateWalletDto.customerName || `User ${userId}`,
         bvn: generateWalletDto.bvn,
         dateOfBirth: generateWalletDto.dateOfBirth,
         currencyCode: generateWalletDto.currencyCode || 'NGN',
       });
 
-      // Update user with wallet information
-      await this.userRepository.update(userId, {
-        walletReference: virtualAccount.walletReference,
-        walletAccountNumber: virtualAccount.accountNumber,
-        walletAccountName: virtualAccount.accountName,
-        walletBankName: virtualAccount.bankName,
-        walletBankCode: virtualAccount.bankCode,
-      });
+      // Create Wallet entity
+      const wallet = new Wallet();
+      wallet.userId = userId;
+      wallet.provider = 'paystack' as any;
+      wallet.providerCustomerId = virtualAccount.walletReference;
+      wallet.providerAccountId = virtualAccount.walletReference;
+      wallet.accountNumber = virtualAccount.accountNumber;
+      wallet.accountName = virtualAccount.accountName;
+      wallet.bankName = virtualAccount.bankName;
+      wallet.bankCode = virtualAccount.bankCode;
+      wallet.status = 'active' as any;
+      wallet.currency = virtualAccount.currencyCode || 'NGN';
+      wallet.availableBalance = 0;
+      wallet.pendingBalance = 0;
+      wallet.ledgerBalance = 0;
+      wallet.providerMetadata = virtualAccount;
+      wallet.activatedAt = new Date();
+
+      await this.walletRepository.save(wallet);
 
       return {
         message: 'Wallet created successfully',
@@ -107,32 +127,20 @@ export class WalletsService {
    */
   async getUserWallet(userId: number): Promise<any> {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        select: [
-          'id',
-          'walletReference',
-          'walletAccountNumber',
-          'walletAccountName',
-          'walletBankName',
-          'walletBankCode',
-        ],
+      const wallet = await this.walletRepository.findOne({
+        where: { userId },
       });
 
-      if (!user) {
-        ErrorHelper.NotFoundException('User not found');
-      }
-
-      if (!user.walletReference) {
+      if (!wallet) {
         ErrorHelper.NotFoundException('User does not have a wallet');
       }
 
       return {
-        walletReference: user.walletReference,
-        accountNumber: user.walletAccountNumber,
-        accountName: user.walletAccountName,
-        bankName: user.walletBankName,
-        bankCode: user.walletBankCode,
+        walletReference: wallet.providerAccountId,
+        accountNumber: wallet.accountNumber,
+        accountName: wallet.accountName,
+        bankName: wallet.bankName,
+        bankCode: wallet.bankCode,
       };
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -151,33 +159,30 @@ export class WalletsService {
     userId: number,
   ): Promise<WalletBalanceResponseDto> {
     try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        select: [
-          'id',
-          'walletReference',
-          'walletAccountNumber',
-          'walletAccountName',
-          'walletBankName',
-          'walletBankCode',
-        ],
+      const wallet = await this.walletRepository.findOne({
+        where: { userId },
       });
 
-      if (!user) ErrorHelper.NotFoundException('User not found');
-      if (!user.walletReference)
-        ErrorHelper.BadRequestException('User does not have a wallet');
+      if (!wallet) {
+        ErrorHelper.NotFoundException('User does not have a wallet');
+      }
 
-      // Use PaymentService to get balance
+      // Use PaymentService to get balance from Paystack
       const balance = await this.paymentService.getWalletBalance(
-        user.walletReference,
+        wallet.providerAccountId,
       );
 
+      // Update wallet balances in database
+      wallet.availableBalance = balance.availableBalance;
+      wallet.ledgerBalance = balance.ledgerBalance;
+      await this.walletRepository.save(wallet);
+
       const walletDto = plainToInstance(WalletBalanceResponseDto, {
-        walletReference: user.walletReference,
-        accountNumber: user.walletAccountNumber,
-        accountName: user.walletAccountName,
-        bankName: user.walletBankName,
-        bankCode: user.walletBankCode,
+        walletReference: wallet.providerAccountId,
+        accountNumber: wallet.accountNumber,
+        accountName: wallet.accountName,
+        bankName: wallet.bankName,
+        bankCode: wallet.bankCode,
         availableBalance: balance.availableBalance,
         ledgerBalance: balance.ledgerBalance,
       });
@@ -225,24 +230,17 @@ export class WalletsService {
   }
 
   /**
-   * Validate transfer OTP (provider-specific)
+   * Validate transfer OTP
+   * Note: Paystack does not require OTP validation for transfers
    */
   async validateTransferOtp(payload: WalletTransferOtpDto) {
     try {
       const dto = plainToInstance(WalletTransferOtpDto, payload);
       await validateOrReject(dto);
 
-      // This is Monnify-specific, so we'll only call it if using Monnify
-      const activeProvider = this.paymentService.getActiveProvider();
-
-      if (activeProvider === 'MONNIFY') {
-        // Get Monnify provider instance and call OTP validation
-        // This would require additional implementation
-        ErrorHelper.InternalServerErrorException('OTP validation not yet implemented for current provider');
-      }
-
+      // Paystack handles transfers without OTP validation
       ErrorHelper.BadRequestException(
-        'OTP validation not supported by current payment provider',
+        'OTP validation not required for Paystack transfers',
       );
     } catch (error) {
       this.logger.error('OTP validation failed', error.stack);
@@ -284,7 +282,7 @@ export class WalletsService {
    * Get payment methods for provider
    * Helper method for backward compatibility
    */
-  getPaymentMethodsForMonnify(paymentMethod: string): string[] {
+  getPaymentMethodsForProvider(paymentMethod: string): string[] {
     return this.paymentService.getPaymentMethodsForProvider(paymentMethod);
   }
 }

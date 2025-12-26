@@ -70,7 +70,7 @@ export class WalletProvisioningUtil {
 
       const user = await this.userRepository.findOne({
         where: { id: userId },
-        select: ['id', 'walletReference', 'bvn', 'firstName', 'lastName'],
+        relations: ['profile', 'wallet', 'kyc'],
       });
 
 
@@ -82,8 +82,8 @@ export class WalletProvisioningUtil {
         };
       }
 
-      if (user.walletReference) {
-        this.logger.warn(`User ${userId} already has a wallet: ${user.walletReference}`);
+      if (user.wallet) {
+        this.logger.warn(`User ${userId} already has a wallet: ${user.wallet.accountNumber}`);
         return {
           success: false,
           message: 'User already has a wallet',
@@ -98,7 +98,7 @@ export class WalletProvisioningUtil {
 
       // Get customer name - prefer from BVN data, fallback to user data
       const customerName = bvnVerificationData.customerName ||
-        `${user.firstName} ${user.lastName}`.trim();
+        `${user.profile?.firstName || ''} ${user.profile?.lastName || ''}`.trim();
 
       if (!customerName) {
         return {
@@ -122,15 +122,9 @@ export class WalletProvisioningUtil {
       });
 
 
-      // Update user record with wallet information and BVN
-      await this.userRepository.update(userId, {
-        walletReference: walletData.walletReference,
-        walletAccountNumber: walletData.accountNumber,
-        walletAccountName: walletData.accountName,
-        walletBankName: walletData.bankName,
-        walletBankCode: walletData.bankCode,
-        bvn: bvnVerificationData.bvn, // Update BVN in user record
-      });
+      // Wallet is already created by walletService.generateWallet
+      // Just update BVN in user_kyc if needed
+      // Note: The wallet data is already saved by the WalletsService
 
       this.logger.log(`Successfully provisioned wallet for user ${userId}: ${walletReference}`);
 

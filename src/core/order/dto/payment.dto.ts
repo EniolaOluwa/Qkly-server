@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested
 } from 'class-validator';
-import { PaymentMethod } from '../interfaces/order.interface';
+import { PaymentMethod } from '../../../common/enums/payment.enum';
 
 // Move PaymentEventData class definition BEFORE PaymentCallbackDto
 export class PaymentEventCustomer {
@@ -105,7 +105,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -140,7 +140,7 @@ export class ProcessPaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)

@@ -14,12 +14,8 @@ import {
 } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
 import { User } from '../../users/entity/user.entity';
-import {
-  OrderStatus,
-  PaymentStatus,
-  PaymentMethod,
-  DeliveryMethod,
-} from '../interfaces/order.interface';
+import { OrderStatus, DeliveryMethod } from '../../../common/enums/order.enum';
+import { PaymentStatus, PaymentMethod } from '../../../common/enums/payment.enum';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { OrderStatusHistory } from './order-status-history.entity';

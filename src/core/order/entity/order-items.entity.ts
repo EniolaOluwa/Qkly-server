@@ -9,7 +9,7 @@ import {
   Index,
   DeleteDateColumn,
 } from 'typeorm';
-import { OrderItemStatus } from '../interfaces/order.interface';
+import { OrderItemStatus } from '../../../common/enums/order.enum';
 import { Product } from '../../product/entity/product.entity';
 import { ProductVariant } from '../../product/entity/product-variant.entity';
 import { Order } from './order.entity';

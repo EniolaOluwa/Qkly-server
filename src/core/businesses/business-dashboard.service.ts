@@ -4,7 +4,8 @@ import { Between, MoreThanOrEqual, Repository } from 'typeorm';
 import { DateTime } from 'luxon';
 import { Business } from '../businesses/business.entity';
 import { Order } from '../order/entity/order.entity';
-import { OrderStatus, PaymentStatus } from '../order/interfaces/order.interface';
+import { OrderStatus } from '../../common/enums/order.enum';
+import { PaymentStatus } from '../../common/enums/payment.enum';
 import { Product } from '../product/entity/product.entity';
 import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
 import { Review } from '../review/entity/review.entity';
@@ -484,6 +485,7 @@ export class DashboardService {
         businessId,
         createdAt: Between(startDate, endDate),
       },
+      relations: ['refunds'],
     });
 
     // Previous period for comparison
@@ -501,7 +503,10 @@ export class DashboardService {
       total: orders.reduce((sum, o) => sum + Number(o.total), 0),
       paid: orders.filter(o => o.paymentStatus === PaymentStatus.PAID).reduce((sum, o) => sum + Number(o.total), 0),
       pending: orders.filter(o => o.paymentStatus === PaymentStatus.PENDING).reduce((sum, o) => sum + Number(o.total), 0),
-      refunded: orders.filter(o => o.isRefunded).reduce((sum, o) => sum + Number(o.refundedAmount), 0),
+      refunded: orders.reduce((sum, o) => {
+        const refundAmount = o.refunds?.reduce((refundSum, r) => refundSum + Number(r.amountRefunded || 0), 0) || 0;
+        return sum + refundAmount;
+      }, 0),
       previousTotal: previousOrders.reduce((sum, o) => sum + Number(o.total), 0),
     };
   }

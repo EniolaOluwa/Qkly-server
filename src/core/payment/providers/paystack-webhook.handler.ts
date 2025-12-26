@@ -4,7 +4,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order } from '../../order/entity/order.entity';
-import { OrderStatus, PaymentStatus } from '../../order/interfaces/order.interface';
+import { OrderStatus } from '../../../common/enums/order.enum';
+import { PaymentStatus } from '../../../common/enums/payment.enum';
 import {
   Transaction,
   TransactionFlow,
@@ -12,6 +13,8 @@ import {
   TransactionType,
 } from '../../transaction/entity/transaction.entity';
 import { User } from '../../users/entity/user.entity';
+import { Wallet } from '../../wallets/entities/wallet.entity';
+import { WalletStatus } from '../../../common/enums/payment.enum';
 import { PaystackIntegrationService } from '../paystack-integration.service';
 
 
@@ -24,6 +27,8 @@ export class PaystackWebhookHandler {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackIntegrationService: PaystackIntegrationService,
@@ -80,28 +85,28 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[DVA ASSIGNED] Customer: ${customerCode}, Account: ${accountNumber}`);
 
-      // Find user by customer code
-      const user = await this.userRepository.findOne({
-        where: { paystackCustomerCode: customerCode },
+      // Find wallet by customer code (provider customer ID)
+      const wallet = await this.walletRepository.findOne({
+        where: { providerCustomerId: customerCode },
       });
 
-      if (!user) {
-        this.logger.warn(`User not found for customer code: ${customerCode}`);
+      if (!wallet) {
+        this.logger.warn(`Wallet not found for customer code: ${customerCode}`);
         return;
       }
 
-      // Update user with DVA details
-      await this.userRepository.update(user.id, {
-        walletAccountNumber: accountNumber,
-        walletAccountName: accountName,
-        walletBankName: bankName,
-        walletBankCode: bankCode,
-        paystackDedicatedAccountId: accountId.toString(),
-        paystackAccountStatus: 'ACTIVE',
-        updatedAt: new Date(),
+      // Update wallet with DVA details
+      await this.walletRepository.update(wallet.id, {
+        accountNumber: accountNumber,
+        accountName: accountName,
+        bankName: bankName,
+        bankCode: bankCode,
+        providerAccountId: accountId.toString(),
+        status: WalletStatus.ACTIVE,
+        activatedAt: new Date(),
       });
 
-      this.logger.log(`[DVA UPDATED] User ${user.id} account activated`);
+      this.logger.log(`[DVA UPDATED] Wallet ${wallet.id} account activated`);
     } catch (error) {
       this.logger.error('[DVA ASSIGNMENT ERROR]', error);
       throw error;
@@ -122,21 +127,21 @@ export class PaystackWebhookHandler {
         `[DVA PAYMENT] ₦${amount} received in account ${accountNumber} for customer ${customerCode}`,
       );
 
-      // Find user by customer code
-      const user = await this.userRepository.findOne({
-        where: { paystackCustomerCode: customerCode },
-        relations: ['business'],
+      // Find wallet by customer code
+      const wallet = await this.walletRepository.findOne({
+        where: { providerCustomerId: customerCode },
+        relations: ['user', 'user.business'],
       });
 
-      if (!user) {
-        this.logger.warn(`User not found for customer code: ${customerCode}`);
+      if (!wallet) {
+        this.logger.warn(`Wallet not found for customer code: ${customerCode}`);
         return;
       }
 
       // Record transaction - wallet funding
       await this.paystackIntegrationService.recordTransaction({
-        userId: user.id,
-        businessId: user.business?.id,
+        userId: wallet.userId,
+        businessId: wallet.user?.businessId,
         type: TransactionType.WALLET_FUNDING,
         flow: TransactionFlow.CREDIT,
         amount: amount,
@@ -153,7 +158,7 @@ export class PaystackWebhookHandler {
         providerResponse: data,
       });
 
-      this.logger.log(`[DVA PAYMENT RECORDED] User ${user.id} wallet credited with ₦${amount}`);
+      this.logger.log(`[DVA PAYMENT RECORDED] Wallet ${wallet.id} credited with ₦${amount}`);
     } catch (error) {
       this.logger.error('[DVA PAYMENT ERROR]', error);
     }
@@ -191,7 +196,6 @@ export class PaystackWebhookHandler {
       // Update order
       order.paymentStatus = PaymentStatus.PAID;
       order.status = OrderStatus.PROCESSING;
-      order.paymentDate = new Date();
       await this.orderRepository.save(order);
 
       // Record transaction for business (they received settlement via subaccount)

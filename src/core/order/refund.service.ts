@@ -11,7 +11,9 @@ import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from
 import { User } from '../users/entity/user.entity';
 import { InitiateRefundDto, RefundType } from './dto/refund.dto';
 import { Order } from './entity/order.entity';
-import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
+import { OrderRefund } from './entity/order-refund.entity';
+import { OrderStatus, RefundStatus as RefundStatusEnum, RefundType as RefundTypeEnum, RefundMethod as RefundMethodEnum } from '../../common/enums/order.enum';
+import { PaymentStatus } from '../../common/enums/payment.enum';
 
 
 @Injectable()
@@ -21,10 +23,10 @@ export class RefundService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(OrderRefund)
+    private readonly orderRefundRepository: Repository<OrderRefund>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
-    @InjectRepository(User)
-    @InjectRepository(Business)
     private readonly paystackProvider: PaystackProvider,
     private readonly dataSource: DataSource,
   ) { }
@@ -44,7 +46,7 @@ export class RefundService {
       // 1. Fetch and validate order
       const order = await this.orderRepository.findOne({
         where: { id: orderId },
-        relations: ['business', 'business.user', 'user', 'items'],
+        relations: ['business', 'business.user', 'user', 'items', 'refunds', 'payment'],
       });
 
       if (!order) {
@@ -151,33 +153,48 @@ export class RefundService {
         status: 'SUCCESS',
       });
 
-      // 7. Update order with refund details
-      const refundDetails: any = {
-        amount: refundCalculation.totalRefund,
-        reason,
-        refundType,
-        refundMethod,
-        customerNote,
-        merchantNote,
-        refundedBy: refundedByUserId,
-        refundedAt: new Date(),
-        transactions: refundTransactions,
-        breakdown: {
-          totalRefund: refundCalculation.totalRefund,
-          platformRefund: refundCalculation.platformRefund,
-          businessRefund: refundCalculation.businessRefund,
-        },
-      };
-
-      await queryRunner.manager.update(Order, order.id, {
-        isRefunded: refundType === RefundType.FULL,
-        refundedAmount: (order.refundedAmount || 0) + refundCalculation.totalRefund,
+      // 7. Create OrderRefund entity
+      const orderRefund = queryRunner.manager.create(OrderRefund, {
+        orderId: order.id,
         refundReference,
-        refundDate: new Date(),
-        refundDetails,
-        status: refundType === RefundType.FULL ? OrderStatus.REFUNDED : order.status,
-        paymentStatus: refundType === RefundType.FULL ? PaymentStatus.REFUNDED : order.paymentStatus,
+        refundType: refundType === RefundType.FULL ? RefundTypeEnum.FULL : RefundTypeEnum.PARTIAL,
+        refundMethod: refundMethod as any || RefundMethodEnum.ORIGINAL_PAYMENT,
+        status: RefundStatusEnum.COMPLETED,
+        amountRequested: refundCalculation.totalRefund,
+        amountApproved: refundCalculation.totalRefund,
+        amountRefunded: refundCalculation.totalRefund,
+        currency: 'NGN',
+        reason: reason as any,
+        reasonNotes: customerNote || merchantNote,
+        requestedBy: refundedByUserId,
+        approvedBy: refundedByUserId,
+        processedBy: refundedByUserId,
+        platformRefundReference: customerRefundTxn.reference,
+        businessRefundReference: businessRefundTxn.reference,
+        providerMetadata: {
+          paystackRefund,
+          transactions: refundTransactions,
+          breakdown: {
+            totalRefund: refundCalculation.totalRefund,
+            platformRefund: refundCalculation.platformRefund,
+            businessRefund: refundCalculation.businessRefund,
+          },
+        },
+        requestedAt: new Date(),
+        approvedAt: new Date(),
+        processedAt: new Date(),
+        completedAt: new Date(),
       });
+
+      await queryRunner.manager.save(OrderRefund, orderRefund);
+
+      // Update order status if full refund
+      if (refundType === RefundType.FULL) {
+        await queryRunner.manager.update(Order, order.id, {
+          status: OrderStatus.REFUNDED,
+          paymentStatus: PaymentStatus.REFUNDED,
+        });
+      }
 
       // 8. Return inventory if full refund
       if (refundType === RefundType.FULL) {
@@ -217,17 +234,25 @@ export class RefundService {
     amount?: number,
   ): void {
     // Check if order is paid
-    if (order.paymentStatus !== 'PAID') {
+    if (order.paymentStatus !== PaymentStatus.PAID) {
       ErrorHelper.BadRequestException('Only paid orders can be refunded');
     }
 
+    // Calculate total already refunded from OrderRefund entities
+    const totalRefunded = order.refunds?.reduce((sum, refund) =>
+      sum + Number(refund.amountRefunded || 0), 0
+    ) || 0;
+
     // Check if already fully refunded
-    if (order.isRefunded) {
+    const isFullyRefunded = order.refunds?.some(r =>
+      r.refundType === 'full' && r.status === RefundStatusEnum.COMPLETED
+    );
+    if (isFullyRefunded) {
       ErrorHelper.BadRequestException('Order has already been fully refunded');
     }
 
     // Check if refund amount exceeds available amount
-    const availableForRefund = order.total - (order.refundedAmount || 0);
+    const availableForRefund = order.total - totalRefunded;
 
     if (refundType === RefundType.PARTIAL) {
       if (!amount || amount <= 0) {
@@ -242,14 +267,16 @@ export class RefundService {
     }
 
     // Optional: Check refund time window (e.g., within 30 days)
-    const daysSincePurchase = Math.floor(
-      (Date.now() - new Date(order.paymentDate).getTime()) / (1000 * 60 * 60 * 24),
-    );
+    if (order.payment?.paidAt) {
+      const daysSincePurchase = Math.floor(
+        (Date.now() - new Date(order.payment.paidAt).getTime()) / (1000 * 60 * 60 * 24),
+      );
 
-    if (daysSincePurchase > 30) {
-      this.logger.warn(`Refund requested ${daysSincePurchase} days after purchase`);
-      // You can decide to throw error or just log warning
-      // ErrorHelper.BadRequestException('Refund window has expired (30 days)');
+      if (daysSincePurchase > 30) {
+        this.logger.warn(`Refund requested ${daysSincePurchase} days after purchase`);
+        // You can decide to throw error or just log warning
+        // ErrorHelper.BadRequestException('Refund window has expired (30 days)');
+      }
     }
   }
 
@@ -366,12 +393,22 @@ export class RefundService {
     try {
       const order = await this.orderRepository.findOne({
         where: { id: orderId },
-        select: ['id', 'orderReference', 'total', 'refundedAmount', 'refundDetails', 'isRefunded'],
+        relations: ['refunds'],
       });
 
       if (!order) {
         ErrorHelper.NotFoundException(`Order with ID ${orderId} not found`);
       }
+
+      // Calculate total refunded from OrderRefund entities
+      const totalRefunded = order.refunds?.reduce((sum, refund) =>
+        sum + Number(refund.amountRefunded || 0), 0
+      ) || 0;
+
+      // Check if fully refunded
+      const isFullyRefunded = order.refunds?.some(r =>
+        r.refundType === RefundTypeEnum.FULL && r.status === RefundStatusEnum.COMPLETED
+      ) || false;
 
       const refundTransactions = await this.transactionRepository.find({
         where: {
@@ -386,11 +423,11 @@ export class RefundService {
           id: order.id,
           reference: order.orderReference,
           total: order.total,
-          refundedAmount: order.refundedAmount || 0,
-          availableForRefund: order.total - (order.refundedAmount || 0),
-          isFullyRefunded: order.isRefunded,
+          refundedAmount: totalRefunded,
+          availableForRefund: order.total - totalRefunded,
+          isFullyRefunded,
         },
-        refunds: order.refundDetails ? [order.refundDetails] : [],
+        refunds: order.refunds || [],
         transactions: refundTransactions,
       };
     } catch (error) {

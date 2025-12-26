@@ -16,7 +16,7 @@ import { ErrorHelper } from '../../common/utils';
 import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard, RoleGuard, Roles, UserRole } from '../users';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { AcceptOrderDto, FindAllOrdersDto, FindBusinessOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dot';
+import { AcceptOrderDto, FindAllOrdersDto, FindBusinessOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { InitiateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';

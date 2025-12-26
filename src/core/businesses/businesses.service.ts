@@ -10,7 +10,7 @@ import { FindOptionsRelations, Repository, SelectQueryBuilder } from 'typeorm';
 import { Business } from './business.entity';
 import { BusinessType } from './business-type.entity';
 import { User, UserStatus } from '../users/entity/user.entity';
-import { OnboardingStep } from '../users/dto/onboarding-step.enum';
+import { OnboardingStep } from '../../common/enums/user.enum';
 import {
   CreateBusinessTypeDto,
   UpdateBusinessTypeDto,
@@ -30,6 +30,7 @@ import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
 import { UserType } from '../../common/auth/user-role.enum';
 import { Role, RoleStatus } from '../roles/entities/role.entity';
 import { LeadForm } from '../lead/entity/leadForm.entity';
+import { PaymentAccountStatus } from '../../common/enums/payment.enum';
 
 @Injectable()
 export class BusinessesService {
@@ -135,7 +136,7 @@ export class BusinessesService {
     // Find user
     const user = await this.userRepos.findOne({
       where: { id: userId },
-      relations: ['role'],
+      relations: ['role', 'onboarding'],
     });
 
     if (!user) {
@@ -159,9 +160,9 @@ export class BusinessesService {
     }
 
 
-    if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
+    if (user.onboarding?.currentStep !== OnboardingStep.PHONE_VERIFICATION) {
       ErrorHelper.ConflictException(
-        `User must have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
+        `User must have completed phone verification before creating a business. Current step: ${user.onboarding?.currentStep || 'UNKNOWN'}`,
       );
     }
 
@@ -193,10 +194,16 @@ export class BusinessesService {
 
     const savedBusiness = await this.businessRepo.save(business);
 
+    // Update user's businessId
     await this.userRepos.update(userId, {
-      onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
       businessId: savedBusiness.id,
     });
+
+    // Update onboarding step in user_onboarding table
+    if (user.onboarding) {
+      user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
+      await this.userRepos.save(user);
+    }
 
     return await this.findBusinessById(savedBusiness.id);
   }
@@ -458,6 +465,7 @@ export class BusinessesService {
       .leftJoinAndSelect('business.user', 'user')
       .leftJoinAndSelect('user.role', 'role')
       .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoinAndSelect('business.paymentAccount', 'paymentAccount')
       .leftJoin('orders', 'order', 'order.businessId = business.id')
       .leftJoin('products', 'product', 'product.businessId = business.id')
       .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
@@ -467,13 +475,13 @@ export class BusinessesService {
         'business.storeName',
         'business.slug',
         'business.location',
-        'business.isSubaccountActive',
-        'business.revenueSharePercentage',
         'business.createdAt',
         'business.updatedAt',
         'user.email',
         'user.role',
         'businessType.name',
+        'paymentAccount.isSubaccountActive',
+        'paymentAccount.revenueSharePercentage',
       ])
       .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
       .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
@@ -519,8 +527,8 @@ export class BusinessesService {
         totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
         totalProducts: parseInt(raw.totalProducts) || 0,
         totalTransactions: parseInt(raw.totalTransactions) || 0,
-        isSubaccountActive: business.isSubaccountActive,
-        revenueSharePercentage: business.revenueSharePercentage.toString(),
+        isSubaccountActive: business.paymentAccount?.status === PaymentAccountStatus.ACTIVE,
+        revenueSharePercentage: '95.00', // Platform default revenue share
         dateRegistered: business.createdAt,
         lastUpdated: business.updatedAt,
       };

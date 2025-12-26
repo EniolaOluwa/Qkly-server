@@ -12,7 +12,8 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrderStatus, PaymentStatus, PaymentMethod, DeliveryMethod, OrderItemStatus } from '../interfaces/order.interface';
+import { OrderStatus, DeliveryMethod, OrderItemStatus } from '../../../common/enums/order.enum';
+import { PaymentStatus, PaymentMethod } from '../../../common/enums/payment.enum';
 import { PaginationDto } from '../../../common/queries/dto';
 
 export class FindAllOrdersDto extends PaginationDto {

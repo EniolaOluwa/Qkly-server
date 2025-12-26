@@ -164,9 +164,9 @@ export class RegisterUserResponseDto {
 
   @ApiProperty({
     description: 'Current onboarding step',
-    example: 0,
+    example: 'personal_information',
   })
-  onboardingStep: number;
+  onboardingStep: string;
 }
 
 export class CreateBusinessTypeDto {
@@ -650,10 +650,10 @@ export class LoginResponseDto {
   isPhoneVerified: boolean;
 
   @ApiProperty({
-    description: 'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
-    example: 0,
+    description: 'Current onboarding step',
+    example: 'personal_information',
   })
-  onboardingStep: number;
+  onboardingStep: string;
 }
 
 export class VerifyKycDto {

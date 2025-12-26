@@ -12,7 +12,7 @@ import {
   IsString,
   ValidateNested
 } from 'class-validator';
-import { DeliveryMethod } from '../interfaces/order.interface';
+import { DeliveryMethod } from '../../../common/enums/order.enum';
 import { OrderItemDto } from './create-order.dto';
 
 export class CustomerInfoDto {

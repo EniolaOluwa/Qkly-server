@@ -186,22 +186,31 @@ export class RolesSeedService {
       return;
     }
 
-    // Create super admin user
+    // Create super admin user with nested entities
     const superAdminUser = this.userRepository.create({
       email,
-      firstName,
-      lastName,
-      phone,
       password: CryptoUtil.hashPassword(password),
       userType: UserType.ADMIN,
       roleId: superAdminRole.id,
       status: UserStatus.ACTIVE,
       isEmailVerified: true,
       isPhoneVerified: true,
-      isOnboardingCompleted: true,
-      deviceId: 'system',
-      longitude: 0,
-      latitude: 0,
+      profile: {
+        firstName,
+        lastName,
+        phone,
+        isPhoneVerified: true,
+      },
+      onboarding: {
+        isCompleted: true,
+        progressPercentage: 100,
+        completedAt: new Date(),
+      },
+      security: {
+        deviceId: 'system',
+        longitude: 0,
+        latitude: 0,
+      },
     });
 
     await this.userRepository.save(superAdminUser);

@@ -15,7 +15,8 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DeliveryMethod, PaymentMethod } from '../interfaces/order.interface';
+import { DeliveryMethod } from '../../../common/enums/order.enum';
+import { PaymentMethod } from '../../../common/enums/payment.enum';
 
 export class OrderItemDto {
   @ApiProperty({ description: 'Product ID', example: 1 })
@@ -90,7 +91,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)

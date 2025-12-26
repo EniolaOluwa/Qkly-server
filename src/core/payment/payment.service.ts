@@ -1,25 +1,24 @@
 // src/modules/payments/payment.service.ts
 
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IPaymentProvider } from './interfaces/payment-provider.interface';
-import { MonnifyProvider } from './providers/monnify.provider';
-import { PaystackProvider } from './providers/paystack.provider';
+import { ErrorHelper } from '../../common/utils';
 import {
+  BankAccountDetailsDto,
   CreateVirtualAccountDto,
-  VirtualAccountResponseDto,
-  WalletBalanceDto,
   InitializePaymentRequestDto,
   InitializePaymentResponseDto,
-  VerifyPaymentResponseDto,
+  PaymentProviderType,
+  ResolveBankAccountDto,
   TransferRequestDto,
   TransferResponseDto,
-  ResolveBankAccountDto,
-  BankAccountDetailsDto,
+  VerifyPaymentResponseDto,
+  VirtualAccountResponseDto,
+  WalletBalanceDto,
   WebhookEventDto,
-  PaymentProviderType,
 } from './dto/payment-provider.dto';
-import { ErrorHelper } from '../../common/utils';
+import { IPaymentProvider } from './interfaces/payment-provider.interface';
+import { PaystackProvider } from './providers/paystack.provider';
 
 /**
  * Payment Service - Unified interface for all payment providers
@@ -33,7 +32,6 @@ export class PaymentService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly monnifyProvider: MonnifyProvider,
     private readonly paystackProvider: PaystackProvider,
   ) {
     // Get configured provider from environment
@@ -50,9 +48,8 @@ export class PaymentService {
         this.provider = this.paystackProvider;
         this.logger.log('Using Paystack as payment provider');
         break;
-      case PaymentProviderType.MONNIFY:
       default:
-        this.provider = this.monnifyProvider;
+        this.provider = this.paystackProvider;
         this.logger.log('Using Monnify as payment provider');
         break;
     }

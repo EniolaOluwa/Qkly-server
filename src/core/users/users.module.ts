@@ -10,14 +10,19 @@ import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.u
 import { WalletsModule } from '../wallets/wallets.module';
 import { Otp } from './entity/otp.entity';
 import { User } from './entity/user.entity';
+import { UserProfile } from './entities/user-profile.entity';
+import { UserKYC } from './entities/user-kyc.entity';
+import { UserSecurity } from './entities/user-security.entity';
+import { UserOnboarding } from './entities/user-onboarding.entity';
 import { UsersController } from './users.controller';
 import { Order } from '../order/entity/order.entity';
 import { UsersService } from './users.service';
 import { UserProgressModule } from '../user-progress/user-progress.module';
+import { Role } from '../roles/entities/role.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Otp, Order]),
+    TypeOrmModule.forFeature([User, Otp, Order, Role, UserProfile, UserKYC, UserSecurity, UserOnboarding]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     HttpModule,
     JwtModule.registerAsync({

@@ -25,6 +25,13 @@ export class RecentMerchantWithSales {
   phone: string;
 
   @ApiProperty({
+    example: 'https://cloudinary.com/profile.jpg',
+    description: 'Profile picture URL of the merchant',
+    required: false,
+  })
+  profilePicture?: string;
+
+  @ApiProperty({
     example: 'John Doe Stores',
     description: 'Business name of the merchant',
   })
