@@ -66,6 +66,9 @@ export class Product {
   @Index()
   quantityInStock: number;
 
+  @Column({ type: 'int', default: 5 })
+  lowStockThreshold: number;
+
   @Column({ type: 'boolean', default: false, comment: 'Does this product include size or color variations?' })
   hasVariation: boolean;
 

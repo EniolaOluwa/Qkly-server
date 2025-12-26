@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiHeader,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -15,7 +16,7 @@ import { ApiAuth, ApiFindOneDecorator, ApiPaginatedResponse } from '../../common
 import { ErrorHelper } from '../../common/utils';
 import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard, RoleGuard, Roles, UserRole } from '../users';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateOrderDto, CreateOrderFromCartDto } from './dto/create-order.dto';
 import { AcceptOrderDto, FindAllOrdersDto, FindBusinessOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { InitiateRefundDto } from './dto/refund.dto';
@@ -38,23 +39,33 @@ export class OrdersController {
   ) { }
 
 
+  @Post('cart')
   @Public()
-  @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiHeader({
+    name: 'x-session-id',
+    description: 'Guest Session ID (UUID)',
+    required: true,
+  })
   @ApiOperation({
-    summary: 'Create a new order',
-    description: 'Creates a new order for the authenticated user with product details',
+    summary: 'Create order from active cart',
+    description: 'Creates a new order from the guest active cart',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: 'Order created successfully',
+    description: 'Order created successfully from cart',
     type: Order,
   })
-  async createOrder(
+  async createOrderFromCart(
     @Request() req,
-    @Body() createOrderDto: CreateOrderDto,
+    @Body() createOrderDto: CreateOrderFromCartDto,
+    @Headers() headers,
   ): Promise<Order> {
-    return await this.orderService.createGuestOrder(createOrderDto);
+    const sessionId = headers['x-session-id'];
+    if (!sessionId) {
+      throw new BadRequestException('Session ID is required');
+    }
+    return await this.orderService.createOrderFromCart(sessionId, createOrderDto);
   }
 
 

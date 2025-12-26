@@ -16,6 +16,8 @@ import {
   VirtualAccountResponseDto,
   WalletBalanceDto,
   WebhookEventDto,
+  RefundRequestDto,
+  RefundResponseDto,
 } from './dto/payment-provider.dto';
 import { IPaymentProvider } from './interfaces/payment-provider.interface';
 import { PaystackProvider } from './providers/paystack.provider';
@@ -311,5 +313,9 @@ export class PaymentService {
         message: error.message,
       };
     }
+  }
+  // Create Refund
+  async createRefund(dto: RefundRequestDto): Promise<RefundResponseDto> {
+    return this.provider.createRefund(dto);
   }
 }

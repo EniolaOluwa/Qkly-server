@@ -244,7 +244,7 @@ export class TestDataSeedService {
               : OnboardingStep.PERSONAL_INFORMATION,
             isCompleted: userData.hasBusiness,
             progressPercentage: userData.hasBusiness ? 100 : 20,
-            completedAt: userData.hasBusiness ? new Date() : null,
+            completedAt: userData.hasBusiness ? new Date() : undefined,
           },
           security: {
             deviceId: 'seed-device',
@@ -307,13 +307,11 @@ export class TestDataSeedService {
           businessName: 'TechHub Store',
           businessDescription:
             'Your one-stop shop for all tech gadgets and accessories',
-          businessEmail: 'contact@techhub.com',
-          businessPhoneNumber: '+2348012345671',
-          businessTypeId: ecommerceType.id,
-          businessAddress: '123 Tech Street, Lagos',
-          storeSlug: 'techhub-store',
-          logoUrl: 'https://via.placeholder.com/200x200?text=TechHub',
-          coverImageUrl: 'https://via.placeholder.com/1200x400?text=TechHub+Cover',
+          location: '123 Tech Street, Lagos',
+          slug: 'techhub-store',
+          logo: 'https://via.placeholder.com/200x200?text=TechHub',
+          coverImage: 'https://via.placeholder.com/1200x400?text=TechHub+Cover',
+          businessType: ecommerceType,
         });
 
         await this.businessRepository.save(business);
@@ -337,14 +335,12 @@ export class TestDataSeedService {
           businessName: 'Fashion Haven',
           businessDescription:
             'Trendy fashion and accessories for everyone',
-          businessEmail: 'hello@fashionhaven.com',
-          businessPhoneNumber: '+2348012345672',
-          businessTypeId: fashionType.id,
-          businessAddress: '456 Fashion Avenue, Lagos',
-          storeSlug: 'fashion-haven',
-          logoUrl: 'https://via.placeholder.com/200x200?text=Fashion+Haven',
-          coverImageUrl:
+          location: '456 Fashion Avenue, Lagos',
+          slug: 'fashion-haven',
+          logo: 'https://via.placeholder.com/200x200?text=Fashion+Haven',
+          coverImage:
             'https://via.placeholder.com/1200x400?text=Fashion+Haven+Cover',
+          businessType: fashionType,
         });
 
         await this.businessRepository.save(business);
@@ -368,14 +364,12 @@ export class TestDataSeedService {
           businessName: 'Gadget World',
           businessDescription:
             'Latest gadgets and electronic devices at best prices',
-          businessEmail: 'support@gadgetworld.com',
-          businessPhoneNumber: '+2348012345673',
-          businessTypeId: electronicsType.id,
-          businessAddress: '789 Electronics Road, Lagos',
-          storeSlug: 'gadget-world',
-          logoUrl: 'https://via.placeholder.com/200x200?text=Gadget+World',
-          coverImageUrl:
+          location: '789 Electronics Road, Lagos',
+          slug: 'gadget-world',
+          logo: 'https://via.placeholder.com/200x200?text=Gadget+World',
+          coverImage:
             'https://via.placeholder.com/1200x400?text=Gadget+World+Cover',
+          businessType: electronicsType,
         });
 
         await this.businessRepository.save(business);
@@ -421,28 +415,28 @@ export class TestDataSeedService {
             'High-quality wireless headphones with noise cancellation',
           price: 25000,
           quantityInStock: 50,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Headphones',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Headphones'],
         },
         {
           name: 'Smart Watch Pro',
           description: 'Feature-rich smartwatch with health tracking',
           price: 45000,
           quantityInStock: 30,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Smart+Watch',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Smart+Watch'],
         },
         {
           name: 'USB-C Fast Charger',
           description: '65W fast charging adapter with multiple ports',
           price: 8000,
           quantityInStock: 100,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Charger',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Charger'],
         },
         {
           name: 'Portable Power Bank 20000mAh',
           description: 'High capacity power bank for all devices',
           price: 15000,
           quantityInStock: 75,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Power+Bank',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Power+Bank'],
         },
       ];
 
@@ -477,23 +471,23 @@ export class TestDataSeedService {
           description: 'Premium quality cotton t-shirt',
           price: 5000,
           quantityInStock: 120,
-          imageUrls: 'https://via.placeholder.com/400x400?text=T-Shirt',
+          imageUrls: ['https://via.placeholder.com/400x400?text=T-Shirt'],
           hasVariation: true,
-          colors: 'Red,Blue,Black,White',
+          colors: ['Red', 'Blue', 'Black', 'White'],
         },
         {
           name: 'Leather Handbag',
           description: 'Elegant leather handbag for women',
           price: 35000,
           quantityInStock: 25,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Handbag',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Handbag'],
         },
         {
           name: 'Sneakers',
           description: 'Comfortable casual sneakers',
           price: 18000,
           quantityInStock: 60,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Sneakers',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Sneakers'],
           hasVariation: true,
         },
       ];
@@ -528,21 +522,21 @@ export class TestDataSeedService {
           description: 'RGB gaming mouse with programmable buttons',
           price: 12000,
           quantityInStock: 40,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Gaming+Mouse',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Gaming+Mouse'],
         },
         {
           name: 'Mechanical Keyboard',
           description: 'RGB mechanical keyboard for gamers',
           price: 28000,
           quantityInStock: 35,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Keyboard',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Keyboard'],
         },
         {
           name: 'Webcam HD 1080p',
           description: 'HD webcam for video calls and streaming',
           price: 22000,
           quantityInStock: 45,
-          imageUrls: 'https://via.placeholder.com/400x400?text=Webcam',
+          imageUrls: ['https://via.placeholder.com/400x400?text=Webcam'],
         },
       ];
 

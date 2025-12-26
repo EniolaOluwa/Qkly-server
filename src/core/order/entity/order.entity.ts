@@ -40,6 +40,10 @@ export class Order {
 
   @Column({ nullable: true })
   @Index()
+  cartId: number | null;
+
+  @Column({ nullable: true })
+  @Index()
   userId: number | null;
 
   @ManyToOne(() => User, { nullable: true })

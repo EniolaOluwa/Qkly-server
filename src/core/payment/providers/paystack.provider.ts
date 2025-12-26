@@ -22,6 +22,8 @@ import {
   VirtualAccountResponseDto,
   WalletBalanceDto,
   WebhookEventDto,
+  RefundRequestDto,
+  RefundResponseDto,
 } from '../dto/payment-provider.dto';
 import { IPaymentProvider } from '../interfaces/payment-provider.interface';
 
@@ -402,32 +404,22 @@ export class PaystackProvider extends IPaymentProvider {
   // REFUNDS
   // ============================================================
 
-  async createRefund(params: {
-    transactionReference: string;
-    amount?: number;
-    merchantNote?: string;
-    customerNote?: string;
-  }): Promise<{
-    status: string;
-    message: string;
-    refundReference: string;
-    amount: number;
-  }> {
+  async createRefund(dto: RefundRequestDto): Promise<RefundResponseDto> {
     try {
       const payload: any = {
-        transaction: params.transactionReference,
+        transaction: dto.transactionReference,
       };
 
-      if (params.amount) {
-        payload.amount = Math.round(params.amount * 100); // Convert to kobo
+      if (dto.amount) {
+        payload.amount = Math.round(dto.amount * 100); // Convert to kobo
       }
 
-      if (params.merchantNote) {
-        payload.merchant_note = params.merchantNote;
+      if (dto.merchantNote) {
+        payload.merchant_note = dto.merchantNote;
       }
 
-      if (params.customerNote) {
-        payload.customer_note = params.customerNote;
+      if (dto.customerNote) {
+        payload.customer_note = dto.customerNote;
       }
 
       const response = await firstValueFrom(

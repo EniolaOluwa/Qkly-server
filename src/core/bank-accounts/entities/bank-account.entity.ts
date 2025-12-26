@@ -107,6 +107,12 @@ export class BankAccount {
   @Column({ type: 'timestamp', nullable: true })
   verifiedAt: Date;
 
+  @Column({ default: 'NGN', length: 3 })
+  currency: string;
+
+  @Column({ default: false })
+  isDeleted: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

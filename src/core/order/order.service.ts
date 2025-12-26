@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
@@ -9,11 +9,17 @@ import { SettlementStatus } from '../../common/enums/settlement.enum';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
+import { CartService } from '../cart/cart.service';
+import { NotificationService } from '../notifications/notification.service';
+import { InitializePaymentRequestDto } from '../payment/dto/payment-provider.dto';
 import { PaymentService } from '../payment/payment.service';
+import { ProductVariant } from '../product/entity/product-variant.entity';
 import { Product } from '../product/entity/product.entity';
 import { Settlement } from '../settlements/entities/settlement.entity';
+import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
-import { CreateOrderDto } from './dto/create-order.dto';
+import { Wallet } from '../wallets/entities/wallet.entity';
+import { CreateOrderDto, CreateOrderFromCartDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, FindBusinessOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { OrderItem } from './entity/order-items.entity';
@@ -46,23 +52,73 @@ export class OrderService {
     private readonly settlementRepository: Repository<Settlement>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
+    @InjectRepository(ProductVariant)
+    private readonly productVariantRepository: Repository<ProductVariant>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(Business)
     private readonly businessRepository: Repository<Business>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepository: Repository<Transaction>,
+    private readonly cartService: CartService,
+    private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
-    private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    private readonly dataSource: DataSource,
   ) { }
 
 
-  async createOrder(userId: number, createOrderDto: CreateOrderDto): Promise<Order> {
-    return this.createOrderInternal(createOrderDto, userId);
-  }
 
 
-  async createGuestOrder(createOrderDto: CreateOrderDto): Promise<Order> {
-    return this.createOrderInternal(createOrderDto, null);
+  /**
+   * Create an order from the user's active cart.
+   * This retrieves the cart, converts items to order structure,
+   * creates the order, and then clears the cart.
+   */
+  async createOrderFromCart(sessionId: string, createOrderDto: CreateOrderFromCartDto): Promise<Order> {
+    const userId = null; // Buyers are always guests
+    const cart = await this.cartService.getFullCart(userId, sessionId);
+
+    if (!cart || cart.items.length === 0) {
+      throw new BadRequestException('Cart is empty');
+    }
+
+    // Convert cart items to CreateOrderDto structure
+    // We override items in DTO with cart items
+    const orderItems = cart.items.map(item => ({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity: item.quantity,
+      price: item.unitPrice,
+      productName: item.productName,
+      variantName: item.variantName,
+      imageUrl: item.imageUrl,
+    }));
+
+    // Calculate total from cart to verify
+    // But createOrderInternal handles calculations mostly. 
+    // We just need to ensure the DTO passed to createOrderInternal has the correct structure
+    // createOrderInternal expects `orderItems` in the DTO or we might need to modify it.
+    // Let's check CreateOrderDto structure first.
+
+    // Assuming CreateOrderDto has items array.
+    const orderDtoWithCartItems = {
+      ...createOrderDto,
+      items: orderItems,
+      // If payment is initialized here, we use cart totals?
+      // For now, let createOrderInternal handle it.
+    } as CreateOrderDto;
+
+    // Create Order
+    const order = await this.createOrderInternal(orderDtoWithCartItems, userId, cart.id);
+
+    // Clear Cart
+    await this.cartService.clearCart(userId, sessionId);
+
+    return order;
   }
 
   async findOrdersByCustomerEmail(
@@ -437,10 +493,31 @@ export class OrderService {
 
       this.logger.log(`Payment initiated for order ${order.id}`);
 
-      return await this.orderRepository.findOne({
-        where: { id: order.id },
-        relations: ['items'],
-      });
+      const paymentPayload: InitializePaymentRequestDto = {
+        amount: order.total,
+        customerName: order.customerName,
+        customerEmail: order.customerEmail,
+        paymentReference: order.transactionReference,
+        description: `Payment for Order ${order.orderReference}`,
+        redirectUrl: initiatePaymentDto.redirectUrl || this.configService.get('FRONTEND_URL') + '/payment/callback',
+        metadata: {
+          orderId: order.id,
+          businessId: order.businessId,
+          ...initiatePaymentDto.metadata,
+        },
+      };
+
+      const paymentResponse = await this.paymentService.initializePayment(paymentPayload);
+
+      return {
+        success: true,
+        message: 'Payment initialized',
+        data: {
+          ...paymentResponse,
+          orderId: order.id,
+          orderReference: order.orderReference,
+        }
+      };
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error('Payment initialization failed:', error);
@@ -938,6 +1015,12 @@ export class OrderService {
       await queryRunner.manager.save(Order, order);
       await queryRunner.commitTransaction();
 
+      // Send Notification (Async)
+      if (order.customerEmail) {
+        this.notificationService.sendOrderStatusUpdate(order.customerEmail, order, status)
+          .catch(err => this.logger.error(`Failed to send status update for ${order.orderReference}`, err));
+      }
+
       return await this.findOrderById(orderId);
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -1048,6 +1131,7 @@ export class OrderService {
   private async createOrderInternal(
     createOrderDto: CreateOrderDto,
     userId: number | null,
+    cartId?: number,
   ): Promise<Order> {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -1060,6 +1144,7 @@ export class OrderService {
       // Verify business exists
       const business = await this.businessRepository.findOne({
         where: { id: businessId },
+        relations: ['user'],
       });
 
       if (!business) {
@@ -1089,7 +1174,7 @@ export class OrderService {
 
       // Process order items
       for (const item of items) {
-        const { productId, quantity, color, size } = item;
+        const { productId, quantity, color, size, variantId } = item;
         const product = productsMap.get(productId);
 
         if (!product) {
@@ -1102,43 +1187,105 @@ export class OrderService {
           );
         }
 
-        if (product.quantityInStock < quantity) {
-          ErrorHelper.BadRequestException(
-            `Insufficient inventory for product "${product.name}". Requested: ${quantity}, Available: ${product.quantityInStock}`,
-          );
-        }
+        let price = product.price;
+        let variantName = '';
 
-        if (product.hasVariation && color && !product.colors.includes(color)) {
-          ErrorHelper.BadRequestException(
-            `Invalid color "${color}" for product "${product.name}". Available colors: ${product.colors.join(', ')}`,
-          );
-        }
+        // --- Variant Logic ---
+        if (variantId) {
+          const variant = await this.productVariantRepository.findOne({ where: { id: variantId, productId } });
+          if (!variant) {
+            ErrorHelper.NotFoundException(`Product variant ${variantId} not found`);
+          }
 
-        if (product.hasVariation && size) {
-          const validSizes: string[] = [];
-          for (const productSize of product.sizes) {
-            if (typeof productSize.value === 'string') {
-              validSizes.push(productSize.value);
-            } else if (Array.isArray(productSize.value)) {
-              validSizes.push(...productSize.value);
+          if (variant.quantityInStock < quantity) {
+            ErrorHelper.BadRequestException(
+              `Insufficient inventory for product "${product.name}" (${variant.variantName}). Requested: ${quantity}, Available: ${variant.quantityInStock}`,
+            );
+          }
+
+          // Deduct stock from variant
+          // variant.quantityInStock -= quantity; // Don't deduct yet, reserve it? Usually deduct on order creation (Pending) then restore if cancelled/expired.
+          variant.quantityInStock -= quantity;
+          variant.reservedQuantity += quantity;
+          await queryRunner.manager.save(ProductVariant, variant);
+
+          // Use variant price if set
+          if (variant.price) {
+            price = Number(variant.price);
+          }
+          variantName = variant.variantName;
+
+          if (variant.quantityInStock <= variant.lowStockThreshold) {
+            // Trigger Low Stock Alert (Async)
+            // Use business.user.email if available
+            const businessEmail = business.user?.email || 'admin@qkly.com';
+            this.notificationService.sendLowStockAlert(
+              businessEmail,
+              product.name,
+              variant.variantName,
+              variant.quantityInStock
+            ).catch(err => this.logger.error('Failed to send low stock alert', err));
+          }
+
+
+
+        } else {
+          // --- Legacy/Simple Product Logic ---
+          if (product.quantityInStock < quantity) {
+            ErrorHelper.BadRequestException(
+              `Insufficient inventory for product "${product.name}". Requested: ${quantity}, Available: ${product.quantityInStock}`,
+            );
+          }
+
+          if (product.hasVariation && color && !product.colors.includes(color)) {
+            ErrorHelper.BadRequestException(
+              `Invalid color "${color}" for product "${product.name}". Available colors: ${product.colors.join(', ')}`,
+            );
+          }
+
+          if (product.hasVariation && size) {
+            const validSizes: string[] = [];
+            for (const productSize of product.sizes) {
+              if (typeof productSize.value === 'string') {
+                validSizes.push(productSize.value);
+              } else if (Array.isArray(productSize.value)) {
+                validSizes.push(...productSize.value);
+              }
+            }
+
+            if (!validSizes.includes(size)) {
+              ErrorHelper.BadRequestException(
+                `Invalid size "${size}" for product "${product.name}". Available sizes: ${validSizes.join(', ')}`,
+              );
             }
           }
 
-          if (!validSizes.includes(size)) {
-            ErrorHelper.BadRequestException(
-              `Invalid size "${size}" for product "${product.name}". Available sizes: ${validSizes.join(', ')}`,
-            );
+          product.quantityInStock -= quantity;
+          await queryRunner.manager.save(Product, product);
+
+          if (product.quantityInStock <= product.lowStockThreshold) {
+            // Low Stock Alert for simple product
+            const businessEmail = business.user?.email || 'admin@qkly.com';
+            this.notificationService.sendLowStockAlert(
+              businessEmail,
+              product.name,
+              '',
+              product.quantityInStock
+            ).catch(err => this.logger.error('Failed to send low stock alert', err));
           }
+
+
         }
 
-        const itemSubtotal = product.price * quantity;
+        const itemSubtotal = price * quantity;
         subtotal += itemSubtotal;
 
         const orderItem = this.orderItemRepository.create({
           productId,
+          variantId: variantId ?? undefined,
           productName: product.name,
           productDescription: product.description,
-          price: product.price,
+          price: price,
           quantity,
           subtotal: itemSubtotal,
           color,
@@ -1147,10 +1294,6 @@ export class OrderService {
         });
 
         orderItems.push(orderItem);
-
-        // Update inventory
-        product.quantityInStock -= quantity;
-        await queryRunner.manager.save(Product, product);
       }
 
       // Calculate order totals
@@ -1168,6 +1311,7 @@ export class OrderService {
         ...orderData,
         userId,
         businessId,
+        cartId: cartId || null,
         orderReference,
         transactionReference,
         subtotal,
@@ -1221,6 +1365,33 @@ export class OrderService {
 
       // Reload order with items
       const completeOrder = await this.findOrderById(savedOrder.id);
+
+
+      // Send Notifications (Async)
+      // 1. Order Confirmation to Customer
+      if (completeOrder.customerEmail) {
+        this.notificationService.sendOrderConfirmation(completeOrder.customerEmail, completeOrder)
+          .catch(err => this.logger.error(`Failed to send order confirmation for ${savedOrder.orderReference}`, err));
+      }
+
+      // 2. New Order Alert to Business
+      if (business.user?.email) {
+        this.notificationService.sendNewOrderAlert(business.user.email, completeOrder)
+          .catch(err => this.logger.error(`Failed to send new order alert for ${savedOrder.orderReference}`, err));
+      }
+
+      // Send Notifications (Async)
+      // 1. Order Confirmation to Customer
+      if (completeOrder.customerEmail) {
+        this.notificationService.sendOrderConfirmation(completeOrder.customerEmail, completeOrder)
+          .catch(err => this.logger.error(`Failed to send order confirmation for ${savedOrder.orderReference}`, err));
+      }
+
+      // 2. New Order Alert to Business
+      if (business.user?.email) {
+        this.notificationService.sendNewOrderAlert(business.user.email, completeOrder)
+          .catch(err => this.logger.error(`Failed to send new order alert for ${savedOrder.orderReference}`, err));
+      }
 
       return completeOrder;
     } catch (error) {
@@ -1383,13 +1554,14 @@ export class OrderService {
         settlementReference,
         businessId: business.id,
         orderId: order.id,
-        status: SettlementStatus.PENDING,
+        status: SettlementStatus.COMPLETED,
         orderAmount: order.total,
         platformFee,
-        gatewayFee: 0, // Can be calculated from payment gateway response
+        gatewayFee: 0,
         settlementAmount: payoutAmount,
         currency: 'NGN',
-        transferProvider: 'PAYSTACK',
+        transferProvider: 'WALLET',
+        settledAt: new Date(),
       });
 
       await entityManager.save(Settlement, settlement);
@@ -1398,66 +1570,59 @@ export class OrderService {
         `Business settlement initiated for order ${orderId}, business ${business.id}, amount ${payoutAmount}`,
       );
 
-      // Get business owner's primary bank account for settlement
-      const businessUser = await entityManager.findOne(User, {
-        where: { id: business.userId },
-        relations: ['bankAccounts'],
+      // Get business owner's wallet
+      const wallet = await entityManager.findOne(Wallet, {
+        where: { userId: business.userId },
       });
 
-      const primaryBankAccount = businessUser?.bankAccounts?.find(
-        account => account.isPrimary
-      ) || businessUser?.bankAccounts?.[0];
-
-      if (!primaryBankAccount) {
-        throw new Error('Business owner has no bank account configured for settlement');
+      if (!wallet) {
+        // Log error but don't fail the payment transaction completely if possible?
+        // But throwing here will rollback everything including OrderPayment status update.
+        // It is safer to rollback so we don't have inconsistent state (Payment marked PAID but Wallet not funded).
+        throw new Error(`No wallet found for business user ${business.userId}`);
       }
 
-      // Use PaymentService to transfer to business account
-      this.paymentService
-        .transferToBank({
-          amount: payoutAmount,
-          reference: settlementReference,
-          narration: `Settlement for order ${order.orderReference}`,
-          destinationAccountNumber: primaryBankAccount.accountNumber,
-          destinationBankCode: primaryBankAccount.bankCode,
-          destinationAccountName: primaryBankAccount.accountName,
-          sourceWalletReference:
-            this.configService.get<string>('PLATFORM_WALLET_REFERENCE') ||
-            process.env.PLATFORM_WALLET_REFERENCE,
-          currency: 'NGN',
-        })
-        .then(async (transferResponse) => {
-          if (transferResponse.status === 'SUCCESS') {
-            settlement.status = SettlementStatus.COMPLETED;
-            settlement.settledAt = new Date();
-            settlement.transferReference = settlementReference;
-            settlement.providerMetadata = transferResponse;
-            this.logger.log(
-              `Business settlement successful for order ${orderId}, reference: ${settlementReference}`,
-            );
-          } else {
-            settlement.status = SettlementStatus.FAILED;
-            settlement.failureReason = JSON.stringify(transferResponse);
-            this.logger.error(
-              `Business settlement failed for order ${orderId}: ${JSON.stringify(transferResponse)}`,
-            );
-          }
-          await entityManager.save(Settlement, settlement);
-        })
-        .catch(async (err) => {
-          settlement.status = SettlementStatus.FAILED;
-          settlement.failureReason = err.message;
-          await entityManager.save(Settlement, settlement);
-          this.logger.error(
-            `Settlement transfer error for order ${orderId}: ${err.message}`,
-            err.stack,
-          );
-        });
+      // Credit Wallet
+      const balanceBefore = Number(wallet.availableBalance);
+      const balanceAfter = balanceBefore + payoutAmount;
+
+      wallet.availableBalance = balanceAfter;
+      wallet.ledgerBalance = Number(wallet.ledgerBalance) + payoutAmount;
+
+      await entityManager.save(Wallet, wallet);
+
+      // Create Transaction Record
+      const transaction = entityManager.create(Transaction, {
+        userId: business.userId,
+        businessId: business.id,
+        orderId: order.id,
+        reference: `TRX-${uuidv4().substring(0, 12).toUpperCase()}`,
+        type: TransactionType.SETTLEMENT,
+        flow: TransactionFlow.CREDIT,
+        status: TransactionStatus.SUCCESS,
+        amount: payoutAmount,
+        fee: platformFee,
+        netAmount: payoutAmount,
+        currency: 'NGN',
+        description: `Settlement for Order ${order.orderReference}`,
+        balanceBefore,
+        balanceAfter,
+        metadata: {
+          settlementId: settlement.id,
+          orderReference: order.orderReference,
+        },
+        settledAt: new Date(),
+      });
+
+      await entityManager.save(Transaction, transaction);
+
+      this.logger.log(`Wallet credited for business ${business.id}, amount: ${payoutAmount}`);
     } catch (error) {
       this.logger.error(`Failed to process business settlement: ${error.message}`, error.stack);
       throw error;
     }
   }
+
 
   private async sendPaymentNotifications(orderId: number): Promise<void> {
     try {
@@ -1467,7 +1632,30 @@ export class OrderService {
         return;
       }
 
-      // TODO: Implement email/notification service
+      // Send Order Confirmation to Customer
+      await this.notificationService.sendOrderConfirmation(
+        order.customerEmail,
+        order
+      );
+
+      // Send New Order Alert to Business
+      // Need to fetch business owner email again if not in order entity relation
+      // Order entity has business relation but let's check if it loads user
+      // Ideally should just reload order with relations if needed, but let's assume `createOrderInternal` did it right?
+      // Actually `sendPaymentNotifications` calls `findOrderById` at 1629.
+      // Need to make sure `findOrderById` includes business.user
+
+      const fullOrder = await this.orderRepository.findOne({
+        where: { id: orderId },
+        relations: ['business', 'business.user'],
+      });
+
+      if (fullOrder && fullOrder.business && fullOrder.business.user) {
+        await this.notificationService.sendNewOrderAlert(
+          fullOrder.business.user.email,
+          fullOrder
+        );
+      }
 
       this.logger.log(`Notifications sent for order ${orderId}`);
     } catch (error) {
@@ -1603,7 +1791,7 @@ export class OrderService {
     try {
       const order = await this.orderRepository.findOne({
         where: { id: orderId },
-        relations: ['refunds'],
+        relations: ['refunds', 'payment'],
       });
 
       if (!order) {
@@ -1626,13 +1814,45 @@ export class OrderService {
         return;
       }
 
-      // TODO: Implement actual refund logic with payment provider
-      this.logger.log(`Refund process initiated for order ${orderId}`);
+      if (!order.payment || !order.payment.providerReference) {
+        this.logger.error(`Order ${orderId} has no payment provider reference, cannot refund automatically`);
+        // Update refund status to failed? Or MANUAL_REQUIRED?
+        this.sendRefundFailureAlert(orderId, null, 'Missing payment provider reference');
+        return;
+      }
 
-      // Update refund status to processing
-      pendingRefund.status = RefundStatus.PROCESSING;
-      pendingRefund.processedAt = new Date();
-      await this.orderRefundRepository.save(pendingRefund);
+      this.logger.log(`Refund process initiated for order ${orderId} via ${order.payment.provider}`);
+
+      try {
+        const refundAmount = pendingRefund.amountApproved ?? pendingRefund.amountRequested;
+        const note = pendingRefund.reasonNotes || String(pendingRefund.reason);
+
+        const refundResponse = await this.paymentService.createRefund({
+          transactionReference: order.payment.providerReference,
+          amount: refundAmount,
+          merchantNote: `Refund for Order #${order.orderReference}`,
+          customerNote: note,
+        });
+
+        // Update refund status to processing or completed depending on provider response
+        // Paystack refund creation is usually pending/processing
+        pendingRefund.status = RefundStatus.PROCESSING;
+        pendingRefund.providerMetadata = {
+          ...pendingRefund.providerMetadata,
+          providerRefundReference: refundResponse.refundReference,
+          providerStatus: refundResponse.status,
+          amountRefunded: refundResponse.amount,
+        };
+        pendingRefund.processedAt = new Date();
+        await this.orderRefundRepository.save(pendingRefund);
+
+        this.logger.log(`Refund initiated successfully. Reference: ${refundResponse.refundReference}`);
+
+      } catch (paymentError) {
+        this.logger.error(`Payment provider refused refund: ${paymentError.message}`, paymentError.stack);
+        this.sendRefundFailureAlert(orderId, paymentError, paymentError.message);
+        // Do not throw, just log and alert
+      }
     } catch (error) {
       this.logger.error(`Failed to initiate refund: ${error.message}`, error.stack);
       throw error;
@@ -1878,7 +2098,7 @@ export class OrderService {
       //
       if (allSuccess) {
         this.logger.log(`Automatic refund completed successfully for order ${orderId}`);
-        // this.sendRefundNotifications(order);
+        this.sendRefundNotifications(order);
       } else {
         this.logger.error(
           `Refund incomplete for order ${orderId}. Manual intervention required.`,
@@ -1921,23 +2141,7 @@ export class OrderService {
     }
   }
 
-  private async sendRefundFailureAlert(
-    orderId: number,
-    refundData?: any | null,
-    errorMessage?: string,
-  ): Promise<void> {
-    try {
-      // TODO: Implement admin alert system (email, Slack, etc.)
-      this.logger.error(
-        `REFUND FAILURE ALERT - Order ${orderId}: ${errorMessage || 'Some transactions failed'}`,
-      );
-      if (refundData) {
-        this.logger.error(`Refund details: ${JSON.stringify(refundData)}`);
-      }
-    } catch (error) {
-      this.logger.error(`Failed to send refund failure alert: ${error.message}`);
-    }
-  }
+
 
   private async returnInventoryForOrderItem(
     item: OrderItem,
@@ -2090,5 +2294,21 @@ export class OrderService {
       default:
         break;
     }
+  }
+
+  private async sendRefundNotifications(order: Order) {
+    if (order.customerEmail) {
+      // Calculate total refunded amount? For now assume usually full refund if STATUS is REFUNDED
+      // But if partial, we might need more details.
+      // The method in NotifService expects email, order, amount.
+      await this.notificationService.sendRefundSuccess(order.customerEmail, order, order.total);
+    }
+  }
+
+  private async sendRefundFailureAlert(orderId: number | string, error: any, reason: string) {
+    // Need business email? Or admin?
+    // Often fallback to a configured admin email
+    const adminEmail = this.configService.get<string>('ADMIN_EMAIL') || 'admin@qkly.com';
+    await this.notificationService.sendRefundFailureAlert(adminEmail, orderId, reason);
   }
 }

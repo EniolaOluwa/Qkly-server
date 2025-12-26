@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, Reflector } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -10,8 +10,10 @@ import { BusinessesModule } from './core/businesses/businesses.module';
 import { CategoryModule } from './core/category/category.module';
 import { CloudinaryModule } from './core/cloudinary/cloudinary.module';
 import { LeadModule } from './core/lead/lead.module';
+import { NotificationModule } from './core/notifications/notification.module';
 import { OrderModule } from './core/order/order.module';
 import { PaymentModule } from './core/payment/payment.module';
+import { CartModule } from './core/cart/cart.module';
 import { ProductModule } from './core/product/product.module';
 import { ReviewModule } from './core/review/review.module';
 import { RolesModule } from './core/roles/roles.module';
@@ -24,6 +26,9 @@ import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
 import { SeedModule } from './database/seeds/seed.module';
+import { AuditModule } from './core/audit/audit.module';
+import { AuditInterceptor } from './core/audit/audit.interceptor';
+
 
 
 @Module({
@@ -43,13 +48,16 @@ import { SeedModule } from './database/seeds/seed.module';
     LeadModule,
     CategoryModule,
     PaymentModule,
+    CartModule,
     CloudinaryModule,
     StoreFrontModule,
     TrafficModule,
     UserProgressModule,
     AdminModule,
     RolesModule,
-    SeedModule
+    SeedModule,
+    NotificationModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [
@@ -57,6 +65,10 @@ import { SeedModule } from './database/seeds/seed.module';
       provide: APP_GUARD, // global guard for all modules
       useFactory: (reflector: Reflector) => new JwtAuthGuard(reflector),
       inject: [Reflector],
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
     AppService,
     TransactionService,

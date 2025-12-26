@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { CategoryModule } from '../category/category.module';
 import { PaymentModule } from '../payment/payment.module';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
+import { CartModule } from '../cart/cart.module';
 import { WalletsModule } from '../wallets/wallets.module';
 import { OrdersController } from './order.controller';
 import { OrderService } from './order.service';
@@ -19,6 +20,7 @@ import { OrderMetricsController } from './order-metrics.controller';
     CategoryModule,
     WalletsModule,
     PaymentModule,
+    CartModule,
   ],
   controllers: [OrdersController, OrderMetricsController],
   providers: [OrderService, RefundService, OrderMetricsService],

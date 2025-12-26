@@ -195,3 +195,17 @@ export interface WebhookEventDto {
   };
   provider: PaymentProviderType;
 }
+
+export interface RefundRequestDto {
+  transactionReference: string;
+  amount?: number;
+  merchantNote?: string;
+  customerNote?: string;
+}
+
+export interface RefundResponseDto {
+  status: string;
+  message: string;
+  refundReference: string;
+  amount: number;
+}

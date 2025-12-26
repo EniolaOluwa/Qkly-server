@@ -1,6 +1,7 @@
 // src/core/payment/providers/paystack-webhook.handler.ts
 
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order } from '../../order/entity/order.entity';
@@ -16,6 +17,7 @@ import { User } from '../../users/entity/user.entity';
 import { Wallet } from '../../wallets/entities/wallet.entity';
 import { WalletStatus } from '../../../common/enums/payment.enum';
 import { PaystackIntegrationService } from '../paystack-integration.service';
+import { NotificationService } from '../../notifications/notification.service';
 
 
 @Injectable()
@@ -32,6 +34,8 @@ export class PaystackWebhookHandler {
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackIntegrationService: PaystackIntegrationService,
+    private readonly notificationService: NotificationService,
+    private readonly configService: ConfigService,
   ) { }
 
   async handleWebhook(event: string, data: any): Promise<void> {
@@ -159,6 +163,11 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[DVA PAYMENT RECORDED] Wallet ${wallet.id} credited with ₦${amount}`);
+
+      // Send notification
+      if (wallet.user?.email) {
+        await this.notificationService.sendWalletFundedNotification(wallet.user.email, amount, reference);
+      }
     } catch (error) {
       this.logger.error('[DVA PAYMENT ERROR]', error);
     }
@@ -244,6 +253,7 @@ export class PaystackWebhookHandler {
       // Find the transaction by reference
       const transaction = await this.transactionRepository.findOne({
         where: { reference },
+        relations: ['user'],
       });
 
       if (!transaction) {
@@ -259,6 +269,14 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[TRANSFER SUCCESS] Transaction ${transaction.id} marked as successful`);
+
+      if (transaction.user?.email) {
+        await this.notificationService.sendPayoutSuccessNotification(
+          transaction.user.email,
+          transferAmount,
+          reference,
+        );
+      }
     } catch (error) {
       this.logger.error('[TRANSFER SUCCESS ERROR]', error);
     }
@@ -277,6 +295,7 @@ export class PaystackWebhookHandler {
       // Find the transaction by reference
       const transaction = await this.transactionRepository.findOne({
         where: { reference },
+        relations: ['user'],
       });
 
       if (!transaction) {
@@ -292,7 +311,19 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[TRANSFER FAILED] Transaction ${transaction.id} marked as failed`);
 
-      // TODO: Implement retry logic or notification to admin
+      if (transaction.user?.email) {
+        await this.notificationService.sendPayoutFailedNotification(
+          transaction.user.email,
+          transferAmount,
+          reference,
+          data.reason // Paystack often sends reason
+        );
+      }
+
+      await this.alertAdmin(
+        `Transfer Failed for Transaction ${reference}`,
+        `Reason: ${data.reason}\nReference: ${reference}\nProvider Response: ${JSON.stringify(data)}`
+      );
     } catch (error) {
       this.logger.error('[TRANSFER FAILED ERROR]', error);
     }
@@ -359,9 +390,35 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[REFUND FAILED] Transaction ${refundTransaction.id} marked as failed`);
 
-      // TODO: Alert admin or retry
+      await this.alertAdmin(
+        `Refund Failed for Transaction ${reference}`,
+        `Reason: ${data.status}\nReference: ${reference}\nProvider Response: ${JSON.stringify(data)}`
+      );
     } catch (error) {
       this.logger.error('[REFUND FAILED ERROR]', error);
+    }
+  }
+
+  /**
+   * Alert Admin about critical failures
+   */
+  private async alertAdmin(subject: string, message: string): Promise<void> {
+    try {
+      const adminEmail = this.configService.get<string>('ADMIN_EMAIL') || 'admin@qkly.com';
+      await this.notificationService.sendEmail(
+        adminEmail,
+        `[CRITICAL] ${subject}`,
+        `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2 style="color: red;">System Alert</h2>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <pre style="background: #f4f4f4; padding: 10px; overflow-x: auto;">${message}</pre>
+          <p>Please check the system logs for more details.</p>
+        </div>
+        `
+      );
+    } catch (error) {
+      this.logger.error('Failed to send admin alert', error);
     }
   }
 }

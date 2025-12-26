@@ -31,8 +31,11 @@ export class Cart {
   /**
    * User ID (null for guest carts)
    */
+  /**
+   * User ID (null for guest carts)
+   */
   @Column({ unique: true, nullable: true })
-  userId: number;
+  userId: number | null;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
@@ -43,7 +46,7 @@ export class Cart {
    * UUID generated on first cart addition
    */
   @Column({ length: 255, nullable: true })
-  sessionId: string;
+  sessionId: string | null;
 
   /**
    * Cart status
