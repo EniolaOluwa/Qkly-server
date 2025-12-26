@@ -11,6 +11,7 @@ This document outlines the comprehensive database architecture redesign for the 
 ### 📁 New Entities Created (40+ entities)
 
 #### **1. User Domain** (7 entities)
+
 - ✅ `UserProfile` - Personal information separated from auth
 - ✅ `UserKYC` - BVN verification and KYC data
 - ✅ `UserSecurity` - PIN, lockouts, 2FA
@@ -20,11 +21,13 @@ This document outlines the comprehensive database architecture redesign for the 
 - ✅ `User` (existing, cleaned up) - Reduced from 42 to 17 columns, all relationships added
 
 #### **2. Business Domain** (3 entities)
+
 - ✅ `BusinessPaymentAccount` - Paystack subaccount for split payments
 - ✅ `BusinessSettlementConfig` - When and how businesses get paid
 - ✅ `Business` (existing, updated) - Removed payment/settlement columns, relationships added
 
 #### **3. Product Domain** (5 entities)
+
 - ✅ `ProductVariant` - SKU management with inventory per variant
 - ✅ `ProductImage` - Multiple images with ordering
 - ✅ `InventoryLog` - Audit trail for stock changes
@@ -32,6 +35,7 @@ This document outlines the comprehensive database architecture redesign for the 
 - ✅ `Product` (existing, refactored) - Added variants & images relationships, deprecated imageUrls
 
 #### **4. Order Domain** (5 entities)
+
 - ✅ `OrderStatusHistory` - Replaces statusHistory JSON array
 - ✅ `OrderPayment` - Replaces paymentDetails JSON
 - ✅ `OrderShipment` - Replaces deliveryDetails JSON
@@ -40,27 +44,33 @@ This document outlines the comprehensive database architecture redesign for the 
 - ✅ `OrderItem` (existing, updated) - Added variant linkage with ProductVariant foreign key
 
 #### **5. Payment & Settlement Domain** (2 entities)
+
 - ✅ `Settlement` - Replaces Order.settlementDetails JSON
 - ✅ `Transaction` (existing, kept as-is) - General ledger/audit trail for all financial transactions
 
 #### **6. Cart Domain** (3 entities)
+
 - ✅ `Cart` - Persistent cart for users, session-based for guests
 - ✅ `CartItem` - Items in cart with variant linkage
 - ✅ `CartAbandonment` - Recovery campaigns tracking
 
 #### **7. Coupon Domain** (2 entities)
+
 - ✅ `Coupon` - Discount codes management
 - ✅ `CouponUsage` - Usage tracking and limits
 
 #### **8. Customer Domain** (2 entities)
+
 - ✅ `CustomerProfile` - Unified guest + registered customer tracking
 - ✅ `Address` - Reusable shipping/billing addresses
 
 #### **9. Notification Domain** (2 entities)
+
 - ✅ `EmailQueue` - Async email processing with retries
 - ✅ `EmailLog` - Email tracking (opens, clicks, bounces)
 
 #### **10. Audit Domain** (2 entities)
+
 - ✅ `AuditLog` - System-wide audit trail
 - ✅ `SystemEvent` - Webhook events, integration failures
 
@@ -146,18 +156,18 @@ This document outlines the comprehensive database architecture redesign for the 
 
 ## Database Statistics
 
-| Metric | Before | After | Change |
-|--------|--------|-------|--------|
-| **Total Entities** | ~15 | ~45 | +200% |
-| **User-related tables** | 1 (bloated) | 7 (separated) | +600% |
-| **Order-related tables** | 2 | 7 | +250% |
-| **Product-related tables** | 3 | 6 | +100% |
-| **JSON columns in Order** | 4 | 0 | -100% |
-| **JSON columns in User** | 0 | 0 | 0 |
-| **Cart functionality** | None | Complete | NEW |
-| **Coupon system** | None | Complete | NEW |
-| **Email queue** | None | Complete | NEW |
-| **Audit logs** | Limited | Comprehensive | NEW |
+| Metric                     | Before      | After         | Change |
+| -------------------------- | ----------- | ------------- | ------ |
+| **Total Entities**         | ~15         | ~45           | +200%  |
+| **User-related tables**    | 1 (bloated) | 7 (separated) | +600%  |
+| **Order-related tables**   | 2           | 7             | +250%  |
+| **Product-related tables** | 3           | 6             | +100%  |
+| **JSON columns in Order**  | 4           | 0             | -100%  |
+| **JSON columns in User**   | 0           | 0             | 0      |
+| **Cart functionality**     | None        | Complete      | NEW    |
+| **Coupon system**          | None        | Complete      | NEW    |
+| **Email queue**            | None        | Complete      | NEW    |
+| **Audit logs**             | Limited     | Comprehensive | NEW    |
 
 ---
 
@@ -177,12 +187,15 @@ This document outlines the comprehensive database architecture redesign for the 
 ## Next Steps
 
 ### Phase 1: Monnify Removal (Priority: CRITICAL)
+
 See `MONNIFY_REMOVAL_PLAN.md` for detailed strategy.
 
 ### Phase 2: Migration Strategy
+
 See `MIGRATION_PLAN.md` for step-by-step migration guide.
 
 ### Phase 3: Service Layer Refactoring
+
 - Update `UsersService` to use separated entities
 - Refactor `OrderService` to use new payment/shipment/refund entities
 - Implement `CartService` for cart management
@@ -190,12 +203,14 @@ See `MIGRATION_PLAN.md` for step-by-step migration guide.
 - Implement `EmailQueueService` for async email sending
 
 ### Phase 4: Testing
+
 - Unit tests for all new entity validations
 - Integration tests for payment flows
 - E2E tests for complete order workflows
 - Load testing for cart concurrency
 
 ### Phase 5: Deployment
+
 - Create migration files for schema changes
 - Data migration scripts for existing orders/users
 - Rollback plan
@@ -231,17 +246,20 @@ src/
 ## Warnings & Considerations
 
 ### ⚠️ Breaking Changes
+
 - Existing `User`, `Order`, `Product` entities WILL need migration
 - Services using JSON columns will break
 - Current wallet logic tied to Monnify needs rework
 
 ### ⚠️ Data Migration Complexity
+
 - Migrating `Order.statusHistory` JSON to `OrderStatusHistory` table
 - Splitting `Order.refundDetails` into `OrderRefund` entities
 - Converting wallet fields from User to Wallet entity
 - Linking existing orders to new `CustomerProfile` records
 
 ### ⚠️ Service Layer Impact
+
 - `OrderService` (1,998 lines) needs major refactoring
 - `UsersService` (1,495 lines) needs major refactoring
 - Payment webhook handlers need updates
