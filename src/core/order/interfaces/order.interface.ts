@@ -13,7 +13,6 @@ export enum OrderItemStatus {
 
 
 export enum PaymentMethod {
-  MONNIFY = 'MONNIFY',
   BANK_TRANSFER = 'BANK_TRANSFER',
   CARD = 'CARD',
   WALLET = 'WALLET',
@@ -57,49 +56,6 @@ export interface SettlementDetails {
   bankName?: string;
   meta?: any;
 }
-export interface MonnifyPaymentResponse {
-  requestSuccessful: boolean;
-  responseMessage?: string;
-  responseCode?: string;
-  responseBody: {
-    transactionReference?: string;
-    paymentReference?: string;
-    merchantName?: string;
-    apiKey?: string;
-    amount?: number;
-    currencyCode?: string;
-    customerName?: string;
-    customerEmail?: string;
-    paymentDescription?: string;
-    paymentMethods?: string[];
-    paymentMethod?: string;
-    transactionHash?: string;
-    merchantCode?: string;
-    checkoutUrl: string;
-    defaultPaymentMethod?: string;
-    expiresAt?: string;
-    amountPaid?: number;
-    completedOn?: string;
-  };
-}
-
-export interface MonnifyTransaction {
-  amount: number;
-  currencyCode: string;
-  customerEmail: string;
-  customerName: string;
-  paymentDescription?: string;
-  paymentReference: string;
-  paymentStatus: string;
-  transactionReference: string;
-  paymentMethod: string;
-  paidAmount: number;
-  createdOn: string;
-  transactionHash: string;
-  meta?: any;
-}
-
-
 
 export interface PaymentEventData {
   productType: string;

@@ -1,7 +1,6 @@
 import { IsString, IsEmail, IsOptional } from "class-validator";
 
 export enum PaymentProviderType {
-  MONNIFY = 'MONNIFY',
   PAYSTACK = 'PAYSTACK',
 }
 

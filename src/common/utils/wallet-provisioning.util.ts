@@ -110,7 +110,7 @@ export class WalletProvisioningUtil {
 
 
 
-      // Create wallet through Monnify
+      // Create wallet through Paystack
       const walletData = await this.walletService.generateWallet(userId, {
         walletReference,
         walletName,

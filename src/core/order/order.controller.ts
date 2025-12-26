@@ -273,7 +273,7 @@ export class OrdersController {
   @Public()
   @ApiOperation({
     summary: 'Initialize payment for order',
-    description: 'Initializes payment with configured payment provider (Monnify/Paystack) and returns checkout URL',
+    description: 'Initializes payment with Paystack and returns checkout URL',
   })
   @ApiBody({ type: InitiatePaymentDto })
   @ApiResponse({

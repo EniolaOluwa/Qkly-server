@@ -139,7 +139,7 @@ export class GenerateWalletResponseDto {
 
   @ApiProperty({
     description: 'Bank name',
-    example: 'Monnify Bank',
+    example: 'Paystack TItan Bank',
   })
   bankName: string;
 

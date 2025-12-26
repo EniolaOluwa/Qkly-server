@@ -43,16 +43,9 @@ export class PaymentService {
     this.providerType = configuredProvider as PaymentProviderType;
 
     // Select provider based on configuration
-    switch (this.providerType) {
-      case PaymentProviderType.PAYSTACK:
-        this.provider = this.paystackProvider;
-        this.logger.log('Using Paystack as payment provider');
-        break;
-      default:
-        this.provider = this.paystackProvider;
-        this.logger.log('Using Monnify as payment provider');
-        break;
-    }
+    // Only Paystack is supported
+    this.provider = this.paystackProvider;
+    this.logger.log('Using Paystack as payment provider');
   }
 
   /**

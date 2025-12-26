@@ -5,15 +5,11 @@ import { CategoryModule } from '../category/category.module';
 import { PaymentModule } from '../payment/payment.module';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { WalletsModule } from '../wallets/wallets.module';
-import { PaymentDtoAdapter } from './dto/payment-dto-adapter.service';
 import { OrdersController } from './order.controller';
 import { OrderService } from './order.service';
 import { RefundService } from './refund.service';
 import { OrderMetricsService } from './order-metric.service';
 import { OrderMetricsController } from './order-metrics.controller';
-
-
-
 
 @Module({
   imports: [
@@ -25,7 +21,7 @@ import { OrderMetricsController } from './order-metrics.controller';
     PaymentModule,
   ],
   controllers: [OrdersController, OrderMetricsController],
-  providers: [OrderService, PaymentDtoAdapter, RefundService, OrderMetricsService],
+  providers: [OrderService, RefundService, OrderMetricsService],
   exports: [OrderService, OrderMetricsService],
 })
 export class OrderModule { }
