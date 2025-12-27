@@ -92,7 +92,6 @@ export class AdminService {
       roleId: createAdminDto.roleId,
       status: UserStatus.ACTIVE,
       isEmailVerified: true,
-      isPhoneVerified: true,
       createdBy,
       profile: {
         firstName: createAdminDto.firstName,
@@ -361,25 +360,28 @@ export class AdminService {
       /* ---------------------------------------------
          SALES AGGREGATION QUERY
       ----------------------------------------------*/
+      /* ---------------------------------------------
+         SALES AGGREGATION QUERY
+      ----------------------------------------------*/
       const salesQuery = this.orderRepository
-        .createQueryBuilder('order')
-        .select('order.businessId', 'businessId')
-        .addSelect('SUM(order.total)', 'totalSales')
-        .addSelect('COUNT(order.id)', 'salesVolume')
-        .where('order.paymentStatus = :status', {
+        .createQueryBuilder('ord')
+        .select('ord.businessId', 'businessId')
+        .addSelect('SUM(ord.total)', 'totalSales')
+        .addSelect('COUNT(ord.id)', 'salesVolume')
+        .where('ord.paymentStatus = :status', {
           status: PaymentStatus.PAID,
         });
 
       if (fromDate) {
-        salesQuery.andWhere('order.createdAt >= :fromDate', { fromDate });
+        salesQuery.andWhere('ord.createdAt >= :fromDate', { fromDate });
       }
 
       if (toDate) {
-        salesQuery.andWhere('order.createdAt <= :toDate', { toDate });
+        salesQuery.andWhere('ord.createdAt <= :toDate', { toDate });
       }
 
       const salesData = await salesQuery
-        .groupBy('order.businessId')
+        .groupBy('ord.businessId')
         .getRawMany();
 
       const businessIds = salesData.map(d => d.businessId);

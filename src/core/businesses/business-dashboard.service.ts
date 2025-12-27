@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, MoreThanOrEqual, Repository } from 'typeorm';
+import { Between, MoreThanOrEqual, Repository, Brackets } from 'typeorm';
 import { DateTime } from 'luxon';
 import { Business } from '../businesses/business.entity';
 import { Order } from '../order/entity/order.entity';
@@ -10,6 +10,7 @@ import { Product } from '../product/entity/product.entity';
 import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
 import { Review } from '../review/entity/review.entity';
 import { Transaction, TransactionStatus } from '../transaction/entity/transaction.entity';
+import { SettlementStatus } from '../../common/enums/settlement.enum';
 import {
   CompleteDashboardDto,
   DashboardMetricsDto,
@@ -233,18 +234,18 @@ export class DashboardService {
     const finalStartDate = startDate || dateRange.startDate;
     const finalEndDate = endDate || dateRange.endDate;
     const topProducts = await this.orderRepository
-      .createQueryBuilder('order')
-      .innerJoin('order.items', 'item')
+      .createQueryBuilder('ord')
+      .innerJoin('ord.items', 'item')
       .innerJoin('item.product', 'product')
       .select('product.id', 'id')
       .addSelect('product.name', 'name')
       .addSelect('product.price', 'price')
       .addSelect('product.quantityInStock', 'quantityInStock')
       .addSelect('product.imageUrls', 'images')
-      .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
+      .addSelect('COUNT(DISTINCT ord.id)', 'totalOrders')
       .addSelect('SUM(item.quantity * item.price)', 'revenue')
-      .where('order.businessId = :businessId', { businessId })
-      .andWhere('order.createdAt BETWEEN :startDate AND :endDate', { startDate: finalStartDate, endDate: finalEndDate })
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate: finalStartDate, endDate: finalEndDate })
       .groupBy('product.id')
       .addGroupBy('product.name')
       .addGroupBy('product.price')
@@ -454,10 +455,10 @@ export class DashboardService {
 
   private async getUniqueCustomers(businessId: number, startDate: Date, endDate: Date): Promise<number> {
     const result = await this.orderRepository
-      .createQueryBuilder('order')
-      .select('COUNT(DISTINCT order.customerEmail)', 'count')
-      .where('order.businessId = :businessId', { businessId })
-      .andWhere('order.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .createQueryBuilder('ord')
+      .select('COUNT(DISTINCT ord.customerEmail)', 'count')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
       .getRawOne();
 
     return Number(result?.count || 0);
@@ -514,17 +515,22 @@ export class DashboardService {
   private async getSettlementMetrics(businessId: number) {
     const [settled, pending] = await Promise.all([
       this.orderRepository
-        .createQueryBuilder('order')
-        .select('SUM(order.total)', 'total')
-        .where('order.businessId = :businessId', { businessId })
-        .andWhere('order.isBusinessSettled = :settled', { settled: true })
+        .createQueryBuilder('ord')
+        .innerJoin('ord.settlement', 'settlement')
+        .select('SUM(ord.total)', 'total')
+        .where('ord.businessId = :businessId', { businessId })
+        .andWhere('settlement.status = :status', { status: SettlementStatus.COMPLETED })
         .getRawOne(),
       this.orderRepository
-        .createQueryBuilder('order')
-        .select('SUM(order.total)', 'total')
-        .where('order.businessId = :businessId', { businessId })
-        .andWhere('order.isBusinessSettled = :settled', { settled: false })
-        .andWhere('order.paymentStatus = :paid', { paid: PaymentStatus.PAID })
+        .createQueryBuilder('ord')
+        .leftJoin('ord.settlement', 'settlement')
+        .select('SUM(ord.total)', 'total')
+        .where('ord.businessId = :businessId', { businessId })
+        .andWhere('ord.paymentStatus = :paid', { paid: PaymentStatus.PAID })
+        .andWhere(new Brackets(qb => {
+          qb.where('settlement.id IS NULL')
+            .orWhere('settlement.status != :completed', { completed: SettlementStatus.COMPLETED });
+        }))
         .getRawOne(),
     ]);
 

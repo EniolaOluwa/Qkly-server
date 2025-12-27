@@ -17,6 +17,7 @@ import { BusinessPaymentAccount } from '../businesses/entities/business-payment-
 import { PaystackProvider } from './providers/paystack.provider';
 import { ErrorHelper } from '../../common/utils';
 import { WalletStatus, PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class PaystackIntegrationService {
@@ -35,6 +36,7 @@ export class PaystackIntegrationService {
     private readonly businessPaymentAccountRepository: Repository<BusinessPaymentAccount>,
     private readonly paystackProvider: PaystackProvider,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) { }
 
   // ============================================================
@@ -314,7 +316,28 @@ export class PaystackIntegrationService {
         settledAt: data.status === TransactionStatus.SUCCESS ? new Date() : undefined,
       });
 
-      return await this.transactionRepository.save(transaction);
+      const savedTransaction = await this.transactionRepository.save(transaction);
+
+      // Audit Log for initiated transaction
+      await this.auditService.log({
+        action: 'TRANSACTION_INITIATED',
+        entityId: savedTransaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: savedTransaction.userId || undefined,
+        metadata: {
+          businessId: savedTransaction.businessId,
+          details: {
+            type: savedTransaction.type,
+            amount: savedTransaction.amount,
+            flow: savedTransaction.flow,
+            reference: savedTransaction.reference
+          },
+          ...data,
+          providerResponse: undefined
+        },
+      });
+
+      return savedTransaction;
     } catch (error) {
       this.logger.error('Failed to record transaction:', error);
       throw error;

@@ -5,7 +5,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException
+  UnauthorizedException,
+  InternalServerErrorException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -40,6 +41,7 @@ import { UserOnboarding } from './entities/user-onboarding.entity';
 import { UserMapper, MappedUser } from './mappers/user.mapper';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { permission } from 'process';
+import { PhoneUtil, CountryCode } from '../../common/utils/phone.util';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -50,6 +52,21 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly MAX_PIN_ATTEMPTS = 5;
   private readonly PIN_LOCK_MINUTES = 5;
+
+  private readonly ONBOARDING_ORDER = [
+    OnboardingStep.PERSONAL_INFORMATION,
+    OnboardingStep.PHONE_VERIFICATION,
+    OnboardingStep.KYC_VERIFICATION,
+    OnboardingStep.BUSINESS_INFORMATION,
+    OnboardingStep.AUTHENTICATION_PIN,
+  ];
+
+  private shouldUpdateStep(current: OnboardingStep, next: OnboardingStep): boolean {
+    const currentIndex = this.ONBOARDING_ORDER.indexOf(current);
+    const nextIndex = this.ONBOARDING_ORDER.indexOf(next);
+    // Only update if next step is further ahead than current step
+    return nextIndex > currentIndex;
+  }
 
 
   constructor(
@@ -75,25 +92,28 @@ export class UsersService {
   ) { }
 
 
-
   async registerUser(
     registerUserDto: RegisterUserDto,
   ): Promise<RegisterUserResponseDto> {
     try {
+      // Standardize phone number to E.164 format before any operations
+      const standardizedPhone = PhoneUtil.standardize(
+        registerUserDto.phone,
+        CountryCode.NIGERIA,
+      );
+
       // Check if user with email already exists
       const existingUserByEmail = await this.userRepository.findOne({
         where: { email: registerUserDto.email },
       });
-
       if (existingUserByEmail) {
         ErrorHelper.ConflictException('User with this email already exists');
       }
 
-      // Check if user with phone already exists
+      // Check if user with phone already exists (using standardized format)
       const existingUserByPhone = await this.userProfileRepository.findOne({
-        where: { phone: registerUserDto.phone },
+        where: { phone: standardizedPhone },
       });
-
       if (existingUserByPhone) {
         ErrorHelper.ConflictException('User with this phone number already exists');
       }
@@ -105,7 +125,6 @@ export class UsersService {
       const merchantRole = await this.roleRepository.findOne({
         where: { name: 'Merchant', userType: UserType.USER },
       });
-
       if (!merchantRole) {
         this.logger.error('Merchant role not found in database!');
         ErrorHelper.InternalServerErrorException('System configuration error');
@@ -115,7 +134,7 @@ export class UsersService {
       const user = this.userRepository.create({
         email: registerUserDto.email,
         password: hashedPassword,
-        userType: UserType.USER, // All registered users are USER type
+        userType: UserType.USER,
         roleId: merchantRole.id,
         status: UserStatus.ACTIVE,
       });
@@ -123,12 +142,12 @@ export class UsersService {
       // Save user to database
       const savedUser = await this.userRepository.save(user);
 
-      // Create user profile
+      // Create user profile with standardized phone number
       const userProfile = this.userProfileRepository.create({
         userId: savedUser.id,
         firstName: registerUserDto.firstname,
         lastName: registerUserDto.lastname,
-        phone: registerUserDto.phone,
+        phone: standardizedPhone, // Store in E.164 format
         isPhoneVerified: false,
       });
       await this.userProfileRepository.save(userProfile);
@@ -171,7 +190,7 @@ export class UsersService {
       // Generate JWT token
       const accessToken = this.jwtService.sign(payload);
 
-      // Return user information with token
+      // Return user information with token (phone in standardized format)
       return {
         message: 'User registered successfully',
         accessToken,
@@ -181,17 +200,13 @@ export class UsersService {
         email: savedUser.email,
         firstName: userProfile.firstName,
         lastName: userProfile.lastName,
-        phone: userProfile.phone,
+        phone: standardizedPhone, // Return standardized format
         isEmailVerified: savedUser.isEmailVerified,
         isPhoneVerified: userProfile.isPhoneVerified,
         onboardingStep: userOnboarding.currentStep,
       };
     } catch (error) {
-      if (error instanceof ConflictException) {
-        throw error;
-      }
-      this.logger.error('Registration failed:', error);
-      ErrorHelper.InternalServerErrorException('Failed to register user');
+      throw error
     }
   }
 
@@ -199,8 +214,16 @@ export class UsersService {
     return this.userRepository.findOne({ where: { email } });
   }
 
-  async findUserById(id: number): Promise<User | null> {
-    return this.userRepository.findOne({ where: { id } });
+  async findUserById(id: number): Promise<MappedUser | null> {
+    const user = await this.userRepository.findOne({
+      where: { id }, relations: [
+        'profile'
+      ]
+    });
+
+    const mappedUsers = UserMapper.toMappedUser(user!);
+
+    return mappedUsers
   }
 
   async loginUser(loginDto: LoginDto): Promise<LoginResponseDto> {
@@ -221,18 +244,18 @@ export class UsersService {
           (user.suspendedUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
         );
         ErrorHelper.UnauthorizedException(
-          `Account suspended until ${user.suspendedUntil.toISOString()}. ${user.statusReason || ''}`,
+          `Account suspended until ${user.suspendedUntil.toISOString()}. ${user.statusReason || ''} `,
         );
       } else if (!user.suspendedUntil) {
         ErrorHelper.UnauthorizedException(
-          `Account suspended indefinitely. ${user.statusReason || 'Contact support for assistance.'}`,
+          `Account suspended indefinitely.${user.statusReason || 'Contact support for assistance.'} `,
         );
       }
     }
 
     if (user.status === UserStatus.BANNED) {
       ErrorHelper.UnauthorizedException(
-        `Account has been banned. ${user.statusReason || 'Contact support for assistance.'}`,
+        `Account has been banned.${user.statusReason || 'Contact support for assistance.'} `,
       );
     }
 
@@ -389,18 +412,21 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-      // Update user profile as phone verified
+
       if (user.profile) {
-        await this.userProfileRepository.update(user.profile.id, {
+        const a = await this.userProfileRepository.update(user.profile.id, {
           isPhoneVerified: true,
         });
       }
 
-      // Update onboarding step to PHONE_VERIFICATION
+      // Update onboarding step to PHONE_VERIFICATION if appropriate
       if (user.onboarding) {
-        await this.userOnboardingRepository.update(user.onboarding.id, {
-          currentStep: OnboardingStep.PHONE_VERIFICATION,
-        });
+        const nextStep = OnboardingStep.PHONE_VERIFICATION;
+        if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+          await this.userOnboardingRepository.update(user.onboarding.id, {
+            currentStep: nextStep,
+          });
+        }
       }
 
       return {
@@ -408,13 +434,7 @@ export class UsersService {
         verified: true,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException('Failed to verify OTP');
+      throw error
     }
   }
 
@@ -491,7 +511,7 @@ export class UsersService {
       // Call Dojah API for BVN verification with selfie
       const response = await firstValueFrom(
         this.httpService.post(
-          `${dojahBaseUrl}/api/v1/kyc/bvn/verify`,
+          `${dojahBaseUrl} /api/v1 / kyc / bvn / verify`,
           {
             bvn: bvn,
             selfie_image: formattedSelfieImage,
@@ -541,16 +561,19 @@ export class UsersService {
 
         // Update onboarding step
         if (user.onboarding) {
-          await this.userOnboardingRepository.update(user.onboarding.id, {
-            currentStep: OnboardingStep.KYC_VERIFICATION,
-          });
+          const nextStep = OnboardingStep.KYC_VERIFICATION;
+          if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+            await this.userOnboardingRepository.update(user.onboarding.id, {
+              currentStep: nextStep,
+            });
+          }
         }
 
         // Try to provision wallet if utilities are available
         try {
           const bvnVerificationData = {
             bvn: verificationData.bvn,
-            customerName: `${verificationData.first_name} ${verificationData.last_name}`.trim(),
+            customerName: `${verificationData.first_name} ${verificationData.last_name} `.trim(),
             firstName: verificationData.first_name,
             lastName: verificationData.last_name,
             dateOfBirth: verificationData.date_of_birth,
@@ -564,9 +587,9 @@ export class UsersService {
           );
 
           if (walletResult.success) {
-            console.log(`Wallet provisioned successfully for user ${userId}:`, walletResult.walletData);
+            console.log(`Wallet provisioned successfully for user ${userId}: `, walletResult.walletData);
           } else {
-            console.warn(`Failed to provision wallet for user ${userId}:`, walletResult.error);
+            console.warn(`Failed to provision wallet for user ${userId}: `, walletResult.error);
           }
         } catch (walletError) {
           // Log wallet provisioning error but don't fail the verification response
@@ -616,7 +639,7 @@ export class UsersService {
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
       // Validate PIN format (4 digits only)
-      if (!/^\d{4}$/.test(pin)) {
+      if (!/^\d{ 4 } $ /.test(pin)) {
         ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
       }
 
@@ -644,6 +667,15 @@ export class UsersService {
           pin: encryptedPin,
         });
         await this.userSecurityRepository.save(userSecurity);
+      }
+
+      // Update onboarding step to AUTHENTICATION_PIN and mark as completed
+      if (user.onboarding) {
+        user.onboarding.currentStep = OnboardingStep.AUTHENTICATION_PIN;
+        user.onboarding.isCompleted = true;
+        user.onboarding.completedAt = new Date();
+        user.onboarding.progressPercentage = 100;
+        await this.userOnboardingRepository.save(user.onboarding);
       }
 
       return {
@@ -770,7 +802,7 @@ export class UsersService {
     success: boolean;
   }> {
     // Validate PIN format (4 digits only)
-    if (!/^\d{4}$/.test(pin)) {
+    if (!/^\d{ 4 } $ /.test(pin)) {
       ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
     }
 
@@ -842,7 +874,7 @@ export class UsersService {
     try {
       await this.userProgressService.addProgress(userId, UserProgressEvent.TRANSACTION_PIN_CREATED);
     } catch (err) {
-      this.logger.error(`Failed to record PIN creation progress for user ${userId}:`, err);
+      this.logger.error(`Failed to record PIN creation progress for user ${userId}: `, err);
     }
 
     return {
@@ -1170,7 +1202,7 @@ export class UsersService {
     changePinDto: ChangePinDto,
   ): Promise<{ message: string; success: boolean }> {
     // Validate PIN format (4 digits only)
-    if (!/^\d{4}$/.test(changePinDto.newPin)) {
+    if (!/^\d{ 4 } $ /.test(changePinDto.newPin)) {
       ErrorHelper.BadRequestException('New PIN must be exactly 4 digits');
     }
 
@@ -1245,12 +1277,12 @@ export class UsersService {
         });
       }
     } else {
-      ErrorHelper.BadRequestException(`Invalid identifier type: ${identifierType}`);
+      ErrorHelper.BadRequestException(`Invalid identifier type: ${identifierType} `);
     }
 
     if (!user) {
       ErrorHelper.NotFoundException(
-        `User not found with ${identifierType}: ${identifier}`,
+        `User not found with ${identifierType}: ${identifier} `,
       );
     }
 
@@ -1294,7 +1326,7 @@ export class UsersService {
       const remainingMs = user.security.pinLockedUntil.getTime() - Date.now();
       const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
       ErrorHelper.UnauthorizedException(
-        `Account locked due to too many failed PIN attempts. Try again in ${remainingMinutes} minute(s).`,
+        `Account locked due to too many failed PIN attempts.Try again in ${remainingMinutes} minute(s).`,
       );
     }
 
@@ -1381,7 +1413,7 @@ export class UsersService {
     }
 
     const updatedUser = await this.userRepository.save(user);
-    this.logger.log(`User ${userId} suspended by user ${suspendedBy}`);
+    this.logger.log(`User ${userId} suspended by user ${suspendedBy} `);
 
     return updatedUser;
   }
@@ -1399,7 +1431,7 @@ export class UsersService {
     user.suspendedBy = undefined;
 
     const updatedUser = await this.userRepository.save(user);
-    this.logger.log(`User ${userId} reactivated by user ${reactivatedBy}`);
+    this.logger.log(`User ${userId} reactivated by user ${reactivatedBy} `);
 
     return updatedUser;
   }
@@ -1440,7 +1472,7 @@ export class UsersService {
     }
 
     const updatedUser = await this.userRepository.save(user);
-    this.logger.log(`User ${userId} status changed to ${changeStatusDto.status} by user ${changedBy}`);
+    this.logger.log(`User ${userId} status changed to ${changeStatusDto.status} by user ${changedBy} `);
 
     return updatedUser;
   }
@@ -1476,7 +1508,7 @@ export class UsersService {
     user.roleId = roleId;
 
     const updatedUser = await this.userRepository.save(user);
-    this.logger.log(`Role ${roleId} assigned to user ${userId} by user ${assignedBy}`);
+    this.logger.log(`Role ${roleId} assigned to user ${userId} by user ${assignedBy} `);
 
     return updatedUser;
   }
@@ -1591,7 +1623,7 @@ export class UsersService {
       );
     }
 
-    const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes. Do not share this code with anyone.`;
+    const message = `Your Qkly OTP is: ${otp}. This code expires in 5 minutes.Do not share this code with anyone.`;
 
     // Format payload according to Termii SMS API documentation
     const payload = {
@@ -1605,7 +1637,7 @@ export class UsersService {
 
 
     const response = await firstValueFrom(
-      this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
+      this.httpService.post(`${termiiBaseUrl} /api/sms / send`, payload, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1633,6 +1665,6 @@ export class UsersService {
     const lastPart = cleanPhone.substring(cleanPhone.length - 2);
     const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
 
-    return `${firstPart}${maskedMiddle}${lastPart}`;
+    return `${firstPart}${maskedMiddle}${lastPart} `;
   }
 }

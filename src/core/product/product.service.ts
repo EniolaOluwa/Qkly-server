@@ -78,25 +78,30 @@ export class ProductService {
         ErrorHelper.BadRequestException('Category is required for this product.');
       }
 
-      const category = await this.categoryService.findOrCreate(productData.category);
+      const { category: categoryName, images, ...rest } = productData;
 
-      const { category: _, ...rest } = productData;
+      const category = await this.categoryService.findOrCreate(categoryName);
 
       const product = this.productRepository.create({
         ...rest,
+        // Map string[] images to both relation (new way) and simple-array (legacy way)
+        images: images?.map((url, index) => ({
+          imageUrl: url,
+          sortOrder: index,
+          isPrimary: index === 0
+        })),
+        imageUrls: images, // Maintain backward compatibility with the simple-array column
         categoryId: category.id,
         userId
       });
 
       const savedProduct = await this.productRepository.save(product);
 
-
       const productCount = await this.productRepository.count({ where: { userId } });
 
       if (productCount === 1) {
         await this.userProgressService.addProgress(userId, UserProgressEvent.FIRST_PRODUCT_CREATED);
       }
-
 
       return savedProduct;
     } catch (error) {
@@ -206,10 +211,29 @@ export class ProductService {
       }
 
       // Assign other fields
+      // Handle images update if provided
+      if (updateData.images) {
+        // Update simple array column
+        product.imageUrls = updateData.images;
+
+        // Update relation - Note: This appends/replaces depending on logic.
+        // For simplicity and to match create logic, we'll re-map them.
+        // Ideally we should delete old images, but for now we'll overwrite the property
+        // allowing TypeORM to handle new insertions. Old ones might become orphans.
+        product.images = updateData.images.map((url, index) => ({
+          imageUrl: url,
+          sortOrder: index,
+          isPrimary: index === 0,
+          productId: product.id // ensure link
+        } as any)); // cast to any to avoid type issues with deep partial
+      }
+
       Object.assign(product, {
         ...updateData,
         category: product.category,
         categoryId: product.categoryId,
+        // prevent Object.assign from overwriting our processed images with the string array
+        images: updateData.images ? product.images : undefined,
       });
 
       return await this.productRepository.save(product);

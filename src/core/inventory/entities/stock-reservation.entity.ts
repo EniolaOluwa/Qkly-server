@@ -70,31 +70,31 @@ export class StockReservation {
   /**
    * Cart ID (if reservation for cart item)
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   cartId: number;
 
   /**
    * Cart item ID
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   cartItemId: number;
 
   /**
    * Order ID (if reservation converted to order)
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   orderId: number;
 
   /**
    * User ID (null for guest reservations)
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   userId: number;
 
   /**
    * Session ID (for guest carts)
    */
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   sessionId: string;
 
   /**

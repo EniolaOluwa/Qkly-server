@@ -7,7 +7,10 @@ import { PaymentService } from './payment.service';
 import { PaystackIntegrationService } from './paystack-integration.service';
 import { PaystackWebhookHandler } from './providers/paystack-webhook.handler';
 import { PaystackProvider } from './providers/paystack.provider';
+import { PaymentController } from './payment.controller';
+
 @Module({
+  controllers: [PaymentController],
   imports: [
     HttpModule,
     ScheduleModule.forRoot(),

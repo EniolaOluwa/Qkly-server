@@ -20,6 +20,12 @@ export class NotificationService {
   }
 
   async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+    const enableNotifications = this.configService.get<string>('ENABLE_NOTIFICATIONS');
+    if (enableNotifications === 'false') {
+      this.logger.debug(`Skipping email to ${to}: Notifications disabled globally.`);
+      return false;
+    }
+
     if (!this.resend) {
       this.logger.warn(`Skipping email to ${to}: Resend not configured`);
       return false;

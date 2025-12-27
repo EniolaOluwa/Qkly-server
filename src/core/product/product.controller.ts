@@ -579,6 +579,14 @@ export class ProductsController {
     const { user, userId, ...sanitizedProduct } = product;
 
     // Remove any other sensitive fields if they exist
+    // Normalize images to be string[]
+    if (sanitizedProduct.imageUrls && Array.isArray(sanitizedProduct.imageUrls)) {
+      sanitizedProduct.images = sanitizedProduct.imageUrls;
+    } else if (sanitizedProduct.images && Array.isArray(sanitizedProduct.images) && typeof sanitizedProduct.images[0] !== 'string') {
+      // If images is relation array, map to strings
+      sanitizedProduct.images = sanitizedProduct.images.map((img: any) => img.imageUrl);
+    }
+
     return sanitizedProduct;
   }
 }

@@ -11,8 +11,10 @@ import {
   Matches,
   IsUUID,
   Length,
+  IsPhoneNumber,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { CountryCode } from '../utils/phone.util';
 
 export class WelcomeResponseDto {
   @ApiProperty({
@@ -48,11 +50,20 @@ export class RegisterUserDto {
   lastname: string;
 
   @ApiProperty({
-    description: 'User phone number',
-    example: '+1234567890',
+    description: 'User phone number (Nigerian format)',
+    example: '08012345678',
+    examples: [
+      '08012345678',
+      '+2348012345678',
+      '2348012345678',
+      '0703 456 7890',
+    ],
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
   @ApiProperty({
@@ -484,6 +495,9 @@ export class GeneratePhoneOtpDto {
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 }
 
@@ -514,6 +528,9 @@ export class VerifyPhoneOtpDto {
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
   @ApiProperty({
@@ -634,6 +651,11 @@ export class LoginResponseDto {
   @ApiProperty({
     description: 'User phone number',
     example: '+1234567890',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
   })
   phone: string;
 
@@ -926,8 +948,11 @@ export class LoginWithPinDto {
     description: 'User phone number',
     example: '+1234567890',
   })
-  @IsNotEmpty()
   @IsString()
+  @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
 

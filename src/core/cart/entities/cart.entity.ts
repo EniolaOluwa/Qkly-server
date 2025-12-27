@@ -34,7 +34,7 @@ export class Cart {
   /**
    * User ID (null for guest carts)
    */
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'int', unique: true, nullable: true })
   userId: number | null;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
@@ -45,7 +45,7 @@ export class Cart {
    * Session ID (for guest carts)
    * UUID generated on first cart addition
    */
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   sessionId: string | null;
 
   /**
@@ -104,7 +104,7 @@ export class Cart {
   /**
    * Cart converted to order ID
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   convertedToOrderId: number;
 
   /**

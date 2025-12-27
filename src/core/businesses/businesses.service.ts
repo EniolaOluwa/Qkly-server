@@ -159,10 +159,15 @@ export class BusinessesService {
       ErrorHelper.BadRequestException('User already has a business registered');
     }
 
+    console.log({
+      onboarding: user.onboarding
+    })
 
-    if (user.onboarding?.currentStep !== OnboardingStep.PHONE_VERIFICATION) {
+
+    // Verify phone is verified (prerequisite for business creation)
+    if (!user.profile?.isPhoneVerified) {
       ErrorHelper.ConflictException(
-        `User must have completed phone verification before creating a business. Current step: ${user.onboarding?.currentStep || 'UNKNOWN'}`,
+        'User must verify phone number before creating a business.',
       );
     }
 
@@ -184,6 +189,7 @@ export class BusinessesService {
 
 
     const business = this.businessRepo.create({
+      ...createBusinessDto,
       businessName: createBusinessDto.businessName,
       businessTypeId: createBusinessDto.businessTypeId,
       businessDescription: createBusinessDto.businessDescription,
@@ -200,7 +206,7 @@ export class BusinessesService {
     });
 
     // Update onboarding step in user_onboarding table
-    if (user.onboarding) {
+    if (user.onboarding && user.onboarding.currentStep !== OnboardingStep.AUTHENTICATION_PIN) {
       user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
       await this.userRepos.save(user);
     }

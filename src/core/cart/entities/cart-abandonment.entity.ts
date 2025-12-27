@@ -30,7 +30,7 @@ export class CartAbandonment {
   /**
    * Cart ID (unique - one abandonment record per cart)
    */
-  @Column({ unique: true })
+  @Column({ type: 'int', unique: true })
   cartId: number;
 
   @OneToOne(() => Cart, { onDelete: 'CASCADE' })
@@ -106,7 +106,7 @@ export class CartAbandonment {
   /**
    * Order ID (if recovered)
    */
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   recoveredOrderId: number;
 
   /**

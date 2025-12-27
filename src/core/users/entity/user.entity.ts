@@ -81,9 +81,6 @@ export class User {
   @Column({ default: false })
   isEmailVerified: boolean;
 
-  @Column({ default: false })
-  isPhoneVerified: boolean;
-
   @CreateDateColumn()
   createdAt: Date;
 

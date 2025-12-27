@@ -19,6 +19,10 @@ import {
   GenerateWalletDto,
   GenerateWalletResponseDto
 } from './dto/wallet.dto';
+import {
+  WalletTransferRequestDto,
+  WalletTransferResponseDto
+} from './dto/wallet-transfer.dto';
 import { WalletsService } from './wallets.service';
 
 @ApiTags('Wallets')
@@ -102,6 +106,37 @@ export class WalletsController {
   @Get(':userId/balance')
   async getWalletBalance(@Request() req): Promise<WalletBalanceResponseDto> {
     return await this.walletsService.getUserWalletWithBalance(req.user.userId);
+  }
+
+  @Post('transfer')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Transfer funds',
+    description: 'Transfer funds from wallet to bank account or another wallet.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transfer initiated successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid transfer data or insufficient balance',
+  })
+  async transferFunds(
+    @Body(ValidationPipe) transferDto: WalletTransferRequestDto,
+    @Request() req,
+  ): Promise<WalletTransferResponseDto> {
+    // Ensure source wallet belongs to user (optional validation, service handles logic)
+    // For now we assume the service checks or we trust the input. 
+    // Ideally, we should override sourceAccountNumber with the user's wallet reference
+    // but the DTO allows specifying it. 
+
+    // Better security: Force source to be user's wallet
+    const userWallet = await this.walletsService.getUserWallet(req.user.userId);
+    transferDto.sourceAccountNumber = userWallet.walletReference;
+
+    return await this.walletsService.transferToWalletOrBank(transferDto);
   }
 
   // @Post('payments/initialize')

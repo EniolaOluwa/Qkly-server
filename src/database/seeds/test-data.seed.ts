@@ -231,7 +231,6 @@ export class TestDataSeedService {
           roleId: userData.roleId,
           status: UserStatus.ACTIVE,
           isEmailVerified: true,
-          isPhoneVerified: userData.profile.isPhoneVerified,
           profile: {
             firstName: userData.profile.firstName,
             lastName: userData.profile.lastName,

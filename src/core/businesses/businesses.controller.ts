@@ -37,6 +37,7 @@ import { Business } from './business.entity';
 import { BusinessesService } from './businesses.service';
 import { create } from 'domain';
 import { Public } from '../../common/decorators/public.decorator';
+import { Admin } from '../../common/decorators/admin.decorator';
 
 
 @ApiTags('Business')
@@ -298,6 +299,7 @@ export class BusinessesController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
+  @Admin()
   @ApiOperation({
     summary: 'Get all businesses',
     description: 'Retrieves all businesses with their business types',

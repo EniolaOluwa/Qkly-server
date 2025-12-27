@@ -225,11 +225,12 @@ export class PaymentService {
   async processWebhook(
     payload: any,
     signature?: string,
+    rawBody?: string,
   ): Promise<WebhookEventDto> {
     try {
       // Validate signature if provided
-      if (signature) {
-        const isValid = this.provider.validateWebhookSignature(payload, signature);
+      if (signature && rawBody) {
+        const isValid = this.provider.validateWebhookSignature(rawBody, signature);
         if (!isValid) {
           ErrorHelper.InternalServerErrorException('Invalid webhook signature');
         }
@@ -245,9 +246,9 @@ export class PaymentService {
   /**
    * Validate webhook signature
    */
-  validateWebhookSignature(payload: any, signature: string): boolean {
+  validateWebhookSignature(rawBody: string, signature: string): boolean {
     try {
-      return this.provider.validateWebhookSignature(payload, signature);
+      return this.provider.validateWebhookSignature(rawBody, signature);
     } catch (error) {
       this.logger.error('Failed to validate webhook signature:', error.message);
       return false;

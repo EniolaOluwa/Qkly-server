@@ -127,12 +127,12 @@ export class OrderService {
   ): Promise<PaginationResultDto<Order>> {
     try {
       const qb = this.orderRepository
-        .createQueryBuilder('order')
-        .leftJoinAndSelect('order.items', 'items')
-        .leftJoinAndSelect('order.business', 'business')
-        .where('LOWER(order.customerEmail) = LOWER(:customerEmail)', { customerEmail })
+        .createQueryBuilder('ord')
+        .leftJoinAndSelect('ord.items', 'items')
+        .leftJoinAndSelect('ord.business', 'business')
+        .where('LOWER(ord.customerEmail) = LOWER(:customerEmail)', { customerEmail })
         .select([
-          'order',
+          'ord',
           'business.id',
           'business.businessName',
           'business.logo',
@@ -142,7 +142,7 @@ export class OrderService {
       const itemCount = await qb.getCount();
       const { skip = 0, limit = 10, order = PaginationOrder.DESC } = query || {};
 
-      const data = await qb.skip(skip).take(limit).orderBy('order.createdAt', order).getMany();
+      const data = await qb.skip(skip).take(limit).orderBy('ord.createdAt', order).getMany();
 
       const paginationDto: PaginationDto = query || {
         skip,
@@ -190,24 +190,24 @@ export class OrderService {
         select,
       } = options;
 
-      let qb = this.orderRepository.createQueryBuilder('order');
+      let qb = this.orderRepository.createQueryBuilder('ord');
 
       if (relations.includes('items')) {
-        qb = qb.leftJoinAndSelect('order.items', 'items');
+        qb = qb.leftJoinAndSelect('ord.items', 'items');
       }
       if (relations.includes('user')) {
-        qb = qb.leftJoinAndSelect('order.user', 'user');
+        qb = qb.leftJoinAndSelect('ord.user', 'user');
       }
       if (relations.includes('business')) {
-        qb = qb.leftJoinAndSelect('order.business', 'business');
+        qb = qb.leftJoinAndSelect('ord.business', 'business');
       }
 
       if (id) {
-        qb = qb.where('order.id = :id', { id });
+        qb = qb.where('ord.id = :id', { id });
       } else if (orderReference) {
-        qb = qb.where('order.orderReference = :orderReference', { orderReference });
+        qb = qb.where('ord.orderReference = :orderReference', { orderReference });
       } else if (transactionReference) {
-        qb = qb.where('order.transactionReference = :transactionReference', {
+        qb = qb.where('ord.transactionReference = :transactionReference', {
           transactionReference,
         });
       } else {
@@ -215,7 +215,7 @@ export class OrderService {
       }
 
       if (select) {
-        const selectFields = ['order'];
+        const selectFields = ['ord'];
         if (relations.includes('user') && select.some((field) => field.startsWith('user.'))) {
           selectFields.push(...select.filter((field) => field.startsWith('user.')));
         }
@@ -332,28 +332,28 @@ export class OrderService {
     } = query;
 
     const qb = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.items', 'items');
+      .createQueryBuilder('ord')
+      .leftJoinAndSelect('ord.items', 'items');
 
     // ---- Filters ----
-    if (userId) qb.andWhere('order.userId = :userId', { userId });
-    if (businessId) qb.andWhere('order.businessId = :businessId', { businessId });
-    if (status) qb.andWhere('order.status = :status', { status });
-    if (paymentStatus) qb.andWhere('order.paymentStatus = :paymentStatus', { paymentStatus });
-    if (paymentMethod) qb.andWhere('order.paymentMethod = :paymentMethod', { paymentMethod });
-    if (deliveryMethod) qb.andWhere('order.deliveryMethod = :deliveryMethod', { deliveryMethod });
-    if (minTotal !== undefined) qb.andWhere('order.total >= :minTotal', { minTotal });
-    if (maxTotal !== undefined) qb.andWhere('order.total <= :maxTotal', { maxTotal });
+    if (userId) qb.andWhere('ord.userId = :userId', { userId });
+    if (businessId) qb.andWhere('ord.businessId = :businessId', { businessId });
+    if (status) qb.andWhere('ord.status = :status', { status });
+    if (paymentStatus) qb.andWhere('ord.paymentStatus = :paymentStatus', { paymentStatus });
+    if (paymentMethod) qb.andWhere('ord.paymentMethod = :paymentMethod', { paymentMethod });
+    if (deliveryMethod) qb.andWhere('ord.deliveryMethod = :deliveryMethod', { deliveryMethod });
+    if (minTotal !== undefined) qb.andWhere('ord.total >= :minTotal', { minTotal });
+    if (maxTotal !== undefined) qb.andWhere('ord.total <= :maxTotal', { maxTotal });
 
     // ---- Search ----
     if (search) {
       qb.andWhere(
         `
         (
-          order.orderReference ILIKE :search OR
-          order.customerName ILIKE :search OR
-          order.customerEmail ILIKE :search OR
-          order.customerPhoneNumber ILIKE :search
+          ord.orderReference ILIKE :search OR
+          ord.customerName ILIKE :search OR
+          ord.customerEmail ILIKE :search OR
+          ord.customerPhoneNumber ILIKE :search
         )
       `,
         { search: `%${search}%` }
@@ -361,8 +361,8 @@ export class OrderService {
     }
 
     // ---- Date range ----
-    if (startDate) qb.andWhere('order.createdAt >= :startDate', { startDate });
-    if (endDate) qb.andWhere('order.createdAt <= :endDate', { endDate });
+    if (startDate) qb.andWhere('ord.createdAt >= :startDate', { startDate });
+    if (endDate) qb.andWhere('ord.createdAt <= :endDate', { endDate });
 
     // ---- Count (clone before pagination) ----
     const countQb = qb.clone();
@@ -373,7 +373,7 @@ export class OrderService {
     const safeSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const safeSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
 
-    qb.orderBy(`order.${safeSortBy}`, safeSortOrder);
+    qb.orderBy(`ord.${safeSortBy}`, safeSortOrder);
 
     // ---- Pagination ----
     qb.skip(skip).take(limit);
@@ -401,18 +401,18 @@ export class OrderService {
     const { status, search, limit, skip, order } = query;
 
     const qb = this.orderRepository
-      .createQueryBuilder('order')
-      .leftJoinAndSelect('order.items', 'items')
-      .leftJoinAndSelect('order.user', 'user')
-      .leftJoinAndSelect('order.business', 'business')
-      .andWhere('order.paymentStatus = :paymentStatus', {
+      .createQueryBuilder('ord')
+      .leftJoinAndSelect('ord.items', 'items')
+      .leftJoinAndSelect('ord.user', 'user')
+      .leftJoinAndSelect('ord.business', 'business')
+      .andWhere('ord.paymentStatus = :paymentStatus', {
         paymentStatus: PaymentStatus.PAID,
       })
-      .select(['order', 'business.id', 'user.id', 'user.firstName', 'user.lastName', 'user.email', 'items']);
+      .select(['ord', 'business.id', 'user.id', 'user.firstName', 'user.lastName', 'user.email', 'items']);
 
 
     if (status) {
-      qb.andWhere('order.status = :status', { status });
+      qb.andWhere('ord.status = :status', { status });
     }
 
     // Text search
@@ -420,10 +420,10 @@ export class OrderService {
       qb.andWhere(
         `
         (
-          order.orderReference ILIKE :search OR
-          order.customerName ILIKE :search OR
-          order.customerEmail ILIKE :search OR
-          order.customerPhoneNumber ILIKE :search
+          ord.orderReference ILIKE :search OR
+          ord.customerName ILIKE :search OR
+          ord.customerEmail ILIKE :search OR
+          ord.customerPhoneNumber ILIKE :search
         )
       `,
         { search: `%${search}%` },
@@ -435,7 +435,7 @@ export class OrderService {
 
     // Pagination + sorting
     const data = await qb
-      .orderBy('order.createdAt', order)
+      .orderBy('ord.createdAt', order)
       .skip(skip)
       .take(limit)
       .getMany();

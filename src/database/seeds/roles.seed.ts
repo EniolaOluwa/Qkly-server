@@ -194,7 +194,6 @@ export class RolesSeedService {
       roleId: superAdminRole.id,
       status: UserStatus.ACTIVE,
       isEmailVerified: true,
-      isPhoneVerified: true,
       profile: {
         firstName,
         lastName,

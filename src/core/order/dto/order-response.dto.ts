@@ -229,9 +229,9 @@ export class OrderResponseDto {
   @Expose()
   items: OrderItemDto[];
 
-  @ApiProperty({ example: false })
+  @ApiProperty({ example: false, required: false })
   @Expose()
-  isBusinessSettled: boolean;
+  isBusinessSettled?: boolean;
 
   @ApiProperty({ example: null, required: false })
   @Expose()

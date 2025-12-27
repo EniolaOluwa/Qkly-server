@@ -2,7 +2,7 @@ import { CreateProductDto, MeasurementType, SizeDto } from "../../core/product/d
 
 export interface RandomProductOptions {
   businessId: number;
-userId: number;
+  userId: number;
   hasVariation?: boolean;
 }
 
@@ -170,7 +170,7 @@ export const generateRandomProduct = (
     description,
     price: parseFloat((Math.random() * 100 + 10).toFixed(2)),
     quantityInStock: Math.floor(Math.random() * 100) + 1,
-    imageUrls: [image],
+    images: [image],
     hasVariation,
     sizes,
     colors

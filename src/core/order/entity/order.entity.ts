@@ -38,11 +38,11 @@ export class Order {
   orderReference: string;
 
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   @Index()
   cartId: number | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   @Index()
   userId: number | null;
 

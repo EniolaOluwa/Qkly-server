@@ -18,6 +18,7 @@ import { Wallet } from '../../wallets/entities/wallet.entity';
 import { WalletStatus } from '../../../common/enums/payment.enum';
 import { PaystackIntegrationService } from '../paystack-integration.service';
 import { NotificationService } from '../../notifications/notification.service';
+import { AuditService } from '../../audit/audit.service';
 
 
 @Injectable()
@@ -36,6 +37,7 @@ export class PaystackWebhookHandler {
     private readonly paystackIntegrationService: PaystackIntegrationService,
     private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) { }
 
   async handleWebhook(event: string, data: any): Promise<void> {
@@ -164,6 +166,23 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[DVA PAYMENT RECORDED] Wallet ${wallet.id} credited with ₦${amount}`);
 
+      // Audit Log
+      await this.auditService.log({
+        action: 'WALLET_FUNDED',
+        entityId: wallet.id,
+        entityType: 'WALLET',
+        performedBy: wallet.userId,
+        metadata: {
+          businessId: wallet.user?.businessId,
+          details: {
+            amount: amount,
+            reference: reference,
+            channel: 'DVA_TRANSFER'
+          },
+          ...data
+        },
+      });
+
       // Send notification
       if (wallet.user?.email) {
         await this.notificationService.sendWalletFundedNotification(wallet.user.email, amount, reference);
@@ -235,6 +254,23 @@ export class PaystackWebhookHandler {
       this.logger.log(
         `[PAYMENT SUCCESS] Order ${orderId} paid, business ${order.businessId} credited ₦${businessAmount}`,
       );
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'PAYMENT_SUCCESSFUL',
+        entityId: orderId,
+        entityType: 'ORDER',
+        performedBy: order.userId || undefined,
+        metadata: {
+          businessId: order.businessId,
+          details: {
+            amount: order.total,
+            reference: reference,
+            provider: 'PAYSTACK'
+          },
+          ...data
+        },
+      });
     } catch (error) {
       this.logger.error('[PAYMENT SUCCESS ERROR]', error);
     }
@@ -269,6 +305,22 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[TRANSFER SUCCESS] Transaction ${transaction.id} marked as successful`);
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'TRANSFER_SUCCESSFUL',
+        entityId: transaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: transaction.userId || undefined,
+        metadata: {
+          businessId: transaction.businessId,
+          details: {
+            amount: transferAmount,
+            reference: reference,
+          },
+          ...data
+        },
+      });
 
       if (transaction.user?.email) {
         await this.notificationService.sendPayoutSuccessNotification(
@@ -357,6 +409,22 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[REFUND PROCESSED] Transaction ${refundTransaction.id} completed`);
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'REFUND_PROCESSED',
+        entityId: refundTransaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: refundTransaction.userId || undefined,
+        metadata: {
+          businessId: refundTransaction.businessId,
+          details: {
+            amount: data.transaction.amount / 100,
+            reference: reference,
+          },
+          ...data
+        },
+      });
     } catch (error) {
       this.logger.error('[REFUND PROCESSED ERROR]', error);
     }

@@ -529,11 +529,11 @@ export class PaystackProvider extends IPaymentProvider {
     }
   }
 
-  validateWebhookSignature(payload: any, signature: string): boolean {
+  validateWebhookSignature(rawBody: string, signature: string): boolean {
     try {
       const hash = crypto
         .createHmac('sha512', this.secretKey)
-        .update(JSON.stringify(payload))
+        .update(rawBody)
         .digest('hex');
 
       return hash === signature;
