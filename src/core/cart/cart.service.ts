@@ -77,35 +77,149 @@ export class CartService {
   /**
    * Get cart items with product details
    */
-  async getCartItems(cartId: number): Promise<CartItem[]> {
-    return this.cartItemRepository.find({
+  async getFullCart(userId: number | null, sessionId?: string) {
+    const cart = await this.getCart(userId, sessionId);
+    const items = await this.getCartItems(cart.id);
+
+    // Combine and clean top-level cart
+    const fullCart = { ...cart, items };
+    return this.sanitizeCart(fullCart);
+  }
+
+  /**
+   * Helper: Deep clean cart object
+   */
+  private sanitizeCart(cart: any) {
+    const {
+      userId, customerIp, customerUserAgent,
+      convertedToOrderId, abandonedAt, convertedAt,
+      createdAt, updatedAt,
+      ...cleanCart
+    } = cart;
+
+    // Filter out null values
+    Object.keys(cleanCart).forEach(key => cleanCart[key] === null && delete cleanCart[key]);
+
+    return cleanCart;
+  }
+
+  /**
+   * Helper: Deep clean item object
+   */
+  private sanitizeCartItem(item: CartItem) {
+    const {
+      productName, variantName, imageUrl,
+      cartId, stockReservationId,
+      createdAt, updatedAt,
+      ...cleanItem
+    } = item;
+
+    // Clean nested Product
+    if (cleanItem.product) {
+      const {
+        userId, businessId, createdAt, updatedAt, deletedAt,
+        ...safeProduct
+      } = cleanItem.product as any;
+
+      // Remove nulls from product
+      Object.keys(safeProduct).forEach(key => safeProduct[key] === null && delete safeProduct[key]);
+      cleanItem.product = safeProduct;
+    }
+
+    // Clean nested Variant
+    if (cleanItem.variant) {
+      const {
+        createdAt, updatedAt, costPrice,
+        ...safeVariant
+      } = cleanItem.variant as any;
+
+      // Remove nulls from variant
+      Object.keys(safeVariant).forEach(key => safeVariant[key] === null && delete safeVariant[key]);
+      cleanItem.variant = safeVariant;
+    }
+
+    // Remove nulls from item
+    Object.keys(cleanItem).forEach(key => cleanItem[key] === null && delete cleanItem[key]);
+
+    return cleanItem;
+  }
+
+  /**
+   * Get cart items with product details
+   */
+  async getCartItems(cartId: number): Promise<Partial<CartItem>[]> {
+    const items = await this.cartItemRepository.find({
       where: { cartId },
       relations: ['product', 'variant'],
       order: { createdAt: 'DESC' },
     });
+
+    return items.map(this.sanitizeCartItem);
   }
 
   /**
-   * Get full cart with items
+   * Get single cart item
    */
-  async getFullCart(userId: number | null, sessionId?: string) {
+  async getCartItem(userId: number | null, sessionId: string, itemId: number): Promise<Partial<CartItem>> {
     const cart = await this.getCart(userId, sessionId);
-    const items = await this.getCartItems(cart.id);
-    return { ...cart, items };
+    const item = await this.cartItemRepository.findOne({
+      where: { id: itemId, cartId: cart.id },
+      relations: ['product', 'variant'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('Cart item not found');
+    }
+
+    return this.sanitizeCartItem(item);
   }
 
   /**
    * Add item to cart
    */
   async addToCart(userId: number | null, sessionId: string, dto: AddToCartDto) {
-    const { productId, variantId, quantity, notes } = dto;
+    let { productId, variantId, quantity, notes } = dto;
 
     // 1. Validate Product & Variant
     const product = await this.productRepository.findOne({ where: { id: productId }, relations: ['images'] });
     if (!product) throw new NotFoundException('Product not found');
 
-    const variant = await this.productVariantRepository.findOne({ where: { id: variantId, productId } });
-    if (!variant) throw new NotFoundException('Product variant not found');
+    let variant;
+
+    if (variantId) {
+      variant = await this.productVariantRepository.findOne({ where: { id: variantId, productId } });
+      if (!variant) throw new NotFoundException('Product variant not found');
+    } else {
+      // Auto-resolve for simple products
+      if (product.hasVariation) {
+        throw new BadRequestException('This product has variations. Please select a specific option (variantId).');
+      }
+
+      // Find the "default" variant for simple products (there should be only one)
+      variant = await this.productVariantRepository.findOne({ where: { productId } });
+
+      if (!variant) {
+        // Self-healing: Create default variant if it doesn't exist
+        this.logger.warn(`Fixing missing default variant for product ${productId}`);
+
+        variant = this.productVariantRepository.create({
+          productId,
+          sku: `SKU-P-${productId}-${Date.now()}`, // Simple unique SKU
+          variantName: 'Default',
+          price: product.price,
+          quantityInStock: product.quantityInStock,
+          lowStockThreshold: product.lowStockThreshold,
+          isActive: true,
+          isDefault: true,
+          options: {}, // Empty options for simple product
+        });
+
+        variant = await this.productVariantRepository.save(variant);
+      }
+
+      // Assign resolved ID
+      variantId = variant.id;
+    }
 
     if (variant.quantityInStock < quantity) {
       throw new BadRequestException('Insufficient stock');

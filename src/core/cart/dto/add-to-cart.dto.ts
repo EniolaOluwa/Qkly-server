@@ -8,11 +8,11 @@ export class AddToCartDto {
   @IsNotEmpty()
   productId: number;
 
-  @ApiProperty({ description: 'Product Variant ID (SKU)', example: 12 })
+  @ApiProperty({ description: 'Product Variant ID (SKU). Optional for simple products.', example: 12, required: false })
   @IsInt()
   @IsPositive()
-  @IsNotEmpty()
-  variantId: number;
+  @IsOptional()
+  variantId?: number;
 
   @ApiProperty({ description: 'Quantity', example: 1, default: 1 })
   @IsInt()

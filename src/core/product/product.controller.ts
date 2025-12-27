@@ -587,6 +587,13 @@ export class ProductsController {
       sanitizedProduct.images = sanitizedProduct.images.map((img: any) => img.imageUrl);
     }
 
+    if (sanitizedProduct.variants && Array.isArray(sanitizedProduct.variants)) {
+      sanitizedProduct.variants = sanitizedProduct.variants.map((variant: any) => {
+        const { costPrice, ...safeVariant } = variant;
+        return safeVariant;
+      });
+    }
+
     return sanitizedProduct;
   }
 }

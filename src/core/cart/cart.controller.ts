@@ -16,8 +16,10 @@ import { CartService } from './cart.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Cart')
+@Public()
 @ApiHeader({
   name: 'x-session-id',
   description: 'Guest Session ID (UUID)',
@@ -55,6 +57,17 @@ export class CartController {
   async getCart(@Req() req, @Headers() headers) {
     const sessionId = this.getSessionId(headers);
     return this.cartService.getFullCart(null, sessionId);
+  }
+
+  @Get('items/:itemId')
+  @ApiOperation({ summary: 'Get single cart item' })
+  async getCartItem(
+    @Req() req,
+    @Param('itemId', ParseIntPipe) itemId: number,
+    @Headers() headers
+  ) {
+    const sessionId = this.getSessionId(headers);
+    return this.cartService.getCartItem(null, sessionId, itemId);
   }
 
   @Post('items')

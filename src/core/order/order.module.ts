@@ -1,5 +1,5 @@
 import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CartModule } from '../cart/cart.module';
@@ -21,7 +21,8 @@ import { RefundService } from './refund.service';
     ConfigModule,
     CategoryModule,
     WalletsModule,
-    PaymentModule,
+    WalletsModule,
+    forwardRef(() => PaymentModule),
     CartModule,
     TypeOrmModule.forFeature([ProductVariant]),
   ],

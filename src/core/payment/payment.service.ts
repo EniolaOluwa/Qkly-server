@@ -1,8 +1,9 @@
 // src/modules/payments/payment.service.ts
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ErrorHelper } from '../../common/utils';
+import { OrderService } from '../order/order.service';
 import {
   BankAccountDetailsDto,
   CreateVirtualAccountDto,
@@ -35,6 +36,8 @@ export class PaymentService {
   constructor(
     private readonly configService: ConfigService,
     private readonly paystackProvider: PaystackProvider,
+    @Inject(forwardRef(() => OrderService))
+    private readonly orderService: OrderService,
   ) {
     // Get configured provider from environment
     const configuredProvider = this.configService.get<string>(
@@ -236,7 +239,12 @@ export class PaymentService {
         }
       }
 
-      return await this.provider.processWebhook(payload, signature);
+      const event = await this.provider.processWebhook(payload, signature);
+
+      // Forward to OrderService for processing
+      await this.orderService.processWebhook(signature || '', payload);
+
+      return event;
     } catch (error) {
       this.logger.error('Failed to process webhook:', error.message);
       throw error;

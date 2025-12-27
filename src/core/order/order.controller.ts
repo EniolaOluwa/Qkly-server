@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, HttpStatus, Logger, Param, ParseIntPipe, Patch, Post, Query, Request, UseGuards, BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -280,6 +280,9 @@ export class OrdersController {
   // PAYMENT ENDPOINTS (Updated API Documentation)
   // ============================================================
 
+
+
+
   @Post('payment/initialize')
   @Public()
   @ApiOperation({
@@ -304,7 +307,7 @@ export class OrdersController {
   }
 
   @Post('payment/verify')
-  @ApiAuth()
+  @Public()
   @ApiOperation({
     summary: 'Verify payment status',
     description: 'Verifies payment status with configured payment provider',

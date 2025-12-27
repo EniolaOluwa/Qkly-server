@@ -130,6 +130,7 @@ export class ProductService {
     const product = await this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoinAndSelect('product.variants', 'variants')
       .leftJoin('product.category', 'category')
       .addSelect(['category.id', 'category.name'])
       .leftJoin('product.user', 'user')
@@ -263,6 +264,7 @@ export class ProductService {
     const qb = this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoinAndSelect('product.variants', 'variants')
       .leftJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.user', 'user')
       .where('product.deletedAt IS NULL')
@@ -330,6 +332,7 @@ export class ProductService {
     return qb.select([
       'product',       // all product fields
       'sizes',
+      'variants',
       'category',
       'user.id',       // just user id (or add fields if needed)
       'product.businessId', // only businessId
