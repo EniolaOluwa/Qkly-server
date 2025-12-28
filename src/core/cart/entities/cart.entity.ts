@@ -10,6 +10,7 @@ import {
   Index,
 } from 'typeorm';
 import { User } from '../../users/entity/user.entity';
+import { CartItem } from './cart-item.entity';
 
 /**
  * Cart Entity - Shopping cart
@@ -124,4 +125,7 @@ export class Cart {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToMany(() => CartItem, (item) => item.cart, { cascade: true })
+  items: CartItem[];
 }

@@ -1,9 +1,12 @@
+
 import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +14,8 @@ import { plainToInstance } from 'class-transformer';
 import { validateOrReject } from 'class-validator';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from './entities/wallet.entity';
+import { Transaction, TransactionType, TransactionFlow, TransactionStatus } from '../transaction/entity/transaction.entity';
+import { DataSource, EntityManager } from 'typeorm';
 import {
   GenerateWalletDto,
   GenerateWalletResponseDto,
@@ -33,7 +38,11 @@ export class WalletsService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
+    @InjectRepository(Transaction)
+    private readonly transactionRepository: Repository<Transaction>,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    private readonly dataSource: DataSource,
   ) { }
 
   /**
@@ -67,7 +76,7 @@ export class WalletsService {
         walletReference: generateWalletDto.walletReference ?? '',
         walletName: generateWalletDto.walletName,
         customerEmail: generateWalletDto.customerEmail,
-        customerName: generateWalletDto.customerName || `User ${userId}`,
+        customerName: generateWalletDto.customerName || `User ${userId} `,
         bvn: generateWalletDto.bvn,
         dateOfBirth: generateWalletDto.dateOfBirth,
         currencyCode: generateWalletDto.currencyCode || 'NGN',
@@ -279,9 +288,161 @@ export class WalletsService {
   }
 
   /**
+   * Get wallet transactions
+   */
+  async getWalletTransactions(userId: number, page: number = 1, limit: number = 20): Promise<any> {
+    try {
+      const skippedItems = (page - 1) * limit;
+
+      const [transactions, total] = await this.transactionRepository.findAndCount({
+        where: { userId },
+        order: { createdAt: 'DESC' },
+        take: limit,
+        skip: skippedItems,
+      });
+
+      return {
+        data: transactions,
+        meta: {
+          totalItems: total,
+          itemCount: transactions.length,
+          itemsPerPage: limit,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to retrieve transactions', error.stack);
+      ErrorHelper.InternalServerErrorException('Failed to retrieve transactions');
+    }
+  }
+
+  /**
    * Get payment methods for provider
    * Helper method for backward compatibility
    */
+  /**
+   * Credit user wallet (Internal method)
+   * Handles local DB balance update and transaction logging
+   */
+  async creditWallet(
+    userId: number,
+    amount: number,
+    reference: string,
+    description: string,
+    manager?: EntityManager,
+    metadata?: any,
+  ): Promise<Wallet> {
+    const execute = async (em: EntityManager) => {
+      const wallet = await em.findOne(Wallet, {
+        where: { userId },
+      });
+
+      if (!wallet) {
+        ErrorHelper.NotFoundException('User wallet not found');
+      }
+
+      // Update balance
+      wallet.availableBalance = Number(wallet.availableBalance) + Number(amount);
+      wallet.ledgerBalance = Number(wallet.ledgerBalance) + Number(amount);
+
+      await em.save(Wallet, wallet);
+
+      // Create Transaction Record
+      const transaction = em.create(Transaction, {
+        userId,
+        reference,
+        type: TransactionType.WALLET_FUNDING, // Default, can be overridden if passed, but for now fixed or we add param
+        flow: TransactionFlow.CREDIT,
+        status: TransactionStatus.SUCCESS,
+        amount,
+        netAmount: amount,
+        currency: wallet.currency,
+        description,
+        balanceBefore: Number(wallet.availableBalance) - Number(amount),
+        balanceAfter: Number(wallet.availableBalance),
+        metadata,
+      });
+
+      // Override type if metadata specifies it (hacky but flexible)
+      if (metadata?.transactionType) {
+        transaction.type = metadata.transactionType;
+      }
+
+      await em.save(Transaction, transaction);
+
+      return wallet;
+    };
+
+    if (manager) {
+      return execute(manager);
+    } else {
+      return this.dataSource.transaction(execute);
+    }
+  }
+
+  /**
+   * Debit user wallet (Internal method)
+   */
+  async debitWallet(
+    userId: number,
+    amount: number,
+    reference: string,
+    description: string,
+    manager?: EntityManager,
+    metadata?: any,
+  ): Promise<Wallet> {
+    const execute = async (em: EntityManager) => {
+      const wallet = await em.findOne(Wallet, {
+        where: { userId },
+      });
+
+      if (!wallet) {
+        ErrorHelper.NotFoundException('User wallet not found');
+      }
+
+      if (Number(wallet.availableBalance) < Number(amount)) {
+        ErrorHelper.BadRequestException('Insufficient wallet balance');
+      }
+
+      // Update balance
+      wallet.availableBalance = Number(wallet.availableBalance) - Number(amount);
+      wallet.ledgerBalance = Number(wallet.ledgerBalance) - Number(amount);
+
+      await em.save(Wallet, wallet);
+
+      // Create Transaction Record
+      const transaction = em.create(Transaction, {
+        userId,
+        reference,
+        type: TransactionType.WITHDRAWAL, // Default
+        flow: TransactionFlow.DEBIT,
+        status: TransactionStatus.SUCCESS,
+        amount,
+        netAmount: amount,
+        currency: wallet.currency,
+        description,
+        balanceBefore: Number(wallet.availableBalance) + Number(amount),
+        balanceAfter: Number(wallet.availableBalance),
+        metadata,
+      });
+
+      if (metadata?.transactionType) {
+        transaction.type = metadata.transactionType;
+      }
+
+      await em.save(Transaction, transaction);
+
+      return wallet;
+    };
+
+    if (manager) {
+      return execute(manager);
+    } else {
+      return this.dataSource.transaction(execute);
+    }
+  }
+
   getPaymentMethodsForProvider(paymentMethod: string): string[] {
     return this.paymentService.getPaymentMethodsForProvider(paymentMethod);
   }

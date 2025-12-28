@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Query,
   Request,
   UseGuards,
   ValidationPipe
@@ -10,19 +11,21 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
+import { PaginationDto } from '../../common/queries/dto';
 import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
-import {
-  GenerateWalletDto,
-  GenerateWalletResponseDto
-} from './dto/wallet.dto';
 import {
   WalletTransferRequestDto,
   WalletTransferResponseDto
 } from './dto/wallet-transfer.dto';
+import {
+  GenerateWalletDto,
+  GenerateWalletResponseDto
+} from './dto/wallet.dto';
 import { WalletsService } from './wallets.service';
 
 @ApiTags('Wallets')
@@ -139,7 +142,31 @@ export class WalletsController {
     return await this.walletsService.transferToWalletOrBank(transferDto);
   }
 
-  // @Post('payments/initialize')
+
+
+  @Get('transactions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get wallet transactions',
+    description: 'Retrieves all financial transactions (credits, debits, refunds, settlements) for the user wallet.',
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default 20)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Transactions retrieved successfully',
+  })
+  async getWalletTransactions(
+    @Request() req,
+    @Query() query: PaginationDto,
+  ) {
+    return await this.walletsService.getWalletTransactions(
+      req.user.userId,
+      query.page || 1,
+      query.limit || 20,
+    );
+  }
   // @UseGuards(JwtAuthGuard)
   // @ApiBearerAuth()
   // @ApiOperation({

@@ -9,7 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { User } from '../entity/user.entity';
-import { KYCStatus, KYCProvider } from '../../../common/enums/user.enum';
+import { KYCStatus, KYCProvider, KYCTier } from '../../../common/enums/user.enum';
 
 /**
  * UserKYC Entity - Know Your Customer verification data
@@ -95,6 +95,28 @@ export class UserKYC {
    */
   @Column({ type: 'text', nullable: true })
   adminNotes: string;
+
+  /**
+   * KYC Tier Level
+   * TIER_1: Phone Verified
+   * TIER_2: BVN + Selfie Verified (Basic Wallet)
+   * TIER_3: ID Card + Address Verified (Higher Limits)
+   */
+  @Column({
+    type: 'enum',
+    enum: KYCTier,
+    default: KYCTier.TIER_1,
+  })
+  tier: KYCTier;
+
+  @Column({ nullable: true })
+  idType: string;
+
+  @Column({ nullable: true })
+  idNumber: string;
+
+  @Column({ nullable: true })
+  idImageUrl: string;
 
   @CreateDateColumn()
   createdAt: Date;

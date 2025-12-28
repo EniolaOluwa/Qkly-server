@@ -8,6 +8,7 @@ import { JwtStrategy } from '../../common/auth/jwt.strategy';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { WalletsModule } from '../wallets/wallets.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { Otp } from './entity/otp.entity';
 import { User } from './entity/user.entity';
 import { UserProfile } from './entities/user-profile.entity';
@@ -17,6 +18,7 @@ import { UserOnboarding } from './entities/user-onboarding.entity';
 import { UsersController } from './users.controller';
 import { Order } from '../order/entity/order.entity';
 import { UsersService } from './users.service';
+import { KycService } from './kyc.service';
 import { UserProgressModule } from '../user-progress/user-progress.module';
 import { Role } from '../roles/entities/role.entity';
 
@@ -34,10 +36,11 @@ import { Role } from '../roles/entities/role.entity';
       }),
     }),
     WalletsModule,
+    CloudinaryModule,
     forwardRef(() => UserProgressModule),
   ],
   controllers: [UsersController],
-  providers: [UsersService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
-  exports: [UsersService, RoleGuard, JwtStrategy, JwtModule, PassportModule],
+  providers: [UsersService, KycService, JwtStrategy, RoleGuard, WalletProvisioningUtil],
+  exports: [UsersService, KycService, RoleGuard, JwtStrategy, JwtModule, PassportModule],
 })
 export class UsersModule { }

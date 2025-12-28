@@ -57,7 +57,15 @@ export class CartScheduler {
         nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Schedule 1st reminder in 24h
       });
 
-      await this.abandonmentRepository.save(abandonment);
+      try {
+        await this.abandonmentRepository.save(abandonment);
+      } catch (error) {
+        if (error.code === '23505') {
+          this.logger.warn(`Cart ${cart.id} already marked as abandoned (race condition skipped)`);
+          continue;
+        }
+        throw error;
+      }
 
       // Update cart status to ABANDONED so we don't pick it up again as "active"
       cart.status = 'ABANDONED';

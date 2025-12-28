@@ -8,6 +8,7 @@ import { PaymentModule } from '../payment/payment.module';
 import { ProductVariant } from '../product/entity/product-variant.entity';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { WalletsModule } from '../wallets/wallets.module';
+import { SettlementsModule } from '../settlements/settlements.module';
 import { OrderMetricsService } from './order-metric.service';
 import { OrderMetricsController } from './order-metrics.controller';
 import { OrdersController } from './order.controller';
@@ -21,9 +22,10 @@ import { RefundService } from './refund.service';
     ConfigModule,
     CategoryModule,
     WalletsModule,
-    WalletsModule,
+
     forwardRef(() => PaymentModule),
     CartModule,
+    SettlementsModule,
     TypeOrmModule.forFeature([ProductVariant]),
   ],
   controllers: [OrdersController, OrderMetricsController],

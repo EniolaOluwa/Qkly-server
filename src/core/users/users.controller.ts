@@ -43,6 +43,7 @@ import {
   ResetPasswordResponseDto,
   VerifyCreatePinOtpDto,
   VerifyCreatePinOtpResponseDto,
+  UpgradeToTier3Dto,
   VerifyKycDto,
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
@@ -55,11 +56,16 @@ import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/use
 import { UsersService } from './users.service';
 
 
+import { KycService } from './kyc.service';
+
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly kycService: KycService,
+  ) { }
 
   @Public()
   @Post('register')
@@ -313,7 +319,7 @@ export class UsersController {
       ErrorHelper.BadRequestException('Selfie image is required');
     }
 
-    const data = this.usersService.verifyBvnWithSelfie(
+    const data = await this.kycService.verifyBvnWithSelfie(
       req.user.userId,
       verifyKycDto.bvn,
       selfieImage,
@@ -323,6 +329,51 @@ export class UsersController {
       message: 'BVN verification completed successfully',
       data: data
     })
+  }
+
+  @Post('upgrade-tier-3')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('idImage', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG, PNG images and PDF documents are supported.'), false);
+      }
+    },
+  }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Upgrade to KYC Tier 3 (ID Verification)',
+    description: 'Submit ID document for Tier 3 verification. Requires Tier 2 status. Manual review required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'ID document submitted successfully',
+  })
+  async upgradeTier3(
+    @Body(ValidationPipe) dto: UpgradeToTier3Dto,
+    @UploadedFile() idImage: Express.Multer.File,
+    @Request() req,
+  ) {
+    if (!idImage) ErrorHelper.BadRequestException('ID Image is required');
+
+    const data = await this.kycService.upgradeToTier3(
+      req.user.userId,
+      dto.idType,
+      dto.idNumber,
+      idImage,
+    );
+
+    return HttpResponse.success({
+      message: 'ID Document submitted for review',
+      data,
+    });
   }
 
 

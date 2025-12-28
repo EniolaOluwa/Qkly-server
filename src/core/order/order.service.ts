@@ -16,6 +16,7 @@ import { PaymentService } from '../payment/payment.service';
 import { ProductVariant } from '../product/entity/product-variant.entity';
 import { Product } from '../product/entity/product.entity';
 import { Settlement } from '../settlements/entities/settlement.entity';
+import { SettlementsService } from '../settlements/settlements.service'; // Import Service
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
@@ -63,6 +64,7 @@ export class OrderService {
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly cartService: CartService,
+    private readonly settlementsService: SettlementsService, // Inject Service
     private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => PaymentService))
@@ -1536,8 +1538,17 @@ export class OrderService {
 
       await this.processOrderPayment(order, paymentData, queryRunner.manager);
       await queryRunner.commitTransaction();
-
       this.logger.log(`Processed verified payment for order ${order.id}: ${transaction.paymentStatus}`);
+
+      // Trigger Instant Settlement (Best effort)
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        try {
+          await this.settlementsService.processInstantSettlement(order);
+        } catch (settlementError) {
+          this.logger.error(`Failed to process settlement for order ${order.id}`, settlementError);
+          // Don't throw, let the order succeed as PAID. Admin can reconcile.
+        }
+      }
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.logger.error(`Failed to process verified payment: ${error.message}`, error.stack);
@@ -1932,6 +1943,18 @@ export class OrderService {
       try {
         const refundAmount = pendingRefund.amountApproved ?? pendingRefund.amountRequested;
         const note = pendingRefund.reasonNotes || String(pendingRefund.reason);
+
+        // 1. Reverse Settlement (Debit Merchant Wallet)
+        // We must successfully debit merchant before processing refund to customer
+        try {
+          await this.settlementsService.reverseSettlement(orderId, refundAmount, note);
+        } catch (settlementError) {
+          this.logger.error(`Failed to reverse settlement for order ${orderId}: ${settlementError.message}`);
+          // Depending on policy, we might fail here.
+          // "If merchant has no funds, can we refund customer?"
+          // Platform choice. STRICT mode: Throw.
+          throw new Error(`Refund failed: Unable to recover funds from merchant wallet. ${settlementError.message}`);
+        }
 
         const refundResponse = await this.paymentService.createRefund({
           transactionReference: order.payment.providerReference,

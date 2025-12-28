@@ -4,12 +4,15 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BankAccount } from './entities/bank-account.entity';
 import { PaymentService } from '../payment/payment.service';
 import { User } from '../users/entity/user.entity';
+import { from } from 'rxjs';
 
 @Injectable()
 export class BankAccountsService {
@@ -20,6 +23,7 @@ export class BankAccountsService {
     private readonly bankAccountRepository: Repository<BankAccount>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
   ) { }
 

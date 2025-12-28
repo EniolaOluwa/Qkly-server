@@ -14,6 +14,7 @@ import { Order } from './entity/order.entity';
 import { OrderRefund } from './entity/order-refund.entity';
 import { OrderStatus, RefundStatus as RefundStatusEnum, RefundType as RefundTypeEnum, RefundMethod as RefundMethodEnum } from '../../common/enums/order.enum';
 import { PaymentStatus } from '../../common/enums/payment.enum';
+import { WalletsService } from '../wallets/wallets.service'; // Import WalletsService
 
 
 @Injectable()
@@ -28,6 +29,7 @@ export class RefundService {
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackProvider: PaystackProvider,
+    private readonly walletsService: WalletsService, // Inject WalletsService
     private readonly dataSource: DataSource,
   ) { }
 
@@ -59,12 +61,26 @@ export class RefundService {
       // 2. Calculate refund amounts
       const refundCalculation = this.calculateRefundAmounts(order, refundType, amount);
 
-      // 3. Generate refund reference
-      const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
-
       this.logger.log(`Processing ${refundType} refund for order ${order.id}: ₦${refundCalculation.totalRefund}`);
 
-      // 4. Process refund on Paystack (refund to customer)
+      // 4. Deduct from business wallet FIRST (Ensure funds available and lock them)
+      // Using WalletsService to update Balance and Log Transaction in the same transaction
+      const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+      await this.walletsService.debitWallet(
+        order.business.userId,
+        refundCalculation.businessRefund,
+        refundReference,
+        `Refund for order ${order.orderReference}`,
+        queryRunner.manager,
+        {
+          transactionType: TransactionType.REFUND,
+          orderId: order.id,
+          reason
+        }
+      );
+
+      // 5. Process refund on Paystack (refund to customer)
       const paystackRefund = await this.paystackProvider.createRefund({
         transactionReference: order.transactionReference,
         amount: refundCalculation.totalRefund,
@@ -74,17 +90,7 @@ export class RefundService {
 
       this.logger.log(`Paystack refund successful: ${paystackRefund.refundReference}`);
 
-      // 5. Deduct from business wallet (they need to return their portion)
-      await this.deductFromBusinessWallet(
-        order.business.userId,
-        order.businessId,
-        order.id,
-        refundCalculation.businessRefund,
-        refundReference,
-        queryRunner,
-      );
-
-      // 6. Record all transactions
+      // 6. Record Platform Transaction (Customer Refund from Platform View)
       const refundTransactions: Array<{
         type: string;
         amount: number;
@@ -94,6 +100,8 @@ export class RefundService {
 
 
       // Customer refund transaction (platform perspective)
+      // Note: walletsService.debitWallet already logged the Business Debit Side.
+      // We log the Platform Credit/Debit side here if needed, or just the Result.
       const customerRefundTxn = await queryRunner.manager.save(Transaction, {
         userId: null, // Platform transaction
         businessId: null,
@@ -123,33 +131,11 @@ export class RefundService {
         status: 'SUCCESS',
       });
 
-      // Business refund transaction (deduction from their wallet)
-      const businessRefundTxn = await queryRunner.manager.save(Transaction, {
-        userId: order.business.userId,
-        businessId: order.businessId,
-        orderId: order.id,
-        type: TransactionType.REFUND,
-        flow: TransactionFlow.DEBIT,
-        amount: refundCalculation.businessRefund,
-        fee: 0,
-        netAmount: refundCalculation.businessRefund,
-        status: TransactionStatus.SUCCESS,
-        reference: `${refundReference}-BUSINESS`,
-        providerReference: paystackRefund.refundReference,
-        description: `Business refund for order ${order.orderReference}`,
-        paymentProvider: 'PAYSTACK',
-        metadata: {
-          orderId: order.id,
-          refundType,
-          reason,
-        },
-        settledAt: new Date(),
-      });
-
+      // Track Business Refund (already done via debitWallet, but adding to list for metadata)
       refundTransactions.push({
         type: 'BUSINESS_REFUND',
         amount: refundCalculation.businessRefund,
-        reference: businessRefundTxn.reference,
+        reference: refundReference,
         status: 'SUCCESS',
       });
 
@@ -170,7 +156,7 @@ export class RefundService {
         approvedBy: refundedByUserId,
         processedBy: refundedByUserId,
         platformRefundReference: customerRefundTxn.reference,
-        businessRefundReference: businessRefundTxn.reference,
+        businessRefundReference: refundReference,
         providerMetadata: {
           paystackRefund,
           transactions: refundTransactions,
@@ -305,67 +291,10 @@ export class RefundService {
   }
 
 
-  private async deductFromBusinessWallet(
-    userId: number,
-    businessId: number,
-    orderId: number,
-    amount: number,
-    refundReference: string,
-    queryRunner: any,
-  ): Promise<void> {
-    try {
-      // Get current balance
-      const balance = await this.getBusinessBalance(userId);
-
-      if (balance < amount) {
-        ErrorHelper.BadRequestException(
-          `Insufficient wallet balance for refund. Required: ₦${amount}, Available: ₦${balance}`,
-        );
-      }
-
-      // Record deduction transaction
-      await queryRunner.manager.save(Transaction, {
-        userId,
-        businessId,
-        orderId,
-        type: TransactionType.REFUND,
-        flow: TransactionFlow.DEBIT,
-        amount,
-        fee: 0,
-        netAmount: amount,
-        status: TransactionStatus.SUCCESS,
-        reference: `${refundReference}-DEDUCT`,
-        description: `Wallet deduction for refund ${refundReference}`,
-        paymentProvider: 'PAYSTACK',
-        metadata: {
-          refundReference,
-        },
-        settledAt: new Date(),
-      });
-
-      this.logger.log(`Deducted ₦${amount} from business ${businessId} wallet`);
-    } catch (error) {
-      this.logger.error('Failed to deduct from business wallet:', error);
-      throw error;
-    }
-  }
 
 
-  private async getBusinessBalance(userId: number): Promise<number> {
-    const result = await this.transactionRepository
-      .createQueryBuilder('txn')
-      .select('SUM(CASE WHEN txn.flow = :credit THEN txn.netAmount ELSE 0 END)', 'credits')
-      .addSelect('SUM(CASE WHEN txn.flow = :debit THEN txn.netAmount ELSE 0 END)', 'debits')
-      .where('txn.userId = :userId', { userId })
-      .andWhere('txn.status = :status', { status: TransactionStatus.SUCCESS })
-      .setParameter('credit', TransactionFlow.CREDIT)
-      .setParameter('debit', TransactionFlow.DEBIT)
-      .getRawOne();
 
-    const credits = parseFloat(result.credits || '0');
-    const debits = parseFloat(result.debits || '0');
-    return credits - debits;
-  }
+
 
 
   private async returnInventory(order: Order, queryRunner: any): Promise<void> {

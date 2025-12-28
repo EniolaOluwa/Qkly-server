@@ -254,4 +254,48 @@ export class NotificationService {
     `;
     await this.sendEmail(email, subject, html);
   }
+
+
+  async sendKycApprovedNotification(email: string, firstName: string, tier: string) {
+    const subject = 'KYC Verification Approved';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2 style="color: green;">Verification Successful!</h2>
+        <p>Hi ${firstName},</p>
+        <p>Congratulations! Your identity verification has been successfully approved.</p>
+        <p><strong>Current Level:</strong> ${tier}</p>
+        <p>You can now access higher limits and features on Qkly.</p>
+        <p>Thank you for choosing Qkly.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendKycRejectedNotification(email: string, firstName: string, reason: string) {
+    const subject = 'KYC Verification Failed';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2 style="color: red;">Verification Failed</h2>
+        <p>Hi ${firstName},</p>
+        <p>Unfortunately, your identity verification could not be completed.</p>
+        <p><strong>Reason:</strong> ${reason}</p>
+        <p>Please review your details and try again, or contact support for assistance.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendKycUnderReviewNotification(email: string, firstName: string) {
+    const subject = 'KYC Document Submitted';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>Document Under Review</h2>
+        <p>Hi ${firstName},</p>
+        <p>We have received your ID document for verification.</p>
+        <p>Our team will review your submission and notify you shortly via email.</p>
+        <p>This process usually takes 24-48 hours.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
 }

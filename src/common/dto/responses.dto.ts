@@ -731,6 +731,32 @@ export class KycVerificationResponseDto {
   last_name?: string;
 }
 
+export class UpgradeToTier3Dto {
+  @ApiProperty({
+    description: 'Type of ID document (e.g., NIN, PASSPORT, DRIVERS_LICENSE)',
+    example: 'NIN',
+  })
+  @IsString()
+  @IsNotEmpty()
+  idType: string;
+
+  @ApiProperty({
+    description: 'ID Document Number',
+    example: 'A0000000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  idNumber: string;
+
+  @ApiProperty({
+    description: 'Image of the ID document',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  idImage?: Express.Multer.File;
+}
+
 export class KycErrorResponseDto {
   @ApiProperty({
     description: 'Error status',

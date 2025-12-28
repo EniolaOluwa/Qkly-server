@@ -1,5 +1,5 @@
 import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { PaymentModule } from '../payment/payment.module';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
@@ -11,7 +11,7 @@ import { WalletsService } from './wallets.service';
   imports: [
     HttpModule,
     SharedRepositoryModule,
-    PaymentModule,
+    forwardRef(() => PaymentModule),
   ],
   providers: [WalletsService, WalletProvisioningUtil],
   controllers: [WalletsController],
