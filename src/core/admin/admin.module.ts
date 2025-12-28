@@ -26,6 +26,8 @@ import { AdminUsersController } from './admin-users.controller';
 import { AdminOrderController } from './admin-order.controller';
 import { AdminProductsController } from './admin-products.controller';
 import { OrderItem } from '../order/entity/order-items.entity';
+import { AdminTransactionsController } from './admin-transactions.controller';
+import { TransactionModule } from '../transaction/transaction.module';
 
 @Module({
   imports: [
@@ -38,7 +40,8 @@ import { OrderItem } from '../order/entity/order-items.entity';
     TrafficModule,
     CategoryModule,
     BusinessesModule,
-    RolesModule
+    RolesModule,
+    TransactionModule
   ],
   controllers: [
     AdminUsersController,
@@ -48,7 +51,8 @@ import { OrderItem } from '../order/entity/order-items.entity';
     AdminCategoriesController,
     AdminTrafficController,
     AdminOrderController,
-    AdminProductsController
+    AdminProductsController,
+    AdminTransactionsController
   ],
   providers: [AdminService],
   exports: [AdminService],

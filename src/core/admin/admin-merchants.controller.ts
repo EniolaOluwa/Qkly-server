@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from "@nestjs/common";
+import { Controller, Get, Query, Param, ParseIntPipe } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from "@nestjs/swagger";
 import { Admin } from "../../common/decorators/admin.decorator";
 import { BusinessesService } from "../businesses/businesses.service";
@@ -6,6 +6,7 @@ import { MerchantFilterDto } from "../businesses/dto/merchant-filter.dto";
 import { MerchantsListResponseDto } from "../businesses/dto/merchants-list-response.dto";
 import { AdminService } from "../admin/admin.service";
 import { MerchantMetricsResponse, RecentMerchantMetricsQueryDto } from "../admin/dto/merchant-metrics.dto";
+import { MerchantDetailsResponseDto } from "./dto/merchant-details.dto";
 
 @ApiTags('Admin Merchants')
 @Admin()
@@ -101,5 +102,25 @@ export class AdminMerchantsController {
   })
   async gettotalMerchantMetrics(): Promise<MerchantMetricsResponse> {
     return this.adminService.totalMerchantMetrics();
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get merchant details',
+    description: 'Retrieves detailed information for a specific merchant by ID, including sales stats, KYC status, and wallet info.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Merchant details retrieved successfully',
+    type: MerchantDetailsResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Not found - Merchant does not exist',
+  })
+  async getMerchantDetails(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<MerchantDetailsResponseDto> {
+    return this.businessesService.getMerchantDetails(id);
   }
 }

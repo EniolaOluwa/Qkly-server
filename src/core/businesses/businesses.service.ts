@@ -475,20 +475,6 @@ export class BusinessesService {
       .leftJoin('orders', 'order', 'order.businessId = business.id')
       .leftJoin('products', 'product', 'product.businessId = business.id')
       .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
-      .select([
-        'business.id',
-        'business.businessName',
-        'business.storeName',
-        'business.slug',
-        'business.location',
-        'business.createdAt',
-        'business.updatedAt',
-        'user.email',
-        'user.role',
-        'businessType.name',
-        'paymentAccount.isSubaccountActive',
-        'paymentAccount.revenueSharePercentage',
-      ])
       .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
       .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
       .addSelect('COUNT(DISTINCT product.id)', 'totalProducts')
@@ -501,13 +487,17 @@ export class BusinessesService {
     queryBuilder = queryBuilder
       .groupBy('business.id')
       .addGroupBy('user.id')
-      .addGroupBy('businessType.id');
+      .addGroupBy('user.roleId') // Postgres strict group by
+      .addGroupBy('role.id')
+      .addGroupBy('businessType.id')
+      .addGroupBy('paymentAccount.id');
 
     // Get count query before applying pagination
     const countQueryBuilder = this.businessRepo
       .createQueryBuilder('business')
       .leftJoin('business.user', 'user')
-      .leftJoin('business.businessType', 'businessType');
+      .leftJoin('business.businessType', 'businessType')
+      .leftJoin('business.paymentAccount', 'paymentAccount');
 
     // Apply same filters to count query
     const countQuery = this.applyFilters(countQueryBuilder, filterDto);
@@ -520,7 +510,15 @@ export class BusinessesService {
 
     // Map results to DTOs
     const merchantsData: MerchantStatsDto[] = merchants.entities.map((business, index) => {
-      const raw = merchants.raw[index];
+      // Find the raw result for this entity (order matches because of same query)
+      // Note: getRawAndEntities returns entities and raw results in same order
+      // However, if we skip/take, we need to be careful. But typeorm usually aligns them.
+      // To be safer, we can match by ID if needed, but index usually works if query is straightforward.
+      // Actually, raw results from getRawAndEntities are flat.
+
+      // Let's find the matching raw result by id to be robust
+      const raw = merchants.raw.find(r => r.business_id === business.id);
+
       return {
         id: business.id,
         businessName: business.businessName,
@@ -529,10 +527,10 @@ export class BusinessesService {
         ownerEmail: business.user?.email || 'N/A',
         businessType: business.businessType?.name || 'N/A',
         location: business.location,
-        totalOrders: parseInt(raw.totalOrders) || 0,
-        totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
-        totalProducts: parseInt(raw.totalProducts) || 0,
-        totalTransactions: parseInt(raw.totalTransactions) || 0,
+        totalOrders: raw ? parseInt(raw.totalOrders) : 0,
+        totalSalesVolume: raw ? parseFloat(raw.totalSalesVolume).toFixed(2) : '0.00',
+        totalProducts: raw ? parseInt(raw.totalProducts) : 0,
+        totalTransactions: raw ? parseInt(raw.totalTransactions) : 0,
         isSubaccountActive: business.paymentAccount?.status === PaymentAccountStatus.ACTIVE,
         revenueSharePercentage: '95.00', // Platform default revenue share
         dateRegistered: business.createdAt,
@@ -548,6 +546,62 @@ export class BusinessesService {
     return {
       data: merchantsData,
       meta,
+    };
+  }
+
+  async getMerchantDetails(id: number): Promise<any> {
+    const business = await this.businessRepo
+      .createQueryBuilder('business')
+      .leftJoinAndSelect('business.user', 'user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.kyc', 'kyc')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoinAndSelect('business.paymentAccount', 'paymentAccount')
+      .leftJoin('orders', 'order', 'order.businessId = business.id')
+      .leftJoin('products', 'product', 'product.businessId = business.id')
+      .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
+      .where('business.id = :id', { id })
+      // Use getRawAndEntities to get the full object + aggregates
+      .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
+      .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
+      .addSelect('COUNT(DISTINCT product.id)', 'totalProducts')
+      .addSelect('COUNT(DISTINCT transaction.id)', 'totalTransactions')
+      .groupBy('business.id')
+      .addGroupBy('user.id')
+      .addGroupBy('profile.id')
+      .addGroupBy('kyc.id')
+      .addGroupBy('role.id')
+      .addGroupBy('businessType.id')
+      .addGroupBy('paymentAccount.id')
+      .getRawAndEntities();
+
+    if (!business || !business.entities.length) {
+      ErrorHelper.NotFoundException(`Merchant with ID ${id} not found`);
+    }
+
+    const entity = business.entities[0];
+    const raw = business.raw[0];
+
+    return {
+      id: entity.id,
+      businessName: entity.businessName,
+      storeName: entity.storeName,
+      slug: entity.slug,
+      ownerEmail: entity.user?.email || 'N/A',
+      userId: entity.user?.id,
+      phoneNumber: entity.user?.profile?.phone || null,
+      kycTier: entity.user?.kyc?.tier || null,
+      businessType: entity.businessType?.name || 'N/A',
+      location: entity.location,
+      totalOrders: parseInt(raw.totalOrders) || 0,
+      totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
+      totalProducts: parseInt(raw.totalProducts) || 0,
+      totalTransactions: parseInt(raw.totalTransactions) || 0,
+      isSubaccountActive: entity.paymentAccount?.status === PaymentAccountStatus.ACTIVE,
+      revenueSharePercentage: '95.00', // Default
+      dateRegistered: entity.createdAt,
+      lastUpdated: entity.updatedAt,
     };
   }
 

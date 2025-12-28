@@ -192,7 +192,7 @@ export class AdminProductsController {
           'product.price',
           'product.quantityInStock',
           'product.hasVariation',
-          'product.images',
+          'product.imageUrls', // Use the correct column name
           'product.createdAt',
           'product.updatedAt',
           'business.id',

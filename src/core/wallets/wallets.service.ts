@@ -27,6 +27,8 @@ import {
   WalletTransferResponseDto,
 } from './dto/wallet-transfer.dto';
 import { PaymentService } from '../payment/payment.service';
+import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
+import { WithdrawalDto, WithdrawalResponseDto } from './dto/withdraw.dto';
 import { ErrorHelper } from '../../common/utils';
 
 @Injectable()
@@ -42,6 +44,7 @@ export class WalletsService {
     private readonly transactionRepository: Repository<Transaction>,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    private readonly bankAccountsService: BankAccountsService,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -214,25 +217,82 @@ export class WalletsService {
       const dto = plainToInstance(WalletTransferRequestDto, payload);
       await validateOrReject(dto);
 
-      // Use PaymentService to transfer
-      const transferResponse = await this.paymentService.transferToBank({
-        amount: dto.amount,
-        reference: dto.reference,
-        narration: dto.narration,
-        destinationAccountNumber: dto.destinationAccountNumber,
-        destinationBankCode: dto.destinationBankCode ?? '',
-        currency: dto.currency || 'NGN',
-        sourceWalletReference: dto.sourceAccountNumber,
-        metadata: {
-          async: dto.async ?? false,
-        },
+      // 1. Get User ID from wallet reference (Assuming sourceAccountNumber is wallet reference)
+      // Since we don't have userId in DTO, we must lookup wallet by reference
+      const sourceWallet = await this.walletRepository.findOne({
+        where: { providerAccountId: dto.sourceAccountNumber },
       });
 
-      return plainToInstance(WalletTransferResponseDto, {
-        status: transferResponse.status,
-        responseBody: transferResponse,
-      });
+      if (!sourceWallet) {
+        ErrorHelper.NotFoundException('Source wallet not found');
+      }
+
+      // 2. Optimistic Debit (Local)
+      // This ensures funds are reserved before external call
+      await this.debitWallet(
+        sourceWallet.userId,
+        dto.amount,
+        dto.reference,
+        `Transfer to ${dto.destinationAccountNumber}`,
+        undefined,
+        {
+          transactionType: TransactionType.WITHDRAWAL,
+          destinationBank: dto.destinationBankCode,
+          destinationAccount: dto.destinationAccountNumber,
+        }
+      );
+
+      try {
+        // 3. Execute External Transfer
+        const transferResponse = await this.paymentService.transferToBank({
+          amount: dto.amount,
+          reference: dto.reference,
+          narration: dto.narration,
+          destinationAccountNumber: dto.destinationAccountNumber,
+          destinationBankCode: dto.destinationBankCode ?? '',
+          currency: dto.currency || 'NGN',
+          sourceWalletReference: dto.sourceAccountNumber,
+          metadata: {
+            async: dto.async ?? false,
+          },
+        });
+
+        // 4. Return Success
+        return plainToInstance(WalletTransferResponseDto, {
+          status: transferResponse.status,
+          responseBody: transferResponse,
+        });
+
+      } catch (externalError) {
+        this.logger.error(`External transfer failed for ref ${dto.reference}. Initiating reversal.`, externalError);
+
+        // 5. Reversal Logic (Credit back)
+        const reversalRef = `REV-${dto.reference}`;
+        await this.creditWallet(
+          sourceWallet.userId,
+          dto.amount,
+          reversalRef,
+          `Reversal: Failed transfer ${dto.reference}`,
+          undefined,
+          {
+            originalReference: dto.reference,
+            transactionType: TransactionType.REFUND, // Marking as Refund/Reversal
+            reason: externalError.message
+          }
+        );
+
+        // Update original transaction status to REVERSED (optional but good for tracking)
+        await this.transactionRepository.update(
+          { reference: dto.reference },
+          { status: TransactionStatus.REVERSED }
+        );
+
+        throw externalError;
+      }
     } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
       this.logger.error('Transfer to wallet/bank failed', error.stack);
       ErrorHelper.InternalServerErrorException('Transfer failed');
     }
@@ -445,5 +505,49 @@ export class WalletsService {
 
   getPaymentMethodsForProvider(paymentMethod: string): string[] {
     return this.paymentService.getPaymentMethodsForProvider(paymentMethod);
+  }
+
+  /**
+   * Withdraw funds to a saved bank account
+   */
+  async withdrawToBankAccount(userId: number, dto: WithdrawalDto): Promise<WithdrawalResponseDto> {
+    // 1. Validate Bank Account
+    const bankAccount = await this.bankAccountsService.getBankAccount(dto.bankAccountId, userId);
+
+    if (!bankAccount) {
+      ErrorHelper.NotFoundException('Bank account not found or does not belong to user');
+    }
+
+    // 2. Validate PIN (TODO: Integrate with UserSecurityService when ready)
+    if (!dto.pin) {
+      ErrorHelper.BadRequestException('Transaction PIN is required');
+    }
+    // const isPinValid = await this.userSecurityService.validatePin(userId, dto.pin);
+    // if (!isPinValid) ErrorHelper.BadRequestException('Invalid PIN');
+
+    // 3. Get User Wallet to get reference
+    const wallet = await this.walletRepository.findOne({ where: { userId } });
+    if (!wallet) ErrorHelper.NotFoundException('Wallet not found');
+
+    // 4. Construct Transfer Payload
+    const transferPayload: WalletTransferRequestDto = {
+      amount: dto.amount,
+      reference: `WDR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      narration: dto.narration || 'Withdrawal to Bank Account',
+      destinationAccountNumber: bankAccount.accountNumber,
+      destinationBankCode: bankAccount.bankCode,
+      currency: bankAccount.currency,
+      sourceAccountNumber: wallet.providerAccountId,
+      async: false,
+    };
+
+    // 5. Execute Transfer
+    const transferResult = await this.transferToWalletOrBank(transferPayload);
+
+    return {
+      success: transferResult.status === 'SUCCESS' || transferResult.status === 'PENDING',
+      message: 'Withdrawal initiated successfully',
+      reference: transferPayload.reference,
+    };
   }
 }

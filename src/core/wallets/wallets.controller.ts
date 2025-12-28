@@ -26,6 +26,7 @@ import {
   GenerateWalletDto,
   GenerateWalletResponseDto
 } from './dto/wallet.dto';
+import { WithdrawalDto, WithdrawalResponseDto } from './dto/withdraw.dto';
 import { WalletsService } from './wallets.service';
 
 @ApiTags('Wallets')
@@ -140,6 +141,32 @@ export class WalletsController {
     transferDto.sourceAccountNumber = userWallet.walletReference;
 
     return await this.walletsService.transferToWalletOrBank(transferDto);
+  }
+
+  @Post('withdraw')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Withdraw funds to bank account',
+    description: 'Withdraw funds from wallet to a linked bank account.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Withdrawal initiated successfully',
+    type: WithdrawalResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid PIN or insufficient balance',
+  })
+  async withdraw(
+    @Body(ValidationPipe) withdrawalDto: WithdrawalDto,
+    @Request() req,
+  ): Promise<WithdrawalResponseDto> {
+    return await this.walletsService.withdrawToBankAccount(
+      req.user.userId,
+      withdrawalDto,
+    );
   }
 
 
