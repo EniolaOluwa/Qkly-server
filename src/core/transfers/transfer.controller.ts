@@ -6,6 +6,7 @@ import {
   Request,
   ValidationPipe,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { TransferService } from './transfer.service';
@@ -20,6 +21,7 @@ export class TransferController {
   constructor(private readonly transferService: TransferService) { }
 
   @Post('initiate')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Initiate a transfer',
     description: 'Initiates a transfer from the user wallet to a bank account. May require OTP.',
@@ -38,6 +40,7 @@ export class TransferController {
   }
 
   @Post('finalize')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Finalize a transfer with OTP',
     description: 'Completes a transfer that requires OTP verification.',

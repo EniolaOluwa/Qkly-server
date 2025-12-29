@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   ValidationPipe
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -21,9 +22,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { UserRole } from '../../common/auth/user-role.enum';
 import { Public } from '../../common/decorators/public.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
 import {
   CreatePinResponseDto,
   CreatePinWithReferenceDto,
@@ -41,16 +40,15 @@ import {
   RegisterUserResponseDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
+  UpgradeToTier3Dto,
   VerifyCreatePinOtpDto,
   VerifyCreatePinOtpResponseDto,
-  UpgradeToTier3Dto,
   VerifyKycDto,
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   VerifyPhoneOtpDto,
   VerifyPhoneOtpResponseDto
 } from '../../common/dto/responses.dto';
-import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -100,6 +98,7 @@ export class UsersController {
   }
 
   @Post('send-email-verification')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Send email verification code' })
   @ApiResponse({ status: 200, description: 'Verification email sent' })
   async sendEmailVerification(
@@ -110,6 +109,7 @@ export class UsersController {
 
   @Public()
   @Post('verify-email')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Verify email with token' })
   @ApiResponse({ status: 200, description: 'Email verified successfully' })
   async verifyEmail(
@@ -120,6 +120,7 @@ export class UsersController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Login user',
     description:
@@ -197,6 +198,7 @@ export class UsersController {
 
   @Post('generate-phone-otp')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Generate OTP for phone number verification',
@@ -238,6 +240,7 @@ export class UsersController {
 
   @Post('verify-phone-otp')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Verify OTP for phone number verification',
@@ -516,6 +519,7 @@ export class UsersController {
   }
 
   @Post('forgot-password')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Forgot password - Send OTP',
     description:
@@ -631,6 +635,7 @@ export class UsersController {
   // settings - change password
   @Patch('settings/change-password')
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Change user password',
@@ -772,6 +777,7 @@ export class UsersController {
 
   @Public()
   @Post('login-with-pin')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({
     summary: 'Login user with PIN',
     description:

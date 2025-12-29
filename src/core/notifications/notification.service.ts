@@ -1,23 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Resend } from 'resend';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
-  private resend: Resend;
-  private readonly fromEmail: string;
 
-  constructor(private readonly configService: ConfigService) {
-    const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
-    if (resendApiKey) {
-      this.resend = new Resend(resendApiKey);
-    } else {
-      this.logger.warn('RESEND_API_KEY is not set. Email notifications will be skipped.');
-    }
-
-    this.fromEmail = this.configService.get<string>('FROM_EMAIL', 'no-reply@qkly.com');
-  }
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectQueue('email') private readonly emailQueue: Queue,
+  ) { }
 
   async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
     const enableNotifications = this.configService.get<string>('ENABLE_NOTIFICATIONS');
@@ -26,28 +19,16 @@ export class NotificationService {
       return false;
     }
 
-    if (!this.resend) {
-      this.logger.warn(`Skipping email to ${to}: Resend not configured`);
-      return false;
-    }
-
     try {
-      const { data, error } = await this.resend.emails.send({
-        from: this.fromEmail,
+      await this.emailQueue.add('send-email', {
         to,
         subject,
         html,
       });
-
-      if (error) {
-        this.logger.error(`Failed to send email to ${to}`, error);
-        return false;
-      }
-
-      this.logger.log(`Email sent to ${to}: ${subject}`);
+      this.logger.log(`Queued email to ${to}: ${subject}`);
       return true;
     } catch (err) {
-      this.logger.error(`Error sending email to ${to}`, err);
+      this.logger.error(`Error queuing email to ${to}`, err);
       return false;
     }
   }
