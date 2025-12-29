@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  HttpException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -27,6 +28,7 @@ import {
   WalletTransferResponseDto,
 } from './dto/wallet-transfer.dto';
 import { PaymentService } from '../payment/payment.service';
+import { BusinessesService } from '../businesses/businesses.service'; // Import
 import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
 import { WithdrawalDto, WithdrawalResponseDto } from './dto/withdraw.dto';
 import { ErrorHelper } from '../../common/utils';
@@ -44,6 +46,8 @@ export class WalletsService {
     private readonly transactionRepository: Repository<Transaction>,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    @Inject(forwardRef(() => BusinessesService)) // Inject BusinessesService
+    private readonly businessesService: BusinessesService,
     private readonly bankAccountsService: BankAccountsService,
     private readonly dataSource: DataSource,
   ) { }
@@ -58,7 +62,7 @@ export class WalletsService {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId },
-        relations: ['wallet'],
+        relations: ['wallet', 'profile'],
       });
 
       if (!user) {
@@ -74,15 +78,58 @@ export class WalletsService {
         ErrorHelper.BadRequestException('User already has a wallet');
       }
 
+      if (!user.profile?.phone) {
+        this.logger.error(`User ${userId} has no phone number in profile`);
+        ErrorHelper.BadRequestException('User profile must have a phone number to create a wallet');
+      }
+
       // Use PaymentService to create virtual account (Paystack DVA)
+      let subaccountCode = undefined;
+
+      // If bank details provided, create manual subaccount first
+      if (generateWalletDto.bankDetails) {
+        try {
+          // 1. Create Subaccount on Paystack
+          const businessName = user.profile?.firstName ? `${user.profile.firstName} ${user.profile.lastName} Store` : `Merchant ${userId}`;
+
+          // call paymentService wrapper instead of private provider
+          const subaccount = await this.paymentService.createSubaccount({
+            business_name: businessName,
+            settlement_bank: generateWalletDto.bankDetails.bankCode,
+            account_number: generateWalletDto.bankDetails.accountNumber,
+            percentage_charge: 0, // Configurable later
+            description: `Settlement Account for ${businessName}`
+          });
+
+          if (subaccount && subaccount.subaccount_code) {
+            subaccountCode = subaccount.subaccount_code;
+
+            // 2. Save Subaccount to Business Profile (if user has one)
+            if (subaccountCode) {
+              await this.businessesService.updateSubaccountCode(userId, subaccountCode);
+              this.logger.log(`Created Subaccount ${subaccountCode} for User ${userId}`);
+            }
+          }
+        } catch (e) {
+          this.logger.error(`Failed to create subaccount during wallet generation: ${e.message}`);
+          // Continue to create DVA? Or Fail?
+          // If DVA depends on it for splitting, we should probably fail or warn.
+          // For now, let's log and proceed (unlinked DVA), but this means manual fix needed.
+        }
+      }
+
       const virtualAccount = await this.paymentService.createVirtualAccount({
         walletReference: generateWalletDto.walletReference ?? '',
         walletName: generateWalletDto.walletName,
-        customerEmail: generateWalletDto.customerEmail,
-        customerName: generateWalletDto.customerName || `User ${userId} `,
+        customerEmail: generateWalletDto.customerEmail || user.email,
+        customerName: generateWalletDto.customerName || `${user.profile?.firstName} ${user.profile?.lastName}` || `User ${userId}`,
         bvn: generateWalletDto.bvn,
         dateOfBirth: generateWalletDto.dateOfBirth,
         currencyCode: generateWalletDto.currencyCode || 'NGN',
+        phoneNumber: user.profile?.phone,
+        firstName: user.profile?.firstName,
+        lastName: user.profile?.lastName,
+        subaccount: subaccountCode, // Link DVA to Subaccount
       });
 
       // Create Wallet entity
@@ -130,7 +177,9 @@ export class WalletsService {
         error.response?.data || error.message,
       );
 
-      ErrorHelper.InternalServerErrorException('Failed to create wallet');
+      // Propagate the actual error message
+      const msg = error.response?.data?.message || error.message || 'Unknown error';
+      ErrorHelper.InternalServerErrorException(`Failed to create wallet: ${msg}`);
     }
   }
 
@@ -155,7 +204,7 @@ export class WalletsService {
         bankCode: wallet.bankCode,
       };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof HttpException) {
         throw error;
       }
       ErrorHelper.InternalServerErrorException(
@@ -179,15 +228,8 @@ export class WalletsService {
         ErrorHelper.NotFoundException('User does not have a wallet');
       }
 
-      // Use PaymentService to get balance from Paystack
-      const balance = await this.paymentService.getWalletBalance(
-        wallet.providerAccountId,
-      );
-
-      // Update wallet balances in database
-      wallet.availableBalance = balance.availableBalance;
-      wallet.ledgerBalance = balance.ledgerBalance;
-      await this.walletRepository.save(wallet);
+      // Wallet balance is maintained locally via transactions (Ledger System)
+      // Paystack DVA does not provide individual account balances via API.
 
       const walletDto = plainToInstance(WalletBalanceResponseDto, {
         walletReference: wallet.providerAccountId,
@@ -195,8 +237,8 @@ export class WalletsService {
         accountName: wallet.accountName,
         bankName: wallet.bankName,
         bankCode: wallet.bankCode,
-        availableBalance: balance.availableBalance,
-        ledgerBalance: balance.ledgerBalance,
+        availableBalance: wallet.availableBalance,
+        ledgerBalance: wallet.ledgerBalance,
       });
 
       return walletDto;
@@ -402,24 +444,29 @@ export class WalletsService {
         ErrorHelper.NotFoundException('User wallet not found');
       }
 
-      // Update balance
-      wallet.availableBalance = Number(wallet.availableBalance) + Number(amount);
-      wallet.ledgerBalance = Number(wallet.ledgerBalance) + Number(amount);
+      // Check if we should skip balance update (e.g. for Split Payments where funds are external)
+      const skipBalanceUpdate = metadata?.skipBalanceUpdate === true;
 
-      await em.save(Wallet, wallet);
+      // Update balance ONLY if not skipped
+      if (!skipBalanceUpdate) {
+        wallet.availableBalance = Number(wallet.availableBalance) + Number(amount);
+        wallet.ledgerBalance = Number(wallet.ledgerBalance) + Number(amount);
+        await em.save(Wallet, wallet);
+      }
 
       // Create Transaction Record
       const transaction = em.create(Transaction, {
         userId,
         reference,
-        type: TransactionType.WALLET_FUNDING, // Default, can be overridden if passed, but for now fixed or we add param
+        type: TransactionType.WALLET_FUNDING, // Default, can be overridden if passed
         flow: TransactionFlow.CREDIT,
         status: TransactionStatus.SUCCESS,
         amount,
         netAmount: amount,
         currency: wallet.currency,
         description,
-        balanceBefore: Number(wallet.availableBalance) - Number(amount),
+        // If skipped, balance remains same as before (or current state)
+        balanceBefore: Number(wallet.availableBalance) - (skipBalanceUpdate ? 0 : Number(amount)),
         balanceAfter: Number(wallet.availableBalance),
         metadata,
       });

@@ -1,36 +1,36 @@
 import {
-  Injectable,
   ConflictException,
-  InternalServerErrorException,
-  NotFoundException,
+  Injectable,
   Logger,
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsRelations, Repository, SelectQueryBuilder } from 'typeorm';
-import { Business } from './business.entity';
-import { BusinessType } from './business-type.entity';
-import { User, UserStatus } from '../users/entity/user.entity';
-import { OnboardingStep } from '../../common/enums/user.enum';
+import { UserType } from '../../common/auth/user-role.enum';
 import {
-  CreateBusinessTypeDto,
-  UpdateBusinessTypeDto,
   CreateBusinessDto,
+  CreateBusinessTypeDto,
   UpdateBusinessDto,
+  UpdateBusinessTypeDto,
 } from '../../common/dto/responses.dto';
-import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
-import { ErrorHelper } from '../../common/utils';
-import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
-import { UserProgressService } from '../user-progress/user-progress.service';
+import { PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { OnboardingStep } from '../../common/enums/user.enum';
 import { PaginationMetadataDto } from '../../common/queries/dto';
+import { ErrorHelper } from '../../common/utils';
+import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { DateFilterUtil } from '../../common/utils/date-filter.util';
 import { SubaccountStatusEnum } from '../admin/enums/admin-filter.enum';
+import { LeadForm } from '../lead/entity/leadForm.entity';
+import { Role, RoleStatus } from '../roles/entities/role.entity';
+import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
+import { UserProgressService } from '../user-progress/user-progress.service';
+import { User, UserStatus } from '../users/entity/user.entity';
+import { BusinessType } from './business-type.entity';
+import { Business } from './business.entity';
 import { MerchantFilterDto } from './dto/merchant-filter.dto';
 import { MerchantStatsDto } from './dto/merchant-stats.dto';
 import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
-import { UserType } from '../../common/auth/user-role.enum';
-import { Role, RoleStatus } from '../roles/entities/role.entity';
-import { LeadForm } from '../lead/entity/leadForm.entity';
-import { PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { BusinessPaymentAccount } from './entities/business-payment-account.entity'; // Import
 
 @Injectable()
 export class BusinessesService {
@@ -44,8 +44,43 @@ export class BusinessesService {
     private userRepos: Repository<User>,
     @InjectRepository(Role)
     private roleRepo: Repository<Role>,
+    @InjectRepository(BusinessPaymentAccount)
+    private paymentAccountRepo: Repository<BusinessPaymentAccount>,
     private cloudinaryUtil: CloudinaryUtil,
   ) { }
+
+  /**
+   * Update or Create Subaccount Code for a Merchant
+   */
+  async updateSubaccountCode(userId: number, subaccountCode: string): Promise<void> {
+    const business = await this.businessRepo.findOne({
+      where: { userId },
+      relations: ['paymentAccount']
+    });
+
+    if (!business) {
+      // Not a business, maybe regular user.
+      return;
+    }
+
+    let account = business.paymentAccount;
+    if (!account) {
+      account = new BusinessPaymentAccount();
+      account.business = business;
+      // Default values
+      account.accountName = business.businessName;
+      account.bankName = 'Paystack Subaccount';
+      account.accountNumber = 'UNKNOWN'; // We don't have this here, but needed for entity validation potentially
+      account.status = PaymentAccountStatus.ACTIVE;
+    }
+
+    account.providerSubaccountCode = subaccountCode;
+    // Ensure status is active
+    account.status = PaymentAccountStatus.ACTIVE;
+
+    await this.paymentAccountRepo.save(account);
+  }
+
 
   private readonly logger = new Logger(BusinessesService.name);
 
@@ -136,7 +171,7 @@ export class BusinessesService {
     // Find user
     const user = await this.userRepos.findOne({
       where: { id: userId },
-      relations: ['role', 'onboarding'],
+      relations: ['role', 'onboarding', 'profile'],
     });
 
     if (!user) {

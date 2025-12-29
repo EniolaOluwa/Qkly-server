@@ -35,7 +35,7 @@ import { Role } from '../roles/entities/role.entity';
         signOptions: { expiresIn: '1h' },
       }),
     }),
-    WalletsModule,
+    forwardRef(() => WalletsModule),
     CloudinaryModule,
     forwardRef(() => UserProgressModule),
   ],

@@ -81,11 +81,25 @@ export class PaymentService {
       this.logger.log(
         `Creating virtual account for ${dto.customerEmail} using ${this.providerType}`,
       );
+      // We need to cast or ensure provider has createVirtualAccount accepting subaccount
+      // Since we updated provider, it handles it, but interface might limit us.
+      // Dto now has subaccount. Passing it through.
       return await this.provider.createVirtualAccount(dto);
     } catch (error) {
       this.logger.error('Failed to create virtual account:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Create a subaccount (Delegates to provider)
+   */
+  async createSubaccount(payload: any): Promise<any> {
+    // Check if provider supports it
+    if (this.providerType === PaymentProviderType.PAYSTACK && 'createSubaccount' in this.provider) {
+      return await (this.provider as any).createSubaccount(payload);
+    }
+    throw new Error(`Provider ${this.providerType} does not support subaccount creation`);
   }
 
   /**
@@ -242,7 +256,7 @@ export class PaymentService {
       const event = await this.provider.processWebhook(payload, signature);
 
       // Forward to OrderService for processing
-      await this.orderService.processWebhook(signature || '', payload);
+      await this.orderService.processWebhook(event);
 
       return event;
     } catch (error) {

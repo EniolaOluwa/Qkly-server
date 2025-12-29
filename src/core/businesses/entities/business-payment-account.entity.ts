@@ -45,22 +45,26 @@ export class BusinessPaymentAccount {
   /**
    * Payment provider (PAYSTACK, future: FLUTTERWAVE, etc.)
    */
-  @Column({
-    type: 'enum',
-    enum: PaymentProvider,
-    default: PaymentProvider.PAYSTACK,
-  })
+  @Column({ default: PaymentProvider.PAYSTACK })
   provider: PaymentProvider;
 
   /**
-   * Provider's subaccount code
-   * Paystack: ACCT_xxxxx
+   * The subaccount code from Paystack (e.g., ACCT_xxxxxxxxx)
    */
-  @Column({ length: 255, unique: true })
+  @Column({ nullable: true })
   providerSubaccountCode: string;
 
+  @Column({ nullable: true })
+  accountName: string;
+
+  @Column({ nullable: true })
+  bankName: string;
+
+  @Column({ nullable: true })
+  accountNumber: string;
+
   /**
-   * Account status
+   * Status of the payment account
    * PENDING: Subaccount creation in progress
    * ACTIVE: Ready to receive payments
    * INACTIVE: Temporarily disabled

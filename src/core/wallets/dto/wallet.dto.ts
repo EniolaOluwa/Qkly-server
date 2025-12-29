@@ -99,6 +99,20 @@ export class GenerateWalletDto {
   currencyCode?: string;
 
   @ApiPropertyOptional({
+    description: 'Bank details for the wallet (optional)',
+    type: 'object',
+    properties: {
+      accountNumber: { type: 'string', example: '1234567890' },
+      bankCode: { type: 'string', example: '044' },
+    },
+  })
+  @IsOptional()
+  bankDetails?: {
+    accountNumber: string;
+    bankCode: string;
+  };
+
+  @ApiPropertyOptional({
     description: 'Date of birth in format YYYY-MM-DD',
     example: '1990-01-31',
   })

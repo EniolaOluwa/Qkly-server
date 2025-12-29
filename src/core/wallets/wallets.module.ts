@@ -3,6 +3,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
 import { PaymentModule } from '../payment/payment.module';
 import { BankAccountsModule } from '../bank-accounts/bank-accounts.module';
+import { BusinessesModule } from '../businesses/businesses.module'; // Import
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { WalletsController } from './wallets.controller';
 import { WalletsService } from './wallets.service';
@@ -13,6 +14,7 @@ import { WalletsService } from './wallets.service';
     HttpModule,
     SharedRepositoryModule,
     forwardRef(() => PaymentModule),
+    forwardRef(() => BusinessesModule), // Import BusinessesModule
     BankAccountsModule,
   ],
   providers: [WalletsService, WalletProvisioningUtil],

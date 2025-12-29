@@ -42,8 +42,12 @@ export class CreateVirtualAccountDto {
   firstName?: string;
 
   @IsOptional()
-  @IsString()
+  @IsOptional()
   lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  subaccount?: string;
 
   @IsOptional()
   @IsString()
@@ -123,6 +127,7 @@ export interface VerifyPaymentResponseDto {
   currency: string;
   metadata?: Record<string, any>;
   provider: PaymentProviderType;
+  providerResponse?: any; // Full response from provider
 }
 
 export enum PaymentVerificationStatus {
@@ -194,6 +199,7 @@ export interface WebhookEventDto {
     metadata?: Record<string, any>;
   };
   provider: PaymentProviderType;
+  rawPayload?: any;
 }
 
 export interface RefundRequestDto {
