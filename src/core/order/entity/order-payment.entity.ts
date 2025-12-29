@@ -174,7 +174,7 @@ export class OrderPayment {
    * Payment failure reason
    */
   @Column({ type: 'text', nullable: true })
-  failureReason: string;
+  failureReason: string | null;
 
   /**
    * Payment expiry (for pending payments)

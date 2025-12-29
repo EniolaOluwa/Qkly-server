@@ -92,7 +92,7 @@ export class ProductVariant {
    * Quantity in stock
    * THIS is the source of truth for inventory
    */
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'quantityInStock', type: 'int', default: 0 })
   quantityInStock: number;
 
   /**

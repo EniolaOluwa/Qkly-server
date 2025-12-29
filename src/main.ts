@@ -65,6 +65,7 @@ async function bootstrap() {
   console.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
   console.log(`OpenAPI JSON available at: http://localhost:${port}/api/docs-json`);
   console.log(`API endpoints now available under /v1 prefix`);
+  console.log('Server Reload Triggered by Antigravity');
 }
 
 bootstrap();

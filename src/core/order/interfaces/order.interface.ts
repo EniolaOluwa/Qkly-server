@@ -1,5 +1,5 @@
 import { PaymentEventCustomer } from "../dto/payment.dto";
-import { RefundMethod, RefundType } from "../dto/refund.dto";
+import { RefundMethod, RefundType } from "../../../common/enums/order.enum";
 
 export enum OrderItemStatus {
   PENDING = 'PENDING',

@@ -393,8 +393,8 @@ export class BusinessesController {
     },
     @CurrentUser('userId') userId: number,
   ): Promise<BusinessResponseDto> {
-    if (files.logo) updateBusinessDto.logo = files.logo[0];
-    if (files.coverImage) updateBusinessDto.coverImage = files.coverImage[0];
+    if (files?.logo) updateBusinessDto.logo = files.logo[0];
+    if (files?.coverImage) updateBusinessDto.coverImage = files.coverImage[0];
 
     const business = await this.businessesService.updateBusinessDetails(
       updateBusinessDto,

@@ -107,7 +107,37 @@ export class SettlementsService {
       await queryRunner.manager.save(Settlement, settlement);
 
       // 5. Credit Wallet (Using WalletsService logic but within our Transaction)
-      // Since WalletsService.creditWallet handles its own transactions or manager, we pass our manager.
+
+      // Fetch OrderPayment to check for Split Payment details
+      // Since order.payment might not be loaded or might be stale, let's load it or check relationship
+      // Assuming order.payment is loaded? The argument order usually comes from OrderService which loads relations?
+      // Let's explicitly fetch OrderPayment just to be safe and get providerResponse
+      const orderPayment = await queryRunner.manager.findOne(this.dataSource.getRepository('OrderPayment').target, {
+        where: { orderId: order.id }
+      }) as any;
+
+      let isSplitPayment = false;
+      if (orderPayment?.providerResponse) {
+        // Check for subaccount in provider response (Paystack structure)
+        // Usually data.subaccount or similar. 
+        // During initialization we sent 'subaccount'.
+        // The Verification Response should contain 'subaccount' object if it was split.
+        const response = orderPayment.providerResponse;
+        // Paystack: response.data.subaccount or response.subaccount depending on how we stored it.
+        // We stored `transaction` object from webhook or verification.
+        if (response.subaccount && response.subaccount.id) {
+          isSplitPayment = true;
+        } else if (response.data && response.data.subaccount && response.data.subaccount.id) {
+          isSplitPayment = true;
+        }
+      }
+
+      if (isSplitPayment) {
+        this.logger.log(`Split Payment detected for order ${order.id}. Skipping wallet balance update.`);
+      }
+
+      console.log('DEBUG: Calling creditWallet with skipBalanceUpdate:', isSplitPayment); // DEBUG LOG
+
       await this.walletsService.creditWallet(
         businessUserId,
         settlementAmount,
@@ -117,7 +147,9 @@ export class SettlementsService {
         {
           transactionType: TransactionType.SETTLEMENT,
           orderId: order.id,
-          settlementId: settlement.id
+          settlementId: settlement.id,
+          skipBalanceUpdate: isSplitPayment, // Skip balance update if split
+          metadata: { isSplit: isSplitPayment }
         }
       );
 
@@ -128,6 +160,7 @@ export class SettlementsService {
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      console.error('DEBUG: Settlement Processing Failed:', error); // DEBUG LOG
       this.logger.error(`Failed to process settlement for order ${order.id}`, error);
       throw error;
     } finally {

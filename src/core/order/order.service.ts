@@ -4,14 +4,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { DeliveryMethod, OrderItemStatus, OrderStatus, RefundMethod, RefundStatus, RefundType } from '../../common/enums/order.enum';
-import { PaymentMethod, PaymentProvider, PaymentStatus } from '../../common/enums/payment.enum';
+import { PaymentMethod, PaymentProvider, PaymentStatus, PaymentAccountStatus } from '../../common/enums/payment.enum';
 import { SettlementStatus } from '../../common/enums/settlement.enum';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CartService } from '../cart/cart.service';
 import { NotificationService } from '../notifications/notification.service';
-import { InitializePaymentRequestDto } from '../payment/dto/payment-provider.dto';
+import { InitializePaymentRequestDto, WebhookEventDto } from '../payment/dto/payment-provider.dto';
 import { PaymentService } from '../payment/payment.service';
 import { ProductVariant } from '../product/entity/product-variant.entity';
 import { Product } from '../product/entity/product.entity';
@@ -445,10 +445,10 @@ export class OrderService {
         ErrorHelper.NotFoundException('Order not found');
       }
 
-      // Check if payment already exists or is initiated
-      if (order.paymentStatus === PaymentStatus.INITIATED) {
-        // If we have a record, return it (Idempotency)
-        if (order.payment && order.payment.authorizationUrl) {
+      // Check if payment already exists
+      if (order.payment) {
+        // Idempotency for INITIATED (return existing link)
+        if (order.paymentStatus === PaymentStatus.INITIATED && order.payment.authorizationUrl) {
           this.logger.log(`Returning existing payment details for order ${order.id}`);
           return {
             success: true,
@@ -462,12 +462,35 @@ export class OrderService {
               orderReference: order.orderReference,
             },
           };
-        } else {
-          // Orphaned state (INITIATED but no OrderPayment record)
-          // We must generate a NEW reference because the old one might be used/invalid but lost.
-          this.logger.warn(`Order ${order.id} is INITIATED but missing OrderPayment. Regenerating reference.`);
-          order.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
         }
+
+        // Retry Logic for FAILED (CANCELLED not in enum)
+        if ([PaymentStatus.FAILED].includes(order.paymentStatus)) {
+          this.logger.log(`Retrying payment on failed order ${order.id}. Previous Ref: ${order.transactionReference}`);
+
+          // 1. Log History
+          const history = this.orderStatusHistoryRepository.create({
+            orderId: order.id,
+            status: order.status, // Keep current status
+            notes: `Payment Retry: Previous reference ${order.transactionReference} failed. Reason: ${order.payment.failureReason || 'User Retry'}`,
+            triggeredBy: 'USER',
+            triggeredByUserId: order.userId || undefined,
+          });
+          await queryRunner.manager.save(history);
+
+          // 2. Regenerate Reference
+          const newRef = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+          order.transactionReference = newRef;
+
+          // 3. Reset Payment Status on Order (will be set to INITIATED below)
+          // We let the flow continue to "Initiate" logic
+        } else if (order.paymentStatus === PaymentStatus.PAID) {
+          ErrorHelper.ConflictException('Payment already completed for this order');
+        }
+      } else if (order.paymentStatus === PaymentStatus.INITIATED) {
+        // Orphaned state (INITIATED but no OrderPayment record)
+        this.logger.warn(`Order ${order.id} is INITIATED but missing OrderPayment. Regenerating reference.`);
+        order.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
       }
 
       if (order.paymentStatus === PaymentStatus.PAID) {
@@ -476,6 +499,7 @@ export class OrderService {
 
       const business = await queryRunner.manager.findOne(Business, {
         where: { id: order.businessId },
+        relations: ['paymentAccount'],
       });
 
       if (!business) {
@@ -488,6 +512,40 @@ export class OrderService {
       await queryRunner.commitTransaction(); // Commit check/update before external call
 
       this.logger.log(`Payment initiated for order ${order.id}`);
+
+      // Calculate Application Fee (Split Payment Logic)
+      let subaccountCode: string | undefined = undefined;
+      let transactionCharge = 0;
+      let bearer: 'account' | 'subaccount' | 'all-proportional' | 'all' | undefined = undefined;
+
+      // Logic: If business has a valid subaccount, we split payment.
+      // Platform takes commission (transaction_charge), Business takes remainder.
+      // Merchant pays Paystack fees (bearer='subaccount').
+      if (business.paymentAccount && business.paymentAccount.providerSubaccountCode && business.paymentAccount.status === PaymentAccountStatus.ACTIVE) {
+        // Calculate Platform Fee (1.5% capped at 2000 - same as Settlement Service logic)
+        // Ideally this comes from a central Config or BusinessSettlementConfig
+        const FEE_PERCENTAGE = 0.015;
+        const MAX_FEE = 2000;
+
+        let platformFee = order.total * FEE_PERCENTAGE;
+        if (platformFee > MAX_FEE) platformFee = MAX_FEE;
+
+        // Ensure fee is usually rounded to 2 decimal places before converting to kobo?
+        // Paystack expects kobo if passed as integer, or we handle it in provider.
+        // Provider expects transaction_charge to be in kobo if amount is in kobo? 
+        // PaystackProvider converts amount to kobo. Let's assume passed charge should be in MAJOR unit if provider converts it?
+        // Checking PaystackProvider: "payload.transaction_charge = dto.transaction_charge || 0;"
+        // It does NOT convert transaction_charge. It assumes caller passes correct value? 
+        // Wait, Paystack API expects transaction_charge in kobo.
+        // Let's modify Provider or Pass Kobo here?
+        // Safest: Pass Kobo here since provider implementation didn't explicitly convert it in the `if(dto.subaccount)` block.
+
+        transactionCharge = Math.round(platformFee * 100);
+        subaccountCode = business.paymentAccount.providerSubaccountCode;
+        bearer = 'subaccount'; // Merchant bears Paystack processing fee
+
+        this.logger.log(`Split Payment Active: Subaccount ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
+      }
 
       // Prepare payload
       const paymentPayload: InitializePaymentRequestDto = {
@@ -503,34 +561,50 @@ export class OrderService {
           businessId: order.businessId,
           ...initiatePaymentDto.metadata,
         },
+        subaccount: subaccountCode,
+        transaction_charge: transactionCharge,
+        bearer: bearer,
       };
 
       // Call Provider
       const paymentResponse = await this.paymentService.initializePayment(paymentPayload);
 
-      // Save OrderPayment Record
+      // Save or Update OrderPayment Record
       try {
-        const orderPayment = this.orderPaymentRepository.create({
-          orderId: order.id,
-          paymentReference: order.transactionReference,
-          provider: PaymentProvider.PAYSTACK, // Dynamic if multiple providers
-          paymentMethod: initiatePaymentDto.paymentMethod,
-          status: PaymentStatus.INITIATED,
-          amount: order.total,
-          netAmount: order.total, // Will update after fee
-          currency: 'NGN', // Should come from business/config
-          authorizationUrl: paymentResponse.authorizationUrl,
-          accessCode: paymentResponse.accessCode,
-          providerReference: paymentResponse.paymentReference, // Logic might differ
-          initiatedAt: new Date(),
-        });
+        let orderPayment = await queryRunner.manager.findOne(OrderPayment, { where: { orderId: order.id } });
 
-        await this.orderPaymentRepository.save(orderPayment);
+        if (orderPayment) {
+          // ... (existing update logic) ...
+          orderPayment.paymentReference = order.transactionReference;
+          orderPayment.paymentMethod = initiatePaymentDto.paymentMethod;
+          orderPayment.status = PaymentStatus.INITIATED;
+          orderPayment.authorizationUrl = paymentResponse.authorizationUrl;
+          orderPayment.accessCode = paymentResponse.accessCode;
+          orderPayment.providerReference = paymentResponse.paymentReference;
+          orderPayment.initiatedAt = new Date();
+          orderPayment.failureReason = null;
+        } else {
+          // ... (existing create logic) ...
+          orderPayment = this.orderPaymentRepository.create({
+            orderId: order.id,
+            paymentReference: order.transactionReference,
+            provider: PaymentProvider.PAYSTACK,
+            paymentMethod: initiatePaymentDto.paymentMethod,
+            status: PaymentStatus.INITIATED,
+            amount: order.total,
+            netAmount: order.total,
+            currency: 'NGN',
+            authorizationUrl: paymentResponse.authorizationUrl,
+            accessCode: paymentResponse.accessCode,
+            providerReference: paymentResponse.paymentReference,
+            initiatedAt: new Date(),
+          });
+        }
+        await queryRunner.manager.save(orderPayment);
       } catch (saveError) {
-        this.logger.error(`Failed to save OrderPayment for order ${order.id}`, saveError);
-        // We don't throw here to avoid failing the user who already got the link
-        // But this is risky.
+        this.logger.error(`Failed to save OrderPayment: ${saveError}`);
       }
+
 
       return {
         success: true,
@@ -539,6 +613,12 @@ export class OrderService {
           ...paymentResponse,
           orderId: order.id,
           orderReference: order.orderReference,
+          // TEMPORARY DEBUG INFO FOR VERIFICATION
+          splitDebug: {
+            subaccount: subaccountCode,
+            charge: transactionCharge,
+            bearer: bearer
+          }
         },
       };
     } catch (error) {
@@ -1422,36 +1502,8 @@ export class OrderService {
     }
   }
 
-  async processWebhook(signature: string, payload: any): Promise<void> {
+  async processWebhook(event: WebhookEventDto): Promise<void> {
     try {
-      // 1. Validate Signature
-      const isValid = this.paymentService.validateWebhookSignature(JSON.stringify(payload), signature);
-      // Wait, validateWebhookSignature in PaymentService takes (rawBody: string, signature: string).
-      // If NestJS parses body, payload is object. JSON.stringify(payload) might not match raw body exactly due to spacing.
-      // Ideally Controller passes raw body. But for now assuming payload is object is tricky.
-      // Let's assume validation happens in Controller or Guard if possible?
-      // Or we try our best with JSON.stringify.
-      // Actually PaystackProvider implementation:
-      // validateWebhookSignature(rawBody: string, signature: string)
-      // So checks crypto.createHmac(...).update(rawBody).
-
-      // If we cannot get raw body easily here (Nest parsing), we might skip validation HERE if we trust the source IP?
-      // OR we update Controller to get raw body.
-      // For now, I will assume Controller passes rawBody string if needed?
-      // But my method sets payload: any.
-
-      // I will skip signature validation HERE and assume Controller does it?
-      // Or I will try to validate using the object. 
-      // But re-serializing object is unreliable.
-      // I will COMMENT OUT validation here and move it to Controller where RawBody is accessible (if configured).
-      // Or I will update this method to accept rawBody string verify THEN parse.
-
-      // Re-reading Step 325: PaystackProvider.validateWebhookSignature takes rawBody.
-      // I will just proceed with processing logic.
-
-      // 2. Process Webhook Event via Provider
-      const event = await this.paymentService.processWebhook(payload, signature);
-
       if (!event || !event.eventData) {
         return;
       }
@@ -1495,6 +1547,7 @@ export class OrderService {
           paidOn: event.eventData.paidOn,
           metadata: event.eventData.metadata,
           provider: provider,
+          providerResponse: event.rawPayload, // Preserve raw payload (including split info)
         };
 
         if (['SUCCESS', 'FAILED', 'ABANDONED', 'REVERSED'].includes(transaction.paymentStatus)) {
@@ -1529,22 +1582,31 @@ export class OrderService {
         paymentDate: transaction.paidOn ? new Date(transaction.paidOn) : new Date(),
         meta: transaction.metadata || {},
         provider: provider,
-        providerResponse: transaction,
+        // Unwrap: Store the raw payload, not the wrapper
+        providerResponse: transaction.providerResponse || transaction,
       };
 
       // Only update Order Status if success. If failed, we just record the failed payment in OrderPayment but keep Order available for retry?
       // Actually processOrderPayment updates order.status. 
       // If we pass OrderStatus.PENDING, it resets order status. This is good for retry.
 
-      await this.processOrderPayment(order, paymentData, queryRunner.manager);
+      try {
+        await this.processOrderPayment(order, paymentData, queryRunner.manager);
+      } catch (processError) {
+        console.error('DEBUG: processOrderPayment Failed:', processError);
+        throw processError; // Re-throw to trigger rollback
+      }
+
       await queryRunner.commitTransaction();
       this.logger.log(`Processed verified payment for order ${order.id}: ${transaction.paymentStatus}`);
 
       // Trigger Instant Settlement (Best effort)
       if (paymentData.paymentStatus === PaymentStatus.PAID) {
         try {
+          console.log(`DEBUG: Triggering Settlement for Order ${order.id}`); // DEBUG LOG
           await this.settlementsService.processInstantSettlement(order);
         } catch (settlementError) {
+          console.error(`DEBUG: Settlement Error for Order ${order.id}:`, settlementError); // DEBUG LOG
           this.logger.error(`Failed to process settlement for order ${order.id}`, settlementError);
           // Don't throw, let the order succeed as PAID. Admin can reconcile.
         }
@@ -1609,7 +1671,14 @@ export class OrderService {
       }
 
       // Update payment status and timestamps
+      // Update payment status and timestamps
       orderPayment.status = paymentData.paymentStatus;
+
+      // Update provider response if available (e.g. from webhook verification)
+      if (paymentData.providerResponse) {
+        orderPayment.providerResponse = paymentData.providerResponse;
+      }
+
       if (paymentData.paymentStatus === PaymentStatus.PAID) {
         orderPayment.paidAt = paymentData.paymentDate || new Date();
       }

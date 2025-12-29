@@ -9,7 +9,8 @@ import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
-import { InitiateRefundDto, RefundType } from './dto/refund.dto';
+import { InitiateRefundDto } from './dto/refund.dto';
+import { RefundType } from '../../common/enums/order.enum';
 import { Order } from './entity/order.entity';
 import { OrderRefund } from './entity/order-refund.entity';
 import { OrderStatus, RefundStatus as RefundStatusEnum, RefundType as RefundTypeEnum, RefundMethod as RefundMethodEnum } from '../../common/enums/order.enum';
@@ -31,7 +32,9 @@ export class RefundService {
     private readonly paystackProvider: PaystackProvider,
     private readonly walletsService: WalletsService, // Inject WalletsService
     private readonly dataSource: DataSource,
-  ) { }
+  ) {
+    this.logger.log('RefundService Initialized - Rebuild Check');
+  }
 
 
   async processRefund(

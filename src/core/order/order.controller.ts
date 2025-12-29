@@ -36,7 +36,9 @@ export class OrdersController {
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
     private readonly refundService: RefundService,
-  ) { }
+  ) {
+    this.logger.log('OrdersController Initialized - Refund DTO Update Check');
+  }
 
 
   @Post('cart')
@@ -466,7 +468,7 @@ export class OrdersController {
     @Request() req
   ): Promise<any> {
 
-    const userId = req.user.id
+    const userId = req.user.userId
     return await this.refundService.processRefund(createRefundDto, userId);
   }
 

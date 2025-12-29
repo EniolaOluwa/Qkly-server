@@ -102,7 +102,7 @@ export class WalletsController {
     const walletInfo = await this.walletsService.getUserWallet(req.user.userId);
     return {
       message: 'Wallet information retrieved successfully',
-      wallet: walletInfo,
+      data: walletInfo,
     };
   }
 
