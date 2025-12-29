@@ -22,6 +22,7 @@ import { RolesModule } from './core/roles/roles.module';
 import { StoreFrontModule } from './core/store-front/store-front.module';
 import { TrafficModule } from './core/traffic-events/traffic.module';
 import { TransactionModule } from './core/transaction/transaction.module';
+import { TransferModule } from './core/transfers/transfer.module';
 import { UserProgressModule } from './core/user-progress/user-progress.module';
 import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';
@@ -59,6 +60,7 @@ import { SeedModule } from './database/seeds/seed.module';
     NotificationModule,
     AuditModule,
     TransactionModule,
+    TransferModule,
   ],
   controllers: [AppController],
   providers: [

@@ -161,11 +161,13 @@ export interface TransferResponseDto {
   dateInitiated: string;
   provider: PaymentProviderType;
   providerResponse?: any;
+  transferCode?: string; // Added for OTP flow
 }
 
 export enum TransferStatus {
   SUCCESS = 'SUCCESS',
   PENDING = 'PENDING',
+  OTP_REQUIRED = 'OTP_REQUIRED', // Added for OTP flow
   FAILED = 'FAILED',
   REVERSED = 'REVERSED',
 }

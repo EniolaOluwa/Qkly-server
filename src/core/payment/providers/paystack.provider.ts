@@ -574,10 +574,44 @@ export class PaystackProvider extends IPaymentProvider {
         dateInitiated: data.created_at || new Date().toISOString(),
         provider: PaymentProviderType.PAYSTACK,
         providerResponse: data,
+        transferCode: data.transfer_code, // Return transfer code for OTP finalization
       };
     } catch (error) {
       this.logger.error('Transfer failed:', error);
       ErrorHelper.InternalServerErrorException('Failed to process transfer');
+    }
+  }
+
+  async finalizeTransfer(transferCode: string, otp: string): Promise<TransferResponseDto> {
+    try {
+      this.logger.log(`Finalizing transfer ${transferCode} with OTP`);
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${this.baseUrl}/transfer/finalize_transfer`,
+          {
+            transfer_code: transferCode,
+            otp: otp,
+          },
+          { headers: this.getHeaders() },
+        ),
+      );
+
+      const data = response.data.data;
+
+      return {
+        transferReference: data.reference,
+        amount: data.amount / 100,
+        status: this.mapTransferStatus(data.status),
+        recipientAccountNumber: 'UNKNOWN', // Not returned in finalize response
+        recipientBankCode: 'UNKNOWN',
+        narration: 'Transfer Finalized',
+        dateInitiated: data.created_at || new Date().toISOString(),
+        provider: PaymentProviderType.PAYSTACK,
+        providerResponse: data,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to finalize transfer ${transferCode}`, error.response?.data || error.message);
+      ErrorHelper.BadRequestException('Failed to finalize transfer with OTP');
     }
   }
 
