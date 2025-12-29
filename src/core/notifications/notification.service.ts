@@ -298,4 +298,53 @@ export class NotificationService {
     `;
     await this.sendEmail(email, subject, html);
   }
+  async sendEmailVerification(email: string, firstName: string, token: string) {
+    const subject = 'Verify your email address';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>Verify your email</h2>
+        <p>Hi ${firstName},</p>
+        <p>Please use the following code to verify your email address:</p>
+        <h1 style="background-color: #f4f4f4; padding: 10px; text-align: center; letter-spacing: 5px;">${token}</h1>
+        <p>This code is valid for 15 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendLoginNotification(email: string, firstName: string, time: string, device: string, location: string) {
+    const subject = 'New Login Alert';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>New Sign-in Detected</h2>
+        <p>Hi ${firstName},</p>
+        <p>We noticed a new sign-in to your Qkly account.</p>
+        <ul style="list-style: none; padding: 0;">
+          <li><strong>Time:</strong> ${time}</li>
+          <li><strong>Device:</strong> ${device}</li>
+          <li><strong>Location:</strong> ${location}</li>
+        </ul>
+        <p>If this was you, you can ignore this email.</p>
+        <p style="color: red;">If you did not sign in, please contact support immediately and change your PIN.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
+
+  async sendForgotPasswordEmail(email: string, firstName: string, otp: string, validity: string) {
+    const subject = 'Password Reset Request';
+    const html = `
+      <div style="font-family: sans-serif; padding: 20px;">
+        <h2>Reset Your Password</h2>
+        <p>Hi ${firstName},</p>
+        <p>You requested to reset your password. Use the code below to proceed:</p>
+        <h1 style="background-color: #f4f4f4; padding: 10px; text-align: center; letter-spacing: 5px;">${otp}</h1>
+        <p>This code is valid for ${validity}.</p>
+        <p>If you didn't request this, please ignore this email or contact support.</p>
+      </div>
+    `;
+    await this.sendEmail(email, subject, html);
+  }
 }
+

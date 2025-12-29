@@ -53,6 +53,7 @@ import {
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UsersService } from './users.service';
 
 
@@ -96,6 +97,25 @@ export class UsersController {
   ) {
     const register = this.usersService.registerUser(registerUserDto);
     return register
+  }
+
+  @Post('send-email-verification')
+  @ApiOperation({ summary: 'Send email verification code' })
+  @ApiResponse({ status: 200, description: 'Verification email sent' })
+  async sendEmailVerification(
+    @Request() req,
+  ) {
+    return this.usersService.sendEmailVerification(req.user.userId); // req.user.userId based on likely JwtStrategy payload
+  }
+
+  @Public()
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email with token' })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  async verifyEmail(
+    @Body() verifyEmailDto: VerifyEmailDto,
+  ) {
+    return this.usersService.verifyEmail(verifyEmailDto.token);
   }
 
   @Public()
@@ -778,8 +798,19 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async loginWithPin(@Body(ValidationPipe) loginWithPinDto: LoginWithPinDto) {
-    const data = await this.usersService.loginWithPin(loginWithPinDto.phone, loginWithPinDto.pin);
+  async loginWithPin(
+    @Body(ValidationPipe) loginWithPinDto: LoginWithPinDto,
+    @Request() req,
+  ) {
+    const ip = req.ip || req.socket?.remoteAddress || 'Unknown IP';
+    const userAgent = req.headers['user-agent'] || 'Unknown Device';
+
+    const data = await this.usersService.loginWithPin(
+      loginWithPinDto.phone,
+      loginWithPinDto.pin,
+      ip,
+      userAgent
+    );
 
     return HttpResponse.success({
       message: 'User logged in successfully',

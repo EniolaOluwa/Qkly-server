@@ -11,7 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { firstValueFrom } from 'rxjs';
+import { async, firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { UserType } from '../../common/auth/user-role.enum';
 import {
@@ -27,6 +27,7 @@ import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.u
 import { Role, RoleStatus } from '../roles/entities/role.entity';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
+import { NotificationService } from '../notifications/notification.service';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
 import { OnboardingStep } from '../../common/enums/user.enum';
@@ -40,8 +41,9 @@ import { UserSecurity } from './entities/user-security.entity';
 import { UserOnboarding } from './entities/user-onboarding.entity';
 import { UserMapper, MappedUser } from './mappers/user.mapper';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
-import { permission } from 'process';
+import { channel, permission } from 'process';
 import { PhoneUtil, CountryCode } from '../../common/utils/phone.util';
+import { response } from 'express';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -89,6 +91,7 @@ export class UsersService {
     private configService: ConfigService,
     private walletProvisioningUtil: WalletProvisioningUtil,
     private userProgressService: UserProgressService,
+    private notificationService: NotificationService,
   ) { }
 
 
@@ -732,11 +735,19 @@ export class UsersService {
     // Send OTP via Termii SMS
     await this.sendOtpViaTermii(user.profile.phone, otpCode);
 
+    // Send OTP via Email
+    await this.notificationService.sendForgotPasswordEmail(
+      user.email,
+      user.profile?.firstName || 'User',
+      otpCode,
+      '5 minutes'
+    );
+
     // Return masked phone number
     const maskedPhone = this.maskPhoneNumber(user.profile.phone);
 
     return {
-      message: 'OTP sent successfully to your phone number',
+      message: 'OTP sent successfully to your phone number and email',
       maskedPhone,
       expiryInMinutes: 5,
     };
@@ -802,17 +813,104 @@ export class UsersService {
         resetToken,
       };
     } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      ErrorHelper.InternalServerErrorException(
-        'Failed to verify password reset OTP',
-      );
+      throw error;
     }
   }
+
+  async sendEmailVerification(userId: number): Promise<{ message: string; expiryInMinutes: number }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['profile'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (user.isEmailVerified) {
+      ErrorHelper.BadRequestException('Email is already verified');
+    }
+
+    // Generate 6-digit OTP
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+
+    const otp = this.otpRepository.create({
+      userId: user.id,
+      otp: otpCode,
+      otpType: OtpType.EMAIL,
+      purpose: OtpPurpose.EMAIL_VERIFICATION,
+      expiresAt,
+    });
+
+    await this.otpRepository.save(otp);
+
+    // Send email using NotificationService
+    const firstName = user.profile?.firstName || 'User';
+    await this.notificationService.sendEmailVerification(user.email, firstName, otpCode);
+
+    return {
+      message: 'Verification Code sent to your email',
+      expiryInMinutes: 15,
+    };
+  }
+
+  async verifyEmail(token: string): Promise<{ message: string; success: boolean }> {
+    // Find the verification token in the database
+    const tokenRecord = await this.otpRepository.findOne({
+      where: {
+        otp: token,
+        otpType: OtpType.EMAIL,
+        purpose: OtpPurpose.EMAIL_VERIFICATION,
+        isUsed: false,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!tokenRecord) {
+      ErrorHelper.BadRequestException('Invalid or expired verification token');
+    }
+
+    // Check if token has expired
+    if (tokenRecord.expiresAt < new Date()) {
+      ErrorHelper.BadRequestException('Verification token has expired');
+    }
+
+    // Find user by ID from token record
+    const user = await this.userRepository.findOne({
+      where: { id: tokenRecord.userId },
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (user.isEmailVerified) {
+      return {
+        message: 'Email already verified',
+        success: true,
+      };
+    }
+
+    // Mark the token as used
+    await this.otpRepository.update(tokenRecord.id, { isUsed: true });
+
+    // Update user's email verification status
+    await this.userRepository.update(user.id, {
+      isEmailVerified: true,
+    });
+
+    // Send welcome email? Maybe not here, but could technically send a "Verified" email.
+    // For now just return success.
+
+    return {
+      message: 'Email verified successfully',
+      success: true,
+    };
+  }
+
 
 
   async resetPassword(
@@ -1096,7 +1194,7 @@ export class UsersService {
 
   }
 
-  async loginWithPin(phone: string, pin: string): Promise<LoginResponseDto> {
+  async loginWithPin(phone: string, pin: string, ip?: string, userAgent?: string): Promise<LoginResponseDto> {
     if (!phone || !pin) {
       ErrorHelper.BadRequestException('Phone and PIN are required');
     }
@@ -1170,6 +1268,22 @@ export class UsersService {
 
 
     const accessToken = this.jwtService.sign(payload);
+
+    // Send Login Notification
+    const currentTime = new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' });
+    const location = ip || 'Unknown Location';
+    const device = userAgent || 'Unknown Device';
+
+    // Fire and forget notification
+    this.notificationService.sendLoginNotification(
+      user.email,
+      user.profile?.firstName || 'User',
+      currentTime,
+      device,
+      location
+    ).catch(err => {
+      this.logger.error(`Failed to send login notification for user ${user.id}`, err);
+    });
 
     return {
       message: 'User logged in successfully',
