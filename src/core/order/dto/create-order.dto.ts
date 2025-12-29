@@ -15,7 +15,8 @@ import {
   MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DeliveryMethod, PaymentMethod } from '../interfaces/order.interface';
+import { DeliveryMethod } from '../../../common/enums/order.enum';
+import { PaymentMethod } from '../../../common/enums/payment.enum';
 
 export class OrderItemDto {
   @ApiProperty({ description: 'Product ID', example: 1 })
@@ -40,9 +41,15 @@ export class OrderItemDto {
   @IsString()
   @MaxLength(20)
   size?: string;
+
+  @ApiProperty({ description: 'Product Variant ID', example: 12, required: false })
+  @IsOptional()
+  @IsNumber()
+  variantId?: number;
 }
 
-export class CreateOrderDto {
+
+export class BaseOrderDto {
   @ApiProperty({ description: 'Business ID', example: 1 })
   @IsNotEmpty()
   @IsNumber()
@@ -90,7 +97,7 @@ export class CreateOrderDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -105,17 +112,6 @@ export class CreateOrderDto {
   @IsEnum(DeliveryMethod)
   deliveryMethod: DeliveryMethod;
 
-  @ApiProperty({
-    description: 'Order items',
-    type: [OrderItemDto],
-    example: [{ productId: 1, quantity: 2, color: 'Blue', size: 'M' }]
-  })
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => OrderItemDto)
-  @ArrayMinSize(1)
-  items: OrderItemDto[];
-
   @ApiProperty({ description: 'Notes (optional)', example: 'Please leave at front door', required: false })
   @IsOptional()
   @IsString()
@@ -128,3 +124,18 @@ export class CreateOrderDto {
   @MaxLength(50)
   promoCode?: string;
 }
+
+export class CreateOrderDto extends BaseOrderDto {
+  @ApiProperty({
+    description: 'Order items',
+    type: [OrderItemDto],
+    example: [{ productId: 1, quantity: 2, color: 'Blue', size: 'M' }]
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  @ArrayMinSize(1)
+  items: OrderItemDto[];
+}
+
+export class CreateOrderFromCartDto extends BaseOrderDto { }

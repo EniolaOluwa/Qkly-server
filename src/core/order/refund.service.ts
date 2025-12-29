@@ -9,9 +9,13 @@ import { Business } from '../businesses/business.entity';
 import { PaystackProvider } from '../payment/providers/paystack.provider';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
-import { InitiateRefundDto, RefundType } from './dto/refund.dto';
+import { InitiateRefundDto } from './dto/refund.dto';
+import { RefundType } from '../../common/enums/order.enum';
 import { Order } from './entity/order.entity';
-import { OrderStatus, PaymentStatus } from './interfaces/order.interface';
+import { OrderRefund } from './entity/order-refund.entity';
+import { OrderStatus, RefundStatus as RefundStatusEnum, RefundType as RefundTypeEnum, RefundMethod as RefundMethodEnum } from '../../common/enums/order.enum';
+import { PaymentStatus } from '../../common/enums/payment.enum';
+import { WalletsService } from '../wallets/wallets.service'; // Import WalletsService
 
 
 @Injectable()
@@ -21,13 +25,16 @@ export class RefundService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(OrderRefund)
+    private readonly orderRefundRepository: Repository<OrderRefund>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
-    @InjectRepository(User)
-    @InjectRepository(Business)
     private readonly paystackProvider: PaystackProvider,
+    private readonly walletsService: WalletsService, // Inject WalletsService
     private readonly dataSource: DataSource,
-  ) { }
+  ) {
+    this.logger.log('RefundService Initialized - Rebuild Check');
+  }
 
 
   async processRefund(
@@ -44,7 +51,7 @@ export class RefundService {
       // 1. Fetch and validate order
       const order = await this.orderRepository.findOne({
         where: { id: orderId },
-        relations: ['business', 'business.user', 'user', 'items'],
+        relations: ['business', 'business.user', 'user', 'items', 'refunds', 'payment'],
       });
 
       if (!order) {
@@ -57,12 +64,26 @@ export class RefundService {
       // 2. Calculate refund amounts
       const refundCalculation = this.calculateRefundAmounts(order, refundType, amount);
 
-      // 3. Generate refund reference
-      const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
-
       this.logger.log(`Processing ${refundType} refund for order ${order.id}: ₦${refundCalculation.totalRefund}`);
 
-      // 4. Process refund on Paystack (refund to customer)
+      // 4. Deduct from business wallet FIRST (Ensure funds available and lock them)
+      // Using WalletsService to update Balance and Log Transaction in the same transaction
+      const refundReference = `RFD-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+      await this.walletsService.debitWallet(
+        order.business.userId,
+        refundCalculation.businessRefund,
+        refundReference,
+        `Refund for order ${order.orderReference}`,
+        queryRunner.manager,
+        {
+          transactionType: TransactionType.REFUND,
+          orderId: order.id,
+          reason
+        }
+      );
+
+      // 5. Process refund on Paystack (refund to customer)
       const paystackRefund = await this.paystackProvider.createRefund({
         transactionReference: order.transactionReference,
         amount: refundCalculation.totalRefund,
@@ -72,17 +93,7 @@ export class RefundService {
 
       this.logger.log(`Paystack refund successful: ${paystackRefund.refundReference}`);
 
-      // 5. Deduct from business wallet (they need to return their portion)
-      await this.deductFromBusinessWallet(
-        order.business.userId,
-        order.businessId,
-        order.id,
-        refundCalculation.businessRefund,
-        refundReference,
-        queryRunner,
-      );
-
-      // 6. Record all transactions
+      // 6. Record Platform Transaction (Customer Refund from Platform View)
       const refundTransactions: Array<{
         type: string;
         amount: number;
@@ -92,6 +103,8 @@ export class RefundService {
 
 
       // Customer refund transaction (platform perspective)
+      // Note: walletsService.debitWallet already logged the Business Debit Side.
+      // We log the Platform Credit/Debit side here if needed, or just the Result.
       const customerRefundTxn = await queryRunner.manager.save(Transaction, {
         userId: null, // Platform transaction
         businessId: null,
@@ -121,63 +134,56 @@ export class RefundService {
         status: 'SUCCESS',
       });
 
-      // Business refund transaction (deduction from their wallet)
-      const businessRefundTxn = await queryRunner.manager.save(Transaction, {
-        userId: order.business.userId,
-        businessId: order.businessId,
-        orderId: order.id,
-        type: TransactionType.REFUND,
-        flow: TransactionFlow.DEBIT,
-        amount: refundCalculation.businessRefund,
-        fee: 0,
-        netAmount: refundCalculation.businessRefund,
-        status: TransactionStatus.SUCCESS,
-        reference: `${refundReference}-BUSINESS`,
-        providerReference: paystackRefund.refundReference,
-        description: `Business refund for order ${order.orderReference}`,
-        paymentProvider: 'PAYSTACK',
-        metadata: {
-          orderId: order.id,
-          refundType,
-          reason,
-        },
-        settledAt: new Date(),
-      });
-
+      // Track Business Refund (already done via debitWallet, but adding to list for metadata)
       refundTransactions.push({
         type: 'BUSINESS_REFUND',
         amount: refundCalculation.businessRefund,
-        reference: businessRefundTxn.reference,
+        reference: refundReference,
         status: 'SUCCESS',
       });
 
-      // 7. Update order with refund details
-      const refundDetails: any = {
-        amount: refundCalculation.totalRefund,
-        reason,
-        refundType,
-        refundMethod,
-        customerNote,
-        merchantNote,
-        refundedBy: refundedByUserId,
-        refundedAt: new Date(),
-        transactions: refundTransactions,
-        breakdown: {
-          totalRefund: refundCalculation.totalRefund,
-          platformRefund: refundCalculation.platformRefund,
-          businessRefund: refundCalculation.businessRefund,
-        },
-      };
-
-      await queryRunner.manager.update(Order, order.id, {
-        isRefunded: refundType === RefundType.FULL,
-        refundedAmount: (order.refundedAmount || 0) + refundCalculation.totalRefund,
+      // 7. Create OrderRefund entity
+      const orderRefund = queryRunner.manager.create(OrderRefund, {
+        orderId: order.id,
         refundReference,
-        refundDate: new Date(),
-        refundDetails,
-        status: refundType === RefundType.FULL ? OrderStatus.REFUNDED : order.status,
-        paymentStatus: refundType === RefundType.FULL ? PaymentStatus.REFUNDED : order.paymentStatus,
+        refundType: refundType === RefundType.FULL ? RefundTypeEnum.FULL : RefundTypeEnum.PARTIAL,
+        refundMethod: refundMethod as any || RefundMethodEnum.ORIGINAL_PAYMENT,
+        status: RefundStatusEnum.COMPLETED,
+        amountRequested: refundCalculation.totalRefund,
+        amountApproved: refundCalculation.totalRefund,
+        amountRefunded: refundCalculation.totalRefund,
+        currency: 'NGN',
+        reason: reason as any,
+        reasonNotes: customerNote || merchantNote,
+        requestedBy: refundedByUserId,
+        approvedBy: refundedByUserId,
+        processedBy: refundedByUserId,
+        platformRefundReference: customerRefundTxn.reference,
+        businessRefundReference: refundReference,
+        providerMetadata: {
+          paystackRefund,
+          transactions: refundTransactions,
+          breakdown: {
+            totalRefund: refundCalculation.totalRefund,
+            platformRefund: refundCalculation.platformRefund,
+            businessRefund: refundCalculation.businessRefund,
+          },
+        },
+        requestedAt: new Date(),
+        approvedAt: new Date(),
+        processedAt: new Date(),
+        completedAt: new Date(),
       });
+
+      await queryRunner.manager.save(OrderRefund, orderRefund);
+
+      // Update order status if full refund
+      if (refundType === RefundType.FULL) {
+        await queryRunner.manager.update(Order, order.id, {
+          status: OrderStatus.REFUNDED,
+          paymentStatus: PaymentStatus.REFUNDED,
+        });
+      }
 
       // 8. Return inventory if full refund
       if (refundType === RefundType.FULL) {
@@ -217,17 +223,25 @@ export class RefundService {
     amount?: number,
   ): void {
     // Check if order is paid
-    if (order.paymentStatus !== 'PAID') {
+    if (order.paymentStatus !== PaymentStatus.PAID) {
       ErrorHelper.BadRequestException('Only paid orders can be refunded');
     }
 
+    // Calculate total already refunded from OrderRefund entities
+    const totalRefunded = order.refunds?.reduce((sum, refund) =>
+      sum + Number(refund.amountRefunded || 0), 0
+    ) || 0;
+
     // Check if already fully refunded
-    if (order.isRefunded) {
+    const isFullyRefunded = order.refunds?.some(r =>
+      r.refundType === 'full' && r.status === RefundStatusEnum.COMPLETED
+    );
+    if (isFullyRefunded) {
       ErrorHelper.BadRequestException('Order has already been fully refunded');
     }
 
     // Check if refund amount exceeds available amount
-    const availableForRefund = order.total - (order.refundedAmount || 0);
+    const availableForRefund = order.total - totalRefunded;
 
     if (refundType === RefundType.PARTIAL) {
       if (!amount || amount <= 0) {
@@ -242,14 +256,16 @@ export class RefundService {
     }
 
     // Optional: Check refund time window (e.g., within 30 days)
-    const daysSincePurchase = Math.floor(
-      (Date.now() - new Date(order.paymentDate).getTime()) / (1000 * 60 * 60 * 24),
-    );
+    if (order.payment?.paidAt) {
+      const daysSincePurchase = Math.floor(
+        (Date.now() - new Date(order.payment.paidAt).getTime()) / (1000 * 60 * 60 * 24),
+      );
 
-    if (daysSincePurchase > 30) {
-      this.logger.warn(`Refund requested ${daysSincePurchase} days after purchase`);
-      // You can decide to throw error or just log warning
-      // ErrorHelper.BadRequestException('Refund window has expired (30 days)');
+      if (daysSincePurchase > 30) {
+        this.logger.warn(`Refund requested ${daysSincePurchase} days after purchase`);
+        // You can decide to throw error or just log warning
+        // ErrorHelper.BadRequestException('Refund window has expired (30 days)');
+      }
     }
   }
 
@@ -278,67 +294,10 @@ export class RefundService {
   }
 
 
-  private async deductFromBusinessWallet(
-    userId: number,
-    businessId: number,
-    orderId: number,
-    amount: number,
-    refundReference: string,
-    queryRunner: any,
-  ): Promise<void> {
-    try {
-      // Get current balance
-      const balance = await this.getBusinessBalance(userId);
-
-      if (balance < amount) {
-        ErrorHelper.BadRequestException(
-          `Insufficient wallet balance for refund. Required: ₦${amount}, Available: ₦${balance}`,
-        );
-      }
-
-      // Record deduction transaction
-      await queryRunner.manager.save(Transaction, {
-        userId,
-        businessId,
-        orderId,
-        type: TransactionType.REFUND,
-        flow: TransactionFlow.DEBIT,
-        amount,
-        fee: 0,
-        netAmount: amount,
-        status: TransactionStatus.SUCCESS,
-        reference: `${refundReference}-DEDUCT`,
-        description: `Wallet deduction for refund ${refundReference}`,
-        paymentProvider: 'PAYSTACK',
-        metadata: {
-          refundReference,
-        },
-        settledAt: new Date(),
-      });
-
-      this.logger.log(`Deducted ₦${amount} from business ${businessId} wallet`);
-    } catch (error) {
-      this.logger.error('Failed to deduct from business wallet:', error);
-      throw error;
-    }
-  }
 
 
-  private async getBusinessBalance(userId: number): Promise<number> {
-    const result = await this.transactionRepository
-      .createQueryBuilder('txn')
-      .select('SUM(CASE WHEN txn.flow = :credit THEN txn.netAmount ELSE 0 END)', 'credits')
-      .addSelect('SUM(CASE WHEN txn.flow = :debit THEN txn.netAmount ELSE 0 END)', 'debits')
-      .where('txn.userId = :userId', { userId })
-      .andWhere('txn.status = :status', { status: TransactionStatus.SUCCESS })
-      .setParameter('credit', TransactionFlow.CREDIT)
-      .setParameter('debit', TransactionFlow.DEBIT)
-      .getRawOne();
 
-    const credits = parseFloat(result.credits || '0');
-    const debits = parseFloat(result.debits || '0');
-    return credits - debits;
-  }
+
 
 
   private async returnInventory(order: Order, queryRunner: any): Promise<void> {
@@ -366,12 +325,22 @@ export class RefundService {
     try {
       const order = await this.orderRepository.findOne({
         where: { id: orderId },
-        select: ['id', 'orderReference', 'total', 'refundedAmount', 'refundDetails', 'isRefunded'],
+        relations: ['refunds'],
       });
 
       if (!order) {
         ErrorHelper.NotFoundException(`Order with ID ${orderId} not found`);
       }
+
+      // Calculate total refunded from OrderRefund entities
+      const totalRefunded = order.refunds?.reduce((sum, refund) =>
+        sum + Number(refund.amountRefunded || 0), 0
+      ) || 0;
+
+      // Check if fully refunded
+      const isFullyRefunded = order.refunds?.some(r =>
+        r.refundType === RefundTypeEnum.FULL && r.status === RefundStatusEnum.COMPLETED
+      ) || false;
 
       const refundTransactions = await this.transactionRepository.find({
         where: {
@@ -386,11 +355,11 @@ export class RefundService {
           id: order.id,
           reference: order.orderReference,
           total: order.total,
-          refundedAmount: order.refundedAmount || 0,
-          availableForRefund: order.total - (order.refundedAmount || 0),
-          isFullyRefunded: order.isRefunded,
+          refundedAmount: totalRefunded,
+          availableForRefund: order.total - totalRefunded,
+          isFullyRefunded,
         },
-        refunds: order.refundDetails ? [order.refundDetails] : [],
+        refunds: order.refunds || [],
         transactions: refundTransactions,
       };
     } catch (error) {

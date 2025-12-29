@@ -13,9 +13,11 @@ import { UserProgressModule } from '../user-progress/user-progress.module';
 
 
 
+import { RestockController } from './restock.controller';
+
 @Module({
   imports: [TypeOrmModule.forFeature([Product, ProductSize, User, Business, Category]), UserProgressModule],
-  controllers: [ProductsController],
+  controllers: [ProductsController, RestockController],
   providers: [ProductService, CategoryService],
   exports: [ProductService],
 })

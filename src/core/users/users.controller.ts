@@ -43,6 +43,7 @@ import {
   ResetPasswordResponseDto,
   VerifyCreatePinOtpDto,
   VerifyCreatePinOtpResponseDto,
+  UpgradeToTier3Dto,
   VerifyKycDto,
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
@@ -52,14 +53,20 @@ import {
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
 import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UsersService } from './users.service';
 
+
+import { KycService } from './kyc.service';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly kycService: KycService,
+  ) { }
 
   @Public()
   @Post('register')
@@ -90,6 +97,25 @@ export class UsersController {
   ) {
     const register = this.usersService.registerUser(registerUserDto);
     return register
+  }
+
+  @Post('send-email-verification')
+  @ApiOperation({ summary: 'Send email verification code' })
+  @ApiResponse({ status: 200, description: 'Verification email sent' })
+  async sendEmailVerification(
+    @Request() req,
+  ) {
+    return this.usersService.sendEmailVerification(req.user.userId); // req.user.userId based on likely JwtStrategy payload
+  }
+
+  @Public()
+  @Post('verify-email')
+  @ApiOperation({ summary: 'Verify email with token' })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  async verifyEmail(
+    @Body() verifyEmailDto: VerifyEmailDto,
+  ) {
+    return this.usersService.verifyEmail(verifyEmailDto.token);
   }
 
   @Public()
@@ -313,7 +339,7 @@ export class UsersController {
       ErrorHelper.BadRequestException('Selfie image is required');
     }
 
-    const data = this.usersService.verifyBvnWithSelfie(
+    const data = await this.kycService.verifyBvnWithSelfie(
       req.user.userId,
       verifyKycDto.bvn,
       selfieImage,
@@ -323,6 +349,51 @@ export class UsersController {
       message: 'BVN verification completed successfully',
       data: data
     })
+  }
+
+  @Post('upgrade-tier-3')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('idImage', {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type. Only JPEG, PNG images and PDF documents are supported.'), false);
+      }
+    },
+  }))
+  @ApiConsumes('multipart/form-data')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Upgrade to KYC Tier 3 (ID Verification)',
+    description: 'Submit ID document for Tier 3 verification. Requires Tier 2 status. Manual review required.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'ID document submitted successfully',
+  })
+  async upgradeTier3(
+    @Body(ValidationPipe) dto: UpgradeToTier3Dto,
+    @UploadedFile() idImage: Express.Multer.File,
+    @Request() req,
+  ) {
+    if (!idImage) ErrorHelper.BadRequestException('ID Image is required');
+
+    const data = await this.kycService.upgradeToTier3(
+      req.user.userId,
+      dto.idType,
+      dto.idNumber,
+      idImage,
+    );
+
+    return HttpResponse.success({
+      message: 'ID Document submitted for review',
+      data,
+    });
   }
 
 
@@ -727,8 +798,19 @@ export class UsersController {
     status: 500,
     description: 'Internal server error',
   })
-  async loginWithPin(@Body(ValidationPipe) loginWithPinDto: LoginWithPinDto) {
-    const data = await this.usersService.loginWithPin(loginWithPinDto.phone, loginWithPinDto.pin);
+  async loginWithPin(
+    @Body(ValidationPipe) loginWithPinDto: LoginWithPinDto,
+    @Request() req,
+  ) {
+    const ip = req.ip || req.socket?.remoteAddress || 'Unknown IP';
+    const userAgent = req.headers['user-agent'] || 'Unknown Device';
+
+    const data = await this.usersService.loginWithPin(
+      loginWithPinDto.phone,
+      loginWithPinDto.pin,
+      ip,
+      userAgent
+    );
 
     return HttpResponse.success({
       message: 'User logged in successfully',

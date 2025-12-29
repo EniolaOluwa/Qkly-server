@@ -13,6 +13,7 @@ import {
     UpdateLeadDto,
     UpdateLeadFormDto,
 } from './dto/lead.dto';
+import { NotificationService } from '../notifications/notification.service';
 import { LeadForm } from './entity/leadForm.entity';
 import { Leads } from './entity/leads.entity';
 
@@ -23,6 +24,7 @@ export class LeadService {
         private readonly leadFormRepo: Repository<LeadForm>,
         @InjectRepository(Leads)
         private readonly leadsRepo: Repository<Leads>,
+        private readonly notificationService: NotificationService,
     ) { }
 
     async createLeadForm(
@@ -354,7 +356,7 @@ export class LeadService {
         try {
             const form = await this.leadFormRepo.findOne({
                 where: { publicId },
-                relations: ['business', 'leads'],
+                relations: ['business', 'business.user', 'leads'],
             });
 
             if (!form) {
@@ -475,7 +477,37 @@ export class LeadService {
         lead: Leads,
     ): Promise<void> {
         try {
-            // TODO: Implement Notification both mail and App
+            if (!form.business?.user?.email) {
+                console.warn(`No business owner email found for form ${form.id}`);
+                return;
+            }
+
+            const subject = `New Lead: ${form.title}`;
+            const html = `
+                <div style="font-family: sans-serif; padding: 20px;">
+                    <h2>New Lead Submission</h2>
+                    <p>You have a new lead from form: <strong>${form.title}</strong></p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Name</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${lead.name}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Email</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${lead.email}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">Phone</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${lead.phone}</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 20px;">
+                        <a href="https://app.qkly.com/leads/${lead.id}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Lead</a>
+                    </p>
+                </div>
+            `;
+
+            await this.notificationService.sendEmail(form.business.user.email, subject, html);
         } catch (error) {
             console.error('Failed to send lead notification:', error);
         }

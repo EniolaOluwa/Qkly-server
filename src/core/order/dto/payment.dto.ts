@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested
 } from 'class-validator';
-import { PaymentMethod } from '../interfaces/order.interface';
+import { PaymentMethod } from '../../../common/enums/payment.enum';
 
 // Move PaymentEventData class definition BEFORE PaymentCallbackDto
 export class PaymentEventCustomer {
@@ -37,7 +37,7 @@ export class PaymentEventData {
   @IsString()
   transactionReference: string;
 
-  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
+  @ApiProperty({ description: 'Payment reference', example: 'PAYSTACK-12345678' })
   @IsNotEmpty()
   @IsString()
   paymentReference: string;
@@ -105,7 +105,7 @@ export class InitiatePaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -140,7 +140,7 @@ export class ProcessPaymentDto {
   @ApiProperty({
     description: 'Payment method',
     enum: PaymentMethod,
-    example: PaymentMethod.MONNIFY
+    example: PaymentMethod.CARD
   })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
@@ -152,7 +152,7 @@ export class ProcessPaymentDto {
   @IsPositive()
   amount: number;
 
-  @ApiProperty({ description: 'Payment reference', example: 'MONNIFY-12345678' })
+  @ApiProperty({ description: 'Payment reference', example: 'PAYSTACK-12345678' })
   @IsNotEmpty()
   @IsString()
   paymentReference: string;
@@ -230,147 +230,4 @@ export class SettleBusinessDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
-}
-
-
-export class WebhookCustomerDto {
-  @ApiProperty({ example: 'John Doe' })
-  @IsString()
-  @IsNotEmpty()
-  name: string;
-
-  @ApiProperty({ example: 'john.doe@example.com' })
-  @IsString()
-  @IsNotEmpty()
-  email: string;
-}
-
-
-export class WebhookProductDto {
-  @ApiProperty({ example: 'TXN-79C925E3' })
-  @IsString()
-  reference: string;
-
-  @ApiProperty({ example: 'WEB_SDK' })
-  @IsString()
-  type: string;
-}
-
-
-export class WebhookCardDetailsDto {
-  @ApiProperty({ example: '1111' })
-  @IsOptional()
-  @IsString()
-  last4?: string;
-
-  @ApiProperty({ example: '09' })
-  @IsOptional()
-  @IsString()
-  expMonth?: string;
-
-  @ApiProperty({ example: '411111******1111' })
-  @IsOptional()
-  @IsString()
-  maskedPan?: string;
-
-  @ApiProperty({ example: '27' })
-  @IsOptional()
-  @IsString()
-  expYear?: string;
-
-  @ApiProperty({ example: '411111' })
-  @IsOptional()
-  @IsString()
-  bin?: string;
-
-  @ApiProperty({ example: false })
-  @IsOptional()
-  reusable?: boolean;
-}
-
-
-
-export class WebhookEventDataDto {
-  @ApiProperty({ type: WebhookProductDto })
-  @ValidateNested()
-  @Type(() => WebhookProductDto)
-  product: WebhookProductDto;
-
-  @ApiProperty({ example: 'MNFY|87|20251111163333|000481' })
-  @IsString()
-  transactionReference: string;
-
-  @ApiProperty({ example: 'TXN-79C925E3' })
-  @IsString()
-  paymentReference: string;
-
-  @ApiProperty({ example: '2025-11-11 16:33:55.0' })
-  @IsString()
-  paidOn: string;
-
-  @ApiProperty({ example: 'Payment for Order ORD-2D7DC94A' })
-  @IsString()
-  paymentDescription: string;
-
-  @ApiProperty({ example: {} })
-  @IsObject()
-  @IsOptional()
-  metaData: Record<string, any>;
-
-  @ApiProperty({ example: [] })
-  @IsOptional()
-  paymentSourceInformation: any[];
-
-  @ApiProperty({ example: {} })
-  @IsOptional()
-  destinationAccountInformation: Record<string, any>;
-
-  @ApiProperty({ example: 59.98 })
-  @IsNumber()
-  @IsPositive()
-  amountPaid: number;
-
-  @ApiProperty({ example: 59.98 })
-  @IsNumber()
-  @IsPositive()
-  totalPayable: number;
-
-  @ApiProperty({ type: WebhookCardDetailsDto })
-  @ValidateNested()
-  @Type(() => WebhookCardDetailsDto)
-  @IsOptional()
-  cardDetails?: WebhookCardDetailsDto;
-
-  @ApiProperty({ example: 'CARD' })
-  @IsString()
-  paymentMethod: string;
-
-  @ApiProperty({ example: 'NGN' })
-  @IsString()
-  currency: string;
-
-  @ApiProperty({ example: '49.98' })
-  settlementAmount: string | number;
-
-  @ApiProperty({ example: 'PAID' })
-  @IsString()
-  paymentStatus: string;
-
-  @ApiProperty({ type: WebhookCustomerDto })
-  @ValidateNested()
-  @Type(() => WebhookCustomerDto)
-  customer: WebhookCustomerDto;
-}
-
-
-export class MonnifyWebhookDto {
-  @ApiProperty({ example: 'SUCCESSFUL_TRANSACTION' })
-  @IsNotEmpty()
-  @IsString()
-  eventType: string;
-
-  @ApiProperty({ type: WebhookEventDataDto })
-  @ValidateNested()
-  @Type(() => WebhookEventDataDto)
-  eventData: WebhookEventDataDto;
 }

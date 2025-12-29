@@ -192,7 +192,7 @@ export class AdminProductsController {
           'product.price',
           'product.quantityInStock',
           'product.hasVariation',
-          'product.images',
+          'product.imageUrls', // Use the correct column name
           'product.createdAt',
           'product.updatedAt',
           'business.id',
@@ -262,7 +262,7 @@ export class AdminProductsController {
             categoryName: product.category?.name || 'N/A',
             ownerEmail: product.user?.email || 'N/A',
             hasVariation: product.hasVariation,
-            images: product.images || [],
+            images: product.imageUrls || [],
             totalSold: parseInt(raw.totalSold) || 0,
             totalRevenue: parseFloat(raw.totalRevenue).toFixed(2),
             createdAt: product.createdAt,

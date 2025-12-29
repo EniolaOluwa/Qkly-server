@@ -3,26 +3,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
-export enum RefundType {
-  FULL = 'FULL',
-  PARTIAL = 'PARTIAL',
-}
-
-export enum RefundMethod {
-  ORIGINAL_PAYMENT = 'ORIGINAL_PAYMENT', // Refund to customer's original payment method
-  WALLET = 'WALLET', // Refund to customer's wallet (if they have one)
-}
-
-
-export enum RefundReason {
-  ORDER_REJECTED = 'ORDER_REJECTED',
-  ORDER_CANCELLED = 'ORDER_CANCELLED',
-  PRODUCT_DEFECTIVE = 'PRODUCT_DEFECTIVE',
-  WRONG_ITEM_SHIPPED = 'WRONG_ITEM_SHIPPED',
-  CUSTOMER_REQUEST = 'CUSTOMER_REQUEST',
-  DUPLICATE_ORDER = 'DUPLICATE_ORDER',
-  OTHER = 'OTHER',
-}
+import { RefundMethod, RefundReason, RefundType } from '../../../common/enums/order.enum';
 
 export class InitiateRefundDto {
   @ApiProperty({
@@ -55,7 +36,7 @@ export class InitiateRefundDto {
   @ApiProperty({
     description: 'Reason for refund',
     enum: RefundReason,
-    example: RefundReason.ORDER_REJECTED,
+    example: RefundReason.MERCHANT_CANCELLED,
   })
   @IsNotEmpty()
   @IsEnum(RefundReason)
@@ -73,8 +54,7 @@ export class InitiateRefundDto {
 
   @ApiProperty({
     description: 'Refund method',
-    enum: RefundMethod,
-    example: RefundMethod.ORIGINAL_PAYMENT,
+    example: 'wallet',
   })
   @IsNotEmpty()
   @IsEnum(RefundMethod)

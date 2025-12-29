@@ -90,7 +90,7 @@ export class StoreFrontService {
       hasVariation: product.hasVariation,
       colors: product.colors,
       sizes: product.sizes,
-      images: product.images || [],
+      images: product.imageUrls || [],
       category: {
         id: product.category.id,
         name: product.category.name,

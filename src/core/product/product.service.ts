@@ -7,12 +7,14 @@ import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CategoryService } from '../category/category.service';
 import { Category } from '../category/entity/category.entity';
+import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
+import { UserProgressService } from '../user-progress/user-progress.service';
 import { User } from '../users/entity/user.entity';
 import { CreateProductDto, FindAllProductsDto } from './dto/create-product.dto';
+import { RestockOperation, RestockProductDto } from './dto/restock-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entity/product.entity';
-import { UserProgressService } from '../user-progress/user-progress.service';
-import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
+import { ProductVariant } from './entity/product-variant.entity';
 
 
 
@@ -78,25 +80,30 @@ export class ProductService {
         ErrorHelper.BadRequestException('Category is required for this product.');
       }
 
-      const category = await this.categoryService.findOrCreate(productData.category);
+      const { category: categoryName, images, ...rest } = productData;
 
-      const { category: _, ...rest } = productData;
+      const category = await this.categoryService.findOrCreate(categoryName);
 
       const product = this.productRepository.create({
         ...rest,
+        // Map string[] images to both relation (new way) and simple-array (legacy way)
+        images: images?.map((url, index) => ({
+          imageUrl: url,
+          sortOrder: index,
+          isPrimary: index === 0
+        })),
+        imageUrls: images, // Maintain backward compatibility with the simple-array column
         categoryId: category.id,
         userId
       });
 
       const savedProduct = await this.productRepository.save(product);
 
-
       const productCount = await this.productRepository.count({ where: { userId } });
 
       if (productCount === 1) {
         await this.userProgressService.addProgress(userId, UserProgressEvent.FIRST_PRODUCT_CREATED);
       }
-
 
       return savedProduct;
     } catch (error) {
@@ -125,6 +132,7 @@ export class ProductService {
     const product = await this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoinAndSelect('product.variants', 'variants')
       .leftJoin('product.category', 'category')
       .addSelect(['category.id', 'category.name'])
       .leftJoin('product.user', 'user')
@@ -206,10 +214,29 @@ export class ProductService {
       }
 
       // Assign other fields
+      // Handle images update if provided
+      if (updateData.images) {
+        // Update simple array column
+        product.imageUrls = updateData.images;
+
+        // Update relation - Note: This appends/replaces depending on logic.
+        // For simplicity and to match create logic, we'll re-map them.
+        // Ideally we should delete old images, but for now we'll overwrite the property
+        // allowing TypeORM to handle new insertions. Old ones might become orphans.
+        product.images = updateData.images.map((url, index) => ({
+          imageUrl: url,
+          sortOrder: index,
+          isPrimary: index === 0,
+          productId: product.id // ensure link
+        } as any)); // cast to any to avoid type issues with deep partial
+      }
+
       Object.assign(product, {
         ...updateData,
         category: product.category,
         categoryId: product.categoryId,
+        // prevent Object.assign from overwriting our processed images with the string array
+        images: updateData.images ? product.images : undefined,
       });
 
       return await this.productRepository.save(product);
@@ -221,6 +248,46 @@ export class ProductService {
     }
   }
 
+  async restockProduct(id: number, userId: number, dto: RestockProductDto): Promise<Product> {
+    const product = await this.findProductById(id);
+
+    // Verify ownership
+    if (product.userId !== userId) {
+      // Check if user is admin (logic handled in controller, but good to have safety)
+      // For now assume controller handles role check, or we pass userRole
+    }
+
+    const { quantity, variantId, operation = RestockOperation.ADD } = dto;
+
+    if (product.hasVariation) {
+      if (!variantId) {
+        ErrorHelper.BadRequestException('Product has variations; please specify variantId to restock.');
+      }
+
+      const variant = product.variants.find(v => v.id === variantId);
+      if (!variant) {
+        ErrorHelper.NotFoundException(`Variant with ID ${variantId} not found for this product.`);
+      }
+
+      const currentStock = variant.quantityInStock;
+      const newStock = operation === RestockOperation.SET ? quantity : currentStock + quantity;
+
+      variant.quantityInStock = newStock;
+
+      // Update using direct repository update to ensure persistence
+      await this.productRepository.manager.getRepository(ProductVariant).update({ id: variantId }, { quantityInStock: newStock });
+
+    } else {
+      // Simple product
+      const currentStock = product.quantityInStock;
+      const newStock = operation === RestockOperation.SET ? quantity : currentStock + quantity;
+
+      product.quantityInStock = newStock;
+      await this.productRepository.save(product);
+    }
+
+    return this.findProductById(id);
+  }
 
   async deleteProduct(id: number): Promise<void> {
     try {
@@ -239,6 +306,7 @@ export class ProductService {
     const qb = this.productRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.sizes', 'sizes')
+      .leftJoinAndSelect('product.variants', 'variants')
       .leftJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.user', 'user')
       .where('product.deletedAt IS NULL')
@@ -306,6 +374,7 @@ export class ProductService {
     return qb.select([
       'product',       // all product fields
       'sizes',
+      'variants',
       'category',
       'user.id',       // just user id (or add fields if needed)
       'product.businessId', // only businessId

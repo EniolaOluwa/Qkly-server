@@ -4,7 +4,8 @@ import { Between, Repository } from "typeorm";
 import { ErrorHelper } from "../../common/utils";
 import { AdminMetricsDto, BusinessMetricsDto, DateRangeDto, OrderMetricsDto } from "./interfaces/order-metrics.interface";
 import { Order } from "./entity/order.entity";
-import { OrderStatus, PaymentStatus } from "./interfaces/order.interface";
+import { OrderStatus, DeliveryMethod } from "../../common/enums/order.enum";
+import { PaymentStatus, PaymentMethod } from "../../common/enums/payment.enum";
 
 @Injectable()
 export class OrderMetricsService {
@@ -31,7 +32,7 @@ export class OrderMetricsService {
 
       const orders = await this.orderRepository.find({
         where: whereCondition,
-        relations: ['items', 'business'],
+        relations: ['items', 'business', 'refunds', 'settlement'],
       });
 
       if (orders.length === 0) {
@@ -81,7 +82,7 @@ export class OrderMetricsService {
 
       const orders = await this.orderRepository.find({
         where: whereCondition,
-        relations: ['items', 'business'],
+        relations: ['items', 'business', 'refunds', 'settlement'],
       });
 
       if (orders.length === 0) {
@@ -144,7 +145,10 @@ export class OrderMetricsService {
       .reduce((sum, o) => sum + Number(o.total), 0);
     const totalRefunded = orders
       .filter(o => o.paymentStatus === PaymentStatus.REFUNDED)
-      .reduce((sum, o) => sum + Number(o.refundedAmount || 0), 0);
+      .reduce((sum, o) => {
+        const refundAmount = o.refunds?.reduce((refundSum, r) => refundSum + Number(r.amountRefunded || 0), 0) || 0;
+        return sum + refundAmount;
+      }, 0);
     const paymentSuccessRate = totalOrders > 0
       ? (paidOrders.length / totalOrders) * 100
       : 0;
@@ -157,13 +161,13 @@ export class OrderMetricsService {
     const netRevenue = totalRevenue - totalRefunded;
 
     // Settlement Metrics
-    const settledOrders = orders.filter(o => o.isBusinessSettled);
+    const settledOrders = orders.filter(o => o.settlement?.status === 'completed');
     const totalSettled = settledOrders.reduce(
-      (sum, o) => sum + (Number(o.settlementDetails?.settlementAmount) || 0),
+      (sum, o) => sum + (Number(o.settlement?.settlementAmount) || 0),
       0,
     );
     const pendingSettlement = paidOrders
-      .filter(o => !o.isBusinessSettled)
+      .filter(o => !o.settlement || o.settlement?.status !== 'completed')
       .reduce((sum, o) => sum + Number(o.total), 0);
     const settlementRate = paidOrders.length > 0
       ? (settledOrders.length / paidOrders.length) * 100
@@ -173,7 +177,7 @@ export class OrderMetricsService {
       : 0;
 
     // Refund Metrics
-    const refundedOrders = orders.filter(o => o.isRefunded);
+    const refundedOrders = orders.filter(o => o.refunds?.some(r => r.status === 'completed'));
     const refundCount = refundedOrders.length;
     const refundRate = paidOrders.length > 0
       ? (refundCount / paidOrders.length) * 100
@@ -200,9 +204,9 @@ export class OrderMetricsService {
 
     // Delivery Metrics
     const deliveryMetrics = {
-      express: orders.filter(o => o.deliveryMethod === 'EXPRESS').length,
-      standard: orders.filter(o => o.deliveryMethod === 'STANDARD').length,
-      pickup: orders.filter(o => o.deliveryMethod === 'PICKUP').length,
+      express: orders.filter(o => o.deliveryMethod === DeliveryMethod.EXPRESS).length,
+      standard: orders.filter(o => o.deliveryMethod === DeliveryMethod.STANDARD).length,
+      pickup: orders.filter(o => o.deliveryMethod === DeliveryMethod.PICKUP).length,
     };
 
     return {
@@ -273,7 +277,7 @@ export class OrderMetricsService {
 
       const orders = await this.orderRepository.find({
         where: whereCondition,
-        relations: ['items'],
+        relations: ['items', 'refunds', 'settlement'],
       });
 
       const productStats = new Map<number, {
@@ -448,7 +452,7 @@ export class OrderMetricsService {
 
       const orders = await this.orderRepository.find({
         where: whereCondition,
-        relations: ['business'],
+        relations: ['business', 'refunds', 'settlement'],
       });
 
       const businessStats = new Map<number, {
@@ -506,11 +510,11 @@ export class OrderMetricsService {
     const paidOrders = orders.filter(o => o.paymentStatus === PaymentStatus.PAID);
 
     return {
-      card: paidOrders.filter(o => o.paymentMethod === 'CARD').length,
-      bankTransfer: paidOrders.filter(o => o.paymentMethod === 'BANK_TRANSFER').length,
-      wallet: paidOrders.filter(o => o.paymentMethod === 'WALLET').length,
-      ussd: paidOrders.filter(o => o.paymentMethod === 'USSD').length,
-      cashOnDelivery: paidOrders.filter(o => o.paymentMethod === 'CASH_ON_DELIVERY').length,
+      card: paidOrders.filter(o => o.paymentMethod === PaymentMethod.CARD).length,
+      bankTransfer: paidOrders.filter(o => o.paymentMethod === PaymentMethod.BANK_TRANSFER).length,
+      wallet: paidOrders.filter(o => o.paymentMethod === PaymentMethod.WALLET).length,
+      ussd: paidOrders.filter(o => o.paymentMethod === PaymentMethod.USSD).length,
+      cashOnDelivery: paidOrders.filter(o => o.paymentMethod === PaymentMethod.CASH_ON_DELIVERY).length,
     };
   }
 

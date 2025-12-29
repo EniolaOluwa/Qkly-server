@@ -12,8 +12,12 @@ import {
   TransactionType,
 } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
+import { Wallet } from '../wallets/entities/wallet.entity';
+import { BusinessPaymentAccount } from '../businesses/entities/business-payment-account.entity';
 import { PaystackProvider } from './providers/paystack.provider';
 import { ErrorHelper } from '../../common/utils';
+import { WalletStatus, PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class PaystackIntegrationService {
@@ -26,8 +30,13 @@ export class PaystackIntegrationService {
     private readonly businessRepository: Repository<Business>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
+    @InjectRepository(BusinessPaymentAccount)
+    private readonly businessPaymentAccountRepository: Repository<BusinessPaymentAccount>,
     private readonly paystackProvider: PaystackProvider,
     private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) { }
 
   // ============================================================
@@ -47,7 +56,7 @@ export class PaystackIntegrationService {
     try {
       const user = await this.userRepository.findOne({
         where: { id: userId },
-        relations: ['business'],
+        relations: ['profile', 'wallet'],
       });
 
       if (!user) {
@@ -56,6 +65,7 @@ export class PaystackIntegrationService {
 
       const business = await this.businessRepository.findOne({
         where: { id: businessId },
+        relations: ['paymentAccount'],
       });
 
       if (!business) {
@@ -81,33 +91,48 @@ export class PaystackIntegrationService {
   private async createBusinessDVA(user: User): Promise<any> {
     try {
       // Check if user already has a DVA
-      if (user.paystackCustomerCode && user.paystackAccountStatus === 'ACTIVE') {
+      if (user.wallet && user.wallet.status === WalletStatus.ACTIVE) {
         this.logger.log(`User ${user.id} already has active DVA`);
-        return await this.paystackProvider.getVirtualAccountDetails(user.paystackCustomerCode);
+        return await this.paystackProvider.getVirtualAccountDetails(user.wallet.providerCustomerId);
       }
 
       // Create new DVA
       const dvaResponse = await this.paystackProvider.createVirtualAccount({
-        customerName: `${user.firstName} ${user.lastName}`,
+        customerName: `${user.profile?.firstName} ${user.profile?.lastName}`,
         customerEmail: user.email,
         walletReference: `USR-${user.id}`,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        phoneNumber: user.phone,
+        firstName: user.profile?.firstName,
+        lastName: user.profile?.lastName,
+        phoneNumber: user.profile?.phone,
         email: user.email,
       });
 
-      // Update user with DVA details
-      await this.userRepository.update(user.id, {
-        paystackCustomerCode: dvaResponse.customerCode,
-        paystackDedicatedAccountId: dvaResponse.providerAccountId,
-        paystackAccountStatus: dvaResponse.status || 'PENDING',
-        walletAccountNumber: dvaResponse.accountNumber,
-        walletAccountName: dvaResponse.accountName,
-        walletBankName: dvaResponse.bankName,
-        walletBankCode: dvaResponse.bankCode,
-        paymentProvider: 'PAYSTACK',
-      });
+      // Create or update Wallet entity
+      if (user.wallet) {
+        await this.walletRepository.update(user.wallet.id, {
+          providerCustomerId: dvaResponse.customerCode,
+          providerAccountId: dvaResponse.providerAccountId,
+          status: dvaResponse.status === 'active' ? WalletStatus.ACTIVE : WalletStatus.PENDING,
+          accountNumber: dvaResponse.accountNumber,
+          accountName: dvaResponse.accountName,
+          bankName: dvaResponse.bankName,
+          bankCode: dvaResponse.bankCode,
+          activatedAt: dvaResponse.status === 'active' ? new Date() : undefined,
+        });
+      } else {
+        const wallet = this.walletRepository.create({
+          userId: user.id,
+          providerCustomerId: dvaResponse.customerCode,
+          providerAccountId: dvaResponse.providerAccountId,
+          status: dvaResponse.status === 'active' ? WalletStatus.ACTIVE : WalletStatus.PENDING,
+          accountNumber: dvaResponse.accountNumber,
+          accountName: dvaResponse.accountName,
+          bankName: dvaResponse.bankName,
+          bankCode: dvaResponse.bankCode,
+          activatedAt: dvaResponse.status === 'active' ? new Date() : undefined,
+        });
+        await this.walletRepository.save(wallet);
+      }
 
       this.logger.log(`DVA created for user ${user.id}`);
       return dvaResponse;
@@ -123,13 +148,13 @@ export class PaystackIntegrationService {
   private async createBusinessSubaccount(user: User, business: Business): Promise<any> {
     try {
       // Check if business already has subaccount
-      if (business.paystackSubaccountCode) {
+      if (business.paymentAccount && business.paymentAccount.providerSubaccountCode) {
         this.logger.log(`Business ${business.id} already has subaccount`);
-        return { subaccount_code: business.paystackSubaccountCode };
+        return { subaccount_code: business.paymentAccount.providerSubaccountCode };
       }
 
       // Ensure user has wallet account (DVA) for settlement
-      if (!user.walletAccountNumber || !user.walletBankCode) {
+      if (!user.wallet || !user.wallet.accountNumber || !user.wallet.bankCode) {
         ErrorHelper.BadRequestException(
           'User must have a wallet account (DVA) before creating subaccount',
         );
@@ -147,13 +172,13 @@ export class PaystackIntegrationService {
           `${this.paystackProvider.baseUrl}/subaccount`,
           {
             business_name: business.businessName,
-            settlement_bank: user.walletBankCode, // Settle to DVA
-            account_number: user.walletAccountNumber, // DVA account number
+            settlement_bank: user.wallet.bankCode, // Settle to DVA
+            account_number: user.wallet.accountNumber, // DVA account number
             percentage_charge: businessSharePercentage,
             description: business.businessDescription || `Subaccount for ${business.businessName}`,
             primary_contact_email: user.email,
-            primary_contact_name: `${user.firstName} ${user.lastName}`,
-            primary_contact_phone: user.phone,
+            primary_contact_name: `${user.profile?.firstName} ${user.profile?.lastName}`,
+            primary_contact_phone: user.profile?.phone,
             metadata: {
               businessId: business.id,
               userId: user.id,
@@ -165,13 +190,24 @@ export class PaystackIntegrationService {
 
       const subaccountCode = response.data.data.subaccount_code;
 
-      // Update business with subaccount details
-      await this.businessRepository.update(business.id, {
-        paystackSubaccountCode: subaccountCode,
-        revenueSharePercentage: businessSharePercentage,
-        isSubaccountActive: true,
-        settlementSchedule: 'AUTO',
-      });
+      // Create or update BusinessPaymentAccount entity
+      if (business.paymentAccount) {
+        await this.businessPaymentAccountRepository.update(business.paymentAccount.id, {
+          providerSubaccountCode: subaccountCode,
+          status: PaymentAccountStatus.ACTIVE,
+          providerMetadata: response.data.data,
+          activatedAt: new Date(),
+        });
+      } else {
+        const paymentAccount = this.businessPaymentAccountRepository.create({
+          businessId: business.id,
+          providerSubaccountCode: subaccountCode,
+          status: PaymentAccountStatus.ACTIVE,
+          providerMetadata: response.data.data,
+          activatedAt: new Date(),
+        });
+        await this.businessPaymentAccountRepository.save(paymentAccount);
+      }
 
       this.logger.log(`Subaccount created for business ${business.id}: ${subaccountCode}`);
       return response.data.data;
@@ -280,7 +316,28 @@ export class PaystackIntegrationService {
         settledAt: data.status === TransactionStatus.SUCCESS ? new Date() : undefined,
       });
 
-      return await this.transactionRepository.save(transaction);
+      const savedTransaction = await this.transactionRepository.save(transaction);
+
+      // Audit Log for initiated transaction
+      await this.auditService.log({
+        action: 'TRANSACTION_INITIATED',
+        entityId: savedTransaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: savedTransaction.userId || undefined,
+        metadata: {
+          businessId: savedTransaction.businessId,
+          details: {
+            type: savedTransaction.type,
+            amount: savedTransaction.amount,
+            flow: savedTransaction.flow,
+            reference: savedTransaction.reference
+          },
+          ...data,
+          providerResponse: undefined
+        },
+      });
+
+      return savedTransaction;
     } catch (error) {
       this.logger.error('Failed to record transaction:', error);
       throw error;

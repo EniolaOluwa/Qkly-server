@@ -1,23 +1,25 @@
 // src/core/payment/payment.module.ts
 import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { OrderModule } from '../order/order.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
 import { PaymentService } from './payment.service';
 import { PaystackIntegrationService } from './paystack-integration.service';
-import { MonnifyProvider } from './providers/monnify.provider';
 import { PaystackWebhookHandler } from './providers/paystack-webhook.handler';
 import { PaystackProvider } from './providers/paystack.provider';
+import { PaymentController } from './payment.controller';
+
 @Module({
+  controllers: [PaymentController],
   imports: [
     HttpModule,
     ScheduleModule.forRoot(),
     SharedRepositoryModule,
-    // Import OrderModule if you need OrderService
+    forwardRef(() => OrderModule),
   ],
   providers: [
     PaymentService,
-    MonnifyProvider,
     PaystackProvider,
     PaystackWebhookHandler,
     PaystackIntegrationService,
