@@ -6,7 +6,7 @@ import { OrderMetricsService } from "../order/order-metric.service";
 import { OrderService } from "../order/order.service";
 import { PaginationResultDto } from "../../common/queries/dto";
 import { ApiAuth, ApiPaginatedResponse } from "../../common/swagger/api-decorators";
-import { FindAllOrdersDto } from "../order/dto/filter-order.dot";
+import { FindAllOrdersDto } from "../order/dto/filter-order.dto";
 import { Order } from "../order/entity/order.entity";
 
 @Admin()

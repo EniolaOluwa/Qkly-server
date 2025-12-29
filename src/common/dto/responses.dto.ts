@@ -11,8 +11,10 @@ import {
   Matches,
   IsUUID,
   Length,
+  IsPhoneNumber,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { CountryCode } from '../utils/phone.util';
 
 export class WelcomeResponseDto {
   @ApiProperty({
@@ -48,11 +50,20 @@ export class RegisterUserDto {
   lastname: string;
 
   @ApiProperty({
-    description: 'User phone number',
-    example: '+1234567890',
+    description: 'User phone number (Nigerian format)',
+    example: '08012345678',
+    examples: [
+      '08012345678',
+      '+2348012345678',
+      '2348012345678',
+      '0703 456 7890',
+    ],
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
   @ApiProperty({
@@ -164,9 +175,9 @@ export class RegisterUserResponseDto {
 
   @ApiProperty({
     description: 'Current onboarding step',
-    example: 0,
+    example: 'personal_information',
   })
-  onboardingStep: number;
+  onboardingStep: string;
 }
 
 export class CreateBusinessTypeDto {
@@ -484,6 +495,9 @@ export class GeneratePhoneOtpDto {
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 }
 
@@ -514,6 +528,9 @@ export class VerifyPhoneOtpDto {
   })
   @IsString()
   @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
   @ApiProperty({
@@ -635,6 +652,11 @@ export class LoginResponseDto {
     description: 'User phone number',
     example: '+1234567890',
   })
+  @IsString()
+  @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
   @ApiProperty({
@@ -650,10 +672,10 @@ export class LoginResponseDto {
   isPhoneVerified: boolean;
 
   @ApiProperty({
-    description: 'Current onboarding step (0: Personal Info, 1: Phone Verification, 2: Business Info, 3: KYC, 4: PIN)',
-    example: 0,
+    description: 'Current onboarding step',
+    example: 'personal_information',
   })
-  onboardingStep: number;
+  onboardingStep: string;
 }
 
 export class VerifyKycDto {
@@ -707,6 +729,32 @@ export class KycVerificationResponseDto {
     required: false,
   })
   last_name?: string;
+}
+
+export class UpgradeToTier3Dto {
+  @ApiProperty({
+    description: 'Type of ID document (e.g., NIN, PASSPORT, DRIVERS_LICENSE)',
+    example: 'NIN',
+  })
+  @IsString()
+  @IsNotEmpty()
+  idType: string;
+
+  @ApiProperty({
+    description: 'ID Document Number',
+    example: 'A0000000',
+  })
+  @IsString()
+  @IsNotEmpty()
+  idNumber: string;
+
+  @ApiProperty({
+    description: 'Image of the ID document',
+    type: 'string',
+    format: 'binary',
+  })
+  @IsOptional()
+  idImage?: Express.Multer.File;
 }
 
 export class KycErrorResponseDto {
@@ -926,8 +974,11 @@ export class LoginWithPinDto {
     description: 'User phone number',
     example: '+1234567890',
   })
-  @IsNotEmpty()
   @IsString()
+  @IsNotEmpty()
+  @IsPhoneNumber(CountryCode.NIGERIA, {
+    message: 'Phone number must be a valid Nigerian phone number (e.g., 08012345678, +2348012345678)',
+  })
   phone: string;
 
 

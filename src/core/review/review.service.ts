@@ -1,4 +1,3 @@
-import { OrderItemStatus } from './../order/interfaces/order.interface';
 import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,7 +5,7 @@ import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../commo
 import { Business } from '../businesses/business.entity';
 import { OrderItem } from '../order/entity/order-items.entity';
 import { Order } from '../order/entity/order.entity';
-import { OrderStatus } from '../order/interfaces/order.interface';
+import { OrderStatus, OrderItemStatus } from '../../common/enums/order.enum';
 import { Product } from '../product/entity/product.entity';
 import { User } from '../users/entity/user.entity';
 import { CreateReviewDto, GuestReviewVerificationDto, UpdateReviewDto } from './dto/create-review.dto';

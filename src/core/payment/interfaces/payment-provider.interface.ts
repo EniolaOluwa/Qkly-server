@@ -11,6 +11,8 @@ import {
   BankAccountDetailsDto,
   WebhookEventDto,
   PaymentProviderType,
+  RefundRequestDto,
+  RefundResponseDto,
 } from '../dto/payment-provider.dto';
 
 
@@ -73,4 +75,6 @@ export abstract class IPaymentProvider {
 
 
   getAccessToken?(): Promise<string>;
+
+  abstract createRefund(dto: RefundRequestDto): Promise<RefundResponseDto>;
 }

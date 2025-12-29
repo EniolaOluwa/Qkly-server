@@ -1,25 +1,27 @@
 // src/modules/payments/payment.service.ts
 
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IPaymentProvider } from './interfaces/payment-provider.interface';
-import { MonnifyProvider } from './providers/monnify.provider';
-import { PaystackProvider } from './providers/paystack.provider';
+import { ErrorHelper } from '../../common/utils';
+import { OrderService } from '../order/order.service';
 import {
+  BankAccountDetailsDto,
   CreateVirtualAccountDto,
-  VirtualAccountResponseDto,
-  WalletBalanceDto,
   InitializePaymentRequestDto,
   InitializePaymentResponseDto,
-  VerifyPaymentResponseDto,
+  PaymentProviderType,
+  ResolveBankAccountDto,
   TransferRequestDto,
   TransferResponseDto,
-  ResolveBankAccountDto,
-  BankAccountDetailsDto,
+  VerifyPaymentResponseDto,
+  VirtualAccountResponseDto,
+  WalletBalanceDto,
   WebhookEventDto,
-  PaymentProviderType,
+  RefundRequestDto,
+  RefundResponseDto,
 } from './dto/payment-provider.dto';
-import { ErrorHelper } from '../../common/utils';
+import { IPaymentProvider } from './interfaces/payment-provider.interface';
+import { PaystackProvider } from './providers/paystack.provider';
 
 /**
  * Payment Service - Unified interface for all payment providers
@@ -33,8 +35,9 @@ export class PaymentService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly monnifyProvider: MonnifyProvider,
     private readonly paystackProvider: PaystackProvider,
+    @Inject(forwardRef(() => OrderService))
+    private readonly orderService: OrderService,
   ) {
     // Get configured provider from environment
     const configuredProvider = this.configService.get<string>(
@@ -45,17 +48,9 @@ export class PaymentService {
     this.providerType = configuredProvider as PaymentProviderType;
 
     // Select provider based on configuration
-    switch (this.providerType) {
-      case PaymentProviderType.PAYSTACK:
-        this.provider = this.paystackProvider;
-        this.logger.log('Using Paystack as payment provider');
-        break;
-      case PaymentProviderType.MONNIFY:
-      default:
-        this.provider = this.monnifyProvider;
-        this.logger.log('Using Monnify as payment provider');
-        break;
-    }
+    // Only Paystack is supported
+    this.provider = this.paystackProvider;
+    this.logger.log('Using Paystack as payment provider');
   }
 
   /**
@@ -86,11 +81,39 @@ export class PaymentService {
       this.logger.log(
         `Creating virtual account for ${dto.customerEmail} using ${this.providerType}`,
       );
+      // We need to cast or ensure provider has createVirtualAccount accepting subaccount
+      // Since we updated provider, it handles it, but interface might limit us.
+      // Dto now has subaccount. Passing it through.
       return await this.provider.createVirtualAccount(dto);
     } catch (error) {
       this.logger.error('Failed to create virtual account:', error.message);
       throw error;
     }
+  }
+
+  async fetchSubaccount(subaccountCode: string): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK) {
+      return (this.provider as any).fetchSubaccount(subaccountCode);
+    }
+    throw new Error('Provider does not support subaccount fetching');
+  }
+
+  /**
+   * Create a subaccount (Delegates to provider)
+   */
+  async requestPayout(subaccountCode: string, amount: number, bankDetails: any): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK) {
+      return (this.provider as any).requestPayout(subaccountCode, amount, bankDetails);
+    }
+    throw new Error('Provider does not support payouts');
+  }
+
+  async createSubaccount(payload: any): Promise<any> {
+    // Check if provider supports it
+    if (this.providerType === PaymentProviderType.PAYSTACK && 'createSubaccount' in this.provider) {
+      return await (this.provider as any).createSubaccount(payload);
+    }
+    throw new Error(`Provider ${this.providerType} does not support subaccount creation`);
   }
 
   /**
@@ -233,17 +256,23 @@ export class PaymentService {
   async processWebhook(
     payload: any,
     signature?: string,
+    rawBody?: string,
   ): Promise<WebhookEventDto> {
     try {
       // Validate signature if provided
-      if (signature) {
-        const isValid = this.provider.validateWebhookSignature(payload, signature);
+      if (signature && rawBody) {
+        const isValid = this.provider.validateWebhookSignature(rawBody, signature);
         if (!isValid) {
           ErrorHelper.InternalServerErrorException('Invalid webhook signature');
         }
       }
 
-      return await this.provider.processWebhook(payload, signature);
+      const event = await this.provider.processWebhook(payload, signature);
+
+      // Forward to OrderService for processing
+      await this.orderService.processWebhook(event);
+
+      return event;
     } catch (error) {
       this.logger.error('Failed to process webhook:', error.message);
       throw error;
@@ -253,9 +282,9 @@ export class PaymentService {
   /**
    * Validate webhook signature
    */
-  validateWebhookSignature(payload: any, signature: string): boolean {
+  validateWebhookSignature(rawBody: string, signature: string): boolean {
     try {
-      return this.provider.validateWebhookSignature(payload, signature);
+      return this.provider.validateWebhookSignature(rawBody, signature);
     } catch (error) {
       this.logger.error('Failed to validate webhook signature:', error.message);
       return false;
@@ -321,5 +350,9 @@ export class PaymentService {
         message: error.message,
       };
     }
+  }
+  // Create Refund
+  async createRefund(dto: RefundRequestDto): Promise<RefundResponseDto> {
+    return this.provider.createRefund(dto);
   }
 }

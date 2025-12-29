@@ -17,6 +17,9 @@ import { BusinessType } from './business-type.entity';
 import { User } from '../users/entity/user.entity';
 import slugify from 'slugify';
 import { LeadForm } from '../lead/entity/leadForm.entity';
+import { BusinessPaymentAccount } from './entities/business-payment-account.entity';
+import { BusinessSettlementConfig } from './entities/business-settlement-config.entity';
+import { Settlement } from '../settlements/entities/settlement.entity';
 
 
 
@@ -72,18 +75,6 @@ export class Business {
   @Column({ nullable: true })
   storeColor: string;
 
-  @Column({ nullable: true, comment: 'Paystack subaccount code for split payments' })
-  paystackSubaccountCode: string;
-
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 95.00, comment: 'Percentage business receives from sales (100 - platform fee)' })
-  revenueSharePercentage: number;
-
-  @Column({ type: 'boolean', default: false, comment: 'Whether subaccount is verified and active' })
-  isSubaccountActive: boolean;
-
-  @Column({ nullable: true, comment: 'Settlement schedule for this business' })
-  settlementSchedule: string;
-
   @CreateDateColumn()
   createdAt: Date;
 
@@ -92,6 +83,16 @@ export class Business {
 
   @OneToMany(() => LeadForm, (form) => form.business)
   forms: LeadForm[];
+
+  // Relationships to new separated entities
+  @OneToOne(() => BusinessPaymentAccount, (account) => account.business, { cascade: true })
+  paymentAccount: BusinessPaymentAccount;
+
+  @OneToOne(() => BusinessSettlementConfig, (config) => config.business, { cascade: true })
+  settlementConfig: BusinessSettlementConfig;
+
+  @OneToMany(() => Settlement, (settlement) => settlement.business)
+  settlements: Settlement[];
 
   @BeforeInsert()
   @BeforeUpdate()

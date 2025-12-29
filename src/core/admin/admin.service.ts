@@ -16,7 +16,7 @@ import { CreateAdminDto } from "./dto/create-admin.dto";
 import { DashboardStatsDto } from "./dto/dashboard-stats.dto";
 import { UpdateAdminDto } from "./dto/update-admin.dto";
 import { MerchantMetricsResponse, RecentMerchantMetricsQueryDto, RecentMerchantWithSales } from "./dto/merchant-metrics.dto";
-import { PaymentStatus } from "../order/interfaces/order.interface";
+import { PaymentStatus } from "../../common/enums/payment.enum";
 
 
 @Injectable()
@@ -53,10 +53,12 @@ export class AdminService {
       ErrorHelper.ConflictException('Email already in use');
     }
 
-    // Check if phone already exists
-    const existingPhone = await this.userRepository.findOne({
-      where: { phone: createAdminDto.phone },
-    });
+    // Check if phone already exists in user profiles
+    const existingPhone = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .where('profile.phone = :phone', { phone: createAdminDto.phone })
+      .getOne();
 
     if (existingPhone) {
       ErrorHelper.ConflictException('Phone number already in use');
@@ -82,30 +84,38 @@ export class AdminService {
     // Hash password
     const hashedPassword = CryptoUtil.hashPassword(createAdminDto.password);
 
-    // Create admin user
+    // Create admin user with related entities
     const admin = this.userRepository.create({
-      firstName: createAdminDto.firstName,
-      lastName: createAdminDto.lastName,
       email: createAdminDto.email,
-      phone: createAdminDto.phone,
       password: hashedPassword,
       userType: UserType.ADMIN,
       roleId: createAdminDto.roleId,
       status: UserStatus.ACTIVE,
       isEmailVerified: true,
-      isPhoneVerified: true,
-      isOnboardingCompleted: true,
-      deviceId: `web-admin-${createAdminDto.phone}`,
-      longitude: 0,
-      latitude: 0,
       createdBy,
+      profile: {
+        firstName: createAdminDto.firstName,
+        lastName: createAdminDto.lastName,
+        phone: createAdminDto.phone,
+        isPhoneVerified: true,
+      },
+      onboarding: {
+        isCompleted: true,
+        progressPercentage: 100,
+        completedAt: new Date(),
+      },
+      security: {
+        deviceId: `web-admin-${createAdminDto.phone}`,
+        longitude: 0,
+        latitude: 0,
+      },
     });
 
     const savedAdmin = await this.userRepository.save(admin);
     this.logger.log(`Admin user created: ${savedAdmin.email} by user ${createdBy}`);
 
     // Remove sensitive data
-    const { password, pin, ...adminWithoutSensitiveData } = savedAdmin;
+    const { password, ...adminWithoutSensitiveData } = savedAdmin;
     return adminWithoutSensitiveData as User;
   }
 
@@ -139,10 +149,13 @@ export class AdminService {
     }
 
     // Check phone uniqueness
-    if (updateAdminDto.phone && updateAdminDto.phone !== admin.phone) {
-      const existingPhone = await this.userRepository.findOne({
-        where: { phone: updateAdminDto.phone, id: Not(adminId) },
-      });
+    if (updateAdminDto.phone) {
+      const existingPhone = await this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.profile', 'profile')
+        .where('profile.phone = :phone', { phone: updateAdminDto.phone })
+        .andWhere('user.id != :adminId', { adminId })
+        .getOne();
 
       if (existingPhone) {
         ErrorHelper.ConflictException('Phone number already in use');
@@ -173,21 +186,21 @@ export class AdminService {
     const updatedAdmin = await this.userRepository.save(admin);
     this.logger.log(`Admin updated: ${updatedAdmin.email} by user ${updatedBy}`);
 
-    const { password, pin, ...adminWithoutSensitiveData } = updatedAdmin;
+    const { password, ...adminWithoutSensitiveData } = updatedAdmin;
     return adminWithoutSensitiveData as User;
   }
 
   async getAdminById(adminId: number): Promise<User> {
     const admin = await this.userRepository.findOne({
       where: { id: adminId, userType: UserType.ADMIN },
-      relations: ['role'],
+      relations: ['role', 'profile'],
     });
 
     if (!admin) {
       ErrorHelper.NotFoundException('Admin not found');
     }
 
-    const { password, pin, ...adminWithoutSensitiveData } = admin;
+    const { password, ...adminWithoutSensitiveData } = admin;
     return adminWithoutSensitiveData as User;
   }
 
@@ -234,11 +247,12 @@ export class AdminService {
       .andWhere('user.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo })
       .getCount();
 
-    // Last login statistics - use query builder
+    // Last login statistics - query admins with security records that have recent activity
     const adminsWithRecentLogin = await this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.security', 'security')
       .where('user.userType = :userType', { userType: UserType.ADMIN })
-      .andWhere('user.lastLoginAt IS NOT NULL')
+      .andWhere('security.updatedAt IS NOT NULL')
       .getCount();
 
     return {
@@ -346,25 +360,28 @@ export class AdminService {
       /* ---------------------------------------------
          SALES AGGREGATION QUERY
       ----------------------------------------------*/
+      /* ---------------------------------------------
+         SALES AGGREGATION QUERY
+      ----------------------------------------------*/
       const salesQuery = this.orderRepository
-        .createQueryBuilder('order')
-        .select('order.businessId', 'businessId')
-        .addSelect('SUM(order.total)', 'totalSales')
-        .addSelect('COUNT(order.id)', 'salesVolume')
-        .where('order.paymentStatus = :status', {
+        .createQueryBuilder('ord')
+        .select('ord.businessId', 'businessId')
+        .addSelect('SUM(ord.total)', 'totalSales')
+        .addSelect('COUNT(ord.id)', 'salesVolume')
+        .where('ord.paymentStatus = :status', {
           status: PaymentStatus.PAID,
         });
 
       if (fromDate) {
-        salesQuery.andWhere('order.createdAt >= :fromDate', { fromDate });
+        salesQuery.andWhere('ord.createdAt >= :fromDate', { fromDate });
       }
 
       if (toDate) {
-        salesQuery.andWhere('order.createdAt <= :toDate', { toDate });
+        salesQuery.andWhere('ord.createdAt <= :toDate', { toDate });
       }
 
       const salesData = await salesQuery
-        .groupBy('order.businessId')
+        .groupBy('ord.businessId')
         .getRawMany();
 
       const businessIds = salesData.map(d => d.businessId);
@@ -386,6 +403,7 @@ export class AdminService {
       const merchantQuery = this.userRepository
         .createQueryBuilder('user')
         .leftJoinAndSelect('user.business', 'business')
+        .leftJoinAndSelect('user.profile', 'profile')
         .where('user.userType = :userType', { userType: UserType.USER })
         .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
         .andWhere('business.id IN (:...businessIds)', { businessIds });
@@ -393,8 +411,8 @@ export class AdminService {
       if (search) {
         merchantQuery.andWhere(
           `(
-            LOWER(user.firstName) LIKE LOWER(:search) OR
-            LOWER(user.lastName) LIKE LOWER(:search) OR
+            LOWER(profile.firstName) LIKE LOWER(:search) OR
+            LOWER(profile.lastName) LIKE LOWER(:search) OR
             LOWER(user.email) LIKE LOWER(:search) OR
             LOWER(business.businessName) LIKE LOWER(:search)
           )`,
@@ -428,11 +446,11 @@ export class AdminService {
 
         return {
           id: merchant.id,
-          firstName: merchant.firstName,
-          lastName: merchant.lastName,
+          firstName: merchant.profile?.firstName || '',
+          lastName: merchant.profile?.lastName || '',
           email: merchant.email,
-          phone: merchant.phone,
-          profilePicture: merchant.profilePicture,
+          phone: merchant.profile?.phone || '',
+          profilePicture: merchant.profile?.profilePicture || '',
           businessName: merchant.business?.businessName,
           totalSales: merchantSales
             ? Number(merchantSales.totalSales)

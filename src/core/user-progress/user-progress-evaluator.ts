@@ -21,6 +21,7 @@ export class UserProgressEvaluator {
     // 1. BUSINESS_INFO_UPDATED
     const business = await this.businessRepo.findOne({
       where: { userId: user.id },
+      relations: ['security']
     });
 
     if (business) {
@@ -45,7 +46,7 @@ export class UserProgressEvaluator {
     }
 
     // 3. PIN_CREATED (Backfill friendly)
-    const hasPin = !!user.pin;
+    const hasPin = !!user.security?.pin;
 
     if (hasPin) {
       progress.push(UserProgressEvent.TRANSACTION_PIN_CREATED);

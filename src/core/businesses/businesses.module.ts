@@ -17,9 +17,11 @@ import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
 import { Review } from '../review/entity/review.entity';
 import { Transaction } from '../transaction/entity/transaction.entity';
 
+import { BusinessPaymentAccount } from './entities/business-payment-account.entity';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Business, BusinessType, User, Role, Order, Product, TrafficEvent, Review, Transaction]),
+    TypeOrmModule.forFeature([Business, BusinessType, User, Role, Order, Product, TrafficEvent, Review, Transaction, BusinessPaymentAccount]),
     ConfigModule,
     UserProgressModule
   ],

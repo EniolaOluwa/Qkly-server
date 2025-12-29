@@ -14,7 +14,9 @@ export class ProgressBackfillService {
   ) { }
 
   async runBackfill() {
-    const users = await this.userRepo.find();
+    const users = await this.userRepo.find({
+      relations: ['security'],
+    });
 
 
     for (const user of users) {

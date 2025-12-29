@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
@@ -13,19 +14,15 @@ import {
 } from 'typeorm';
 import { Business } from '../../businesses/business.entity';
 import { User } from '../../users/entity/user.entity';
-import {
-  OrderStatus,
-  PaymentStatus,
-  PaymentMethod,
-  DeliveryMethod,
-  PaymentDetails,
-  DeliveryDetails,
-  SettlementDetails,
-  RefundDetails,
-  OrderStatusHistory,
-} from '../interfaces/order.interface';
+import { OrderStatus, DeliveryMethod } from '../../../common/enums/order.enum';
+import { PaymentStatus, PaymentMethod } from '../../../common/enums/payment.enum';
 import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
+import { OrderStatusHistory } from './order-status-history.entity';
+import { OrderPayment } from './order-payment.entity';
+import { OrderShipment } from './order-shipment.entity';
+import { OrderRefund } from './order-refund.entity';
+import { Settlement } from '../../settlements/entities/settlement.entity';
 
 @Entity('orders')
 @Index(['userId', 'businessId'])
@@ -41,7 +38,11 @@ export class Order {
   orderReference: string;
 
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
+  @Index()
+  cartId: number | null;
+
+  @Column({ type: 'int', nullable: true })
   @Index()
   userId: number | null;
 
@@ -128,21 +129,6 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: false })
   total: number;
 
-  @Column({ nullable: true })
-  paymentDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  paymentDetails: PaymentDetails;
-
-  @Column({ nullable: true })
-  estimatedDeliveryDate: Date;
-
-  @Column({ nullable: true })
-  deliveryDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  deliveryDetails: DeliveryDetails;
-
   @Column({ type: 'text', nullable: true })
   notes: string;
 
@@ -153,41 +139,23 @@ export class Order {
   items: OrderItem[];
 
   @Column({ type: 'boolean', default: false })
-  isBusinessSettled: boolean;
-
-  @Column({ nullable: true })
-  settlementReference: string;
-
-  @Column({ nullable: true })
-  settlementDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  settlementDetails: SettlementDetails;
-
-
-  @Column({ type: 'boolean', default: false })
-  isRefunded: boolean;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  refundedAmount: number;
-
-  @Column({ nullable: true })
-  refundReference: string;
-
-  @Column({ nullable: true })
-  refundDate: Date;
-
-  @Column({ type: 'json', nullable: true })
-  refundDetails: RefundDetails;
-
-
-  @Column({ type: 'boolean', default: false })
   isGuestOrder: boolean;
 
+  // Relationships to new entities
+  @OneToMany(() => OrderStatusHistory, (history) => history.order, { cascade: true })
+  statusHistoryRecords: OrderStatusHistory[];
 
-  @Column({ type: 'json', nullable: true, default: '[]' })
-  statusHistory: OrderStatusHistory[];
+  @OneToOne(() => OrderPayment, (payment) => payment.order, { cascade: true })
+  payment: OrderPayment;
 
+  @OneToMany(() => OrderShipment, (shipment) => shipment.order, { cascade: true })
+  shipments: OrderShipment[];
+
+  @OneToMany(() => OrderRefund, (refund) => refund.order, { cascade: true })
+  refunds: OrderRefund[];
+
+  @OneToOne(() => Settlement, (settlement) => settlement.order)
+  settlement: Settlement;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -205,10 +173,6 @@ export class Order {
     }
     if (!this.transactionReference) {
       this.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
-    }
-
-    if (!this.statusHistory) {
-      this.statusHistory = [];
     }
   }
 }

@@ -9,8 +9,9 @@ import {
   Index,
   DeleteDateColumn,
 } from 'typeorm';
-import { OrderItemStatus } from '../interfaces/order.interface';
+import { OrderItemStatus } from '../../../common/enums/order.enum';
 import { Product } from '../../product/entity/product.entity';
+import { ProductVariant } from '../../product/entity/product-variant.entity';
 import { Order } from './order.entity';
 
 @Entity('order_items')
@@ -33,6 +34,14 @@ export class OrderItem {
   @ManyToOne(() => Product, { nullable: false })
   @JoinColumn({ name: 'productId' })
   product: Product;
+
+  @Column({ nullable: true })
+  @Index()
+  variantId: number;
+
+  @ManyToOne(() => ProductVariant, { nullable: true })
+  @JoinColumn({ name: 'variantId' })
+  variant: ProductVariant;
 
   @Column({ nullable: false })
   productName: string;

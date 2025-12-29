@@ -1,35 +1,36 @@
 import {
-  Injectable,
   ConflictException,
-  InternalServerErrorException,
-  NotFoundException,
+  Injectable,
   Logger,
+  NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsRelations, Repository, SelectQueryBuilder } from 'typeorm';
-import { Business } from './business.entity';
-import { BusinessType } from './business-type.entity';
-import { User, UserStatus } from '../users/entity/user.entity';
-import { OnboardingStep } from '../users/dto/onboarding-step.enum';
+import { UserType } from '../../common/auth/user-role.enum';
 import {
-  CreateBusinessTypeDto,
-  UpdateBusinessTypeDto,
   CreateBusinessDto,
+  CreateBusinessTypeDto,
   UpdateBusinessDto,
+  UpdateBusinessTypeDto,
 } from '../../common/dto/responses.dto';
-import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
-import { ErrorHelper } from '../../common/utils';
-import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
-import { UserProgressService } from '../user-progress/user-progress.service';
+import { PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { OnboardingStep } from '../../common/enums/user.enum';
 import { PaginationMetadataDto } from '../../common/queries/dto';
+import { ErrorHelper } from '../../common/utils';
+import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { DateFilterUtil } from '../../common/utils/date-filter.util';
 import { SubaccountStatusEnum } from '../admin/enums/admin-filter.enum';
+import { LeadForm } from '../lead/entity/leadForm.entity';
+import { Role, RoleStatus } from '../roles/entities/role.entity';
+import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
+import { UserProgressService } from '../user-progress/user-progress.service';
+import { User, UserStatus } from '../users/entity/user.entity';
+import { BusinessType } from './business-type.entity';
+import { Business } from './business.entity';
 import { MerchantFilterDto } from './dto/merchant-filter.dto';
 import { MerchantStatsDto } from './dto/merchant-stats.dto';
 import { MerchantsListResponseDto } from './dto/merchants-list-response.dto';
-import { UserType } from '../../common/auth/user-role.enum';
-import { Role, RoleStatus } from '../roles/entities/role.entity';
-import { LeadForm } from '../lead/entity/leadForm.entity';
+import { BusinessPaymentAccount } from './entities/business-payment-account.entity'; // Import
 
 @Injectable()
 export class BusinessesService {
@@ -43,8 +44,50 @@ export class BusinessesService {
     private userRepos: Repository<User>,
     @InjectRepository(Role)
     private roleRepo: Repository<Role>,
+    @InjectRepository(BusinessPaymentAccount)
+    private paymentAccountRepo: Repository<BusinessPaymentAccount>,
     private cloudinaryUtil: CloudinaryUtil,
   ) { }
+
+  /**
+   * Update or Create Subaccount Code for a Merchant
+   */
+  async updateSubaccountCode(userId: number, subaccountCode: string): Promise<void> {
+    const business = await this.businessRepo.findOne({
+      where: { userId },
+      relations: ['paymentAccount']
+    });
+
+    if (!business) {
+      // Not a business, maybe regular user.
+      return;
+    }
+
+    let account = business.paymentAccount;
+    if (!account) {
+      account = new BusinessPaymentAccount();
+      account.business = business;
+      // Default values
+      account.accountName = business.businessName;
+      account.bankName = 'Paystack Subaccount';
+      account.accountNumber = 'UNKNOWN'; // We don't have this here, but needed for entity validation potentially
+      account.status = PaymentAccountStatus.ACTIVE;
+    }
+
+    account.providerSubaccountCode = subaccountCode;
+    // Ensure status is active
+    account.status = PaymentAccountStatus.ACTIVE;
+
+    await this.paymentAccountRepo.save(account);
+  }
+
+  async getBusinessPaymentAccount(userId: number): Promise<BusinessPaymentAccount | null> {
+    const business = await this.businessRepo.findOne({
+      where: { userId },
+      relations: ['paymentAccount']
+    });
+    return business?.paymentAccount || null;
+  }
 
   private readonly logger = new Logger(BusinessesService.name);
 
@@ -135,7 +178,7 @@ export class BusinessesService {
     // Find user
     const user = await this.userRepos.findOne({
       where: { id: userId },
-      relations: ['role'],
+      relations: ['role', 'onboarding', 'profile'],
     });
 
     if (!user) {
@@ -158,10 +201,15 @@ export class BusinessesService {
       ErrorHelper.BadRequestException('User already has a business registered');
     }
 
+    console.log({
+      onboarding: user.onboarding
+    })
 
-    if (user.onboardingStep !== OnboardingStep.PHONE_VERIFICATION) {
+
+    // Verify phone is verified (prerequisite for business creation)
+    if (!user.profile?.isPhoneVerified) {
       ErrorHelper.ConflictException(
-        `User must have completed phone verification before creating a business. Current step: ${user.onboardingStep}`,
+        'User must verify phone number before creating a business.',
       );
     }
 
@@ -183,6 +231,7 @@ export class BusinessesService {
 
 
     const business = this.businessRepo.create({
+      ...createBusinessDto,
       businessName: createBusinessDto.businessName,
       businessTypeId: createBusinessDto.businessTypeId,
       businessDescription: createBusinessDto.businessDescription,
@@ -193,10 +242,16 @@ export class BusinessesService {
 
     const savedBusiness = await this.businessRepo.save(business);
 
+    // Update user's businessId
     await this.userRepos.update(userId, {
-      onboardingStep: OnboardingStep.BUSINESS_INFORMATION,
       businessId: savedBusiness.id,
     });
+
+    // Update onboarding step in user_onboarding table
+    if (user.onboarding && user.onboarding.currentStep !== OnboardingStep.AUTHENTICATION_PIN) {
+      user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
+      await this.userRepos.save(user);
+    }
 
     return await this.findBusinessById(savedBusiness.id);
   }
@@ -458,23 +513,10 @@ export class BusinessesService {
       .leftJoinAndSelect('business.user', 'user')
       .leftJoinAndSelect('user.role', 'role')
       .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoinAndSelect('business.paymentAccount', 'paymentAccount')
       .leftJoin('orders', 'order', 'order.businessId = business.id')
       .leftJoin('products', 'product', 'product.businessId = business.id')
       .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
-      .select([
-        'business.id',
-        'business.businessName',
-        'business.storeName',
-        'business.slug',
-        'business.location',
-        'business.isSubaccountActive',
-        'business.revenueSharePercentage',
-        'business.createdAt',
-        'business.updatedAt',
-        'user.email',
-        'user.role',
-        'businessType.name',
-      ])
       .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
       .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
       .addSelect('COUNT(DISTINCT product.id)', 'totalProducts')
@@ -487,13 +529,17 @@ export class BusinessesService {
     queryBuilder = queryBuilder
       .groupBy('business.id')
       .addGroupBy('user.id')
-      .addGroupBy('businessType.id');
+      .addGroupBy('user.roleId') // Postgres strict group by
+      .addGroupBy('role.id')
+      .addGroupBy('businessType.id')
+      .addGroupBy('paymentAccount.id');
 
     // Get count query before applying pagination
     const countQueryBuilder = this.businessRepo
       .createQueryBuilder('business')
       .leftJoin('business.user', 'user')
-      .leftJoin('business.businessType', 'businessType');
+      .leftJoin('business.businessType', 'businessType')
+      .leftJoin('business.paymentAccount', 'paymentAccount');
 
     // Apply same filters to count query
     const countQuery = this.applyFilters(countQueryBuilder, filterDto);
@@ -506,7 +552,15 @@ export class BusinessesService {
 
     // Map results to DTOs
     const merchantsData: MerchantStatsDto[] = merchants.entities.map((business, index) => {
-      const raw = merchants.raw[index];
+      // Find the raw result for this entity (order matches because of same query)
+      // Note: getRawAndEntities returns entities and raw results in same order
+      // However, if we skip/take, we need to be careful. But typeorm usually aligns them.
+      // To be safer, we can match by ID if needed, but index usually works if query is straightforward.
+      // Actually, raw results from getRawAndEntities are flat.
+
+      // Let's find the matching raw result by id to be robust
+      const raw = merchants.raw.find(r => r.business_id === business.id);
+
       return {
         id: business.id,
         businessName: business.businessName,
@@ -515,12 +569,12 @@ export class BusinessesService {
         ownerEmail: business.user?.email || 'N/A',
         businessType: business.businessType?.name || 'N/A',
         location: business.location,
-        totalOrders: parseInt(raw.totalOrders) || 0,
-        totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
-        totalProducts: parseInt(raw.totalProducts) || 0,
-        totalTransactions: parseInt(raw.totalTransactions) || 0,
-        isSubaccountActive: business.isSubaccountActive,
-        revenueSharePercentage: business.revenueSharePercentage.toString(),
+        totalOrders: raw ? parseInt(raw.totalOrders) : 0,
+        totalSalesVolume: raw ? parseFloat(raw.totalSalesVolume).toFixed(2) : '0.00',
+        totalProducts: raw ? parseInt(raw.totalProducts) : 0,
+        totalTransactions: raw ? parseInt(raw.totalTransactions) : 0,
+        isSubaccountActive: business.paymentAccount?.status === PaymentAccountStatus.ACTIVE,
+        revenueSharePercentage: '95.00', // Platform default revenue share
         dateRegistered: business.createdAt,
         lastUpdated: business.updatedAt,
       };
@@ -534,6 +588,62 @@ export class BusinessesService {
     return {
       data: merchantsData,
       meta,
+    };
+  }
+
+  async getMerchantDetails(id: number): Promise<any> {
+    const business = await this.businessRepo
+      .createQueryBuilder('business')
+      .leftJoinAndSelect('business.user', 'user')
+      .leftJoinAndSelect('user.role', 'role')
+      .leftJoinAndSelect('user.kyc', 'kyc')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoinAndSelect('business.paymentAccount', 'paymentAccount')
+      .leftJoin('orders', 'order', 'order.businessId = business.id')
+      .leftJoin('products', 'product', 'product.businessId = business.id')
+      .leftJoin('transactions', 'transaction', 'transaction.businessId = business.id')
+      .where('business.id = :id', { id })
+      // Use getRawAndEntities to get the full object + aggregates
+      .addSelect('COUNT(DISTINCT order.id)', 'totalOrders')
+      .addSelect('COALESCE(SUM(order.total), 0)', 'totalSalesVolume')
+      .addSelect('COUNT(DISTINCT product.id)', 'totalProducts')
+      .addSelect('COUNT(DISTINCT transaction.id)', 'totalTransactions')
+      .groupBy('business.id')
+      .addGroupBy('user.id')
+      .addGroupBy('profile.id')
+      .addGroupBy('kyc.id')
+      .addGroupBy('role.id')
+      .addGroupBy('businessType.id')
+      .addGroupBy('paymentAccount.id')
+      .getRawAndEntities();
+
+    if (!business || !business.entities.length) {
+      ErrorHelper.NotFoundException(`Merchant with ID ${id} not found`);
+    }
+
+    const entity = business.entities[0];
+    const raw = business.raw[0];
+
+    return {
+      id: entity.id,
+      businessName: entity.businessName,
+      storeName: entity.storeName,
+      slug: entity.slug,
+      ownerEmail: entity.user?.email || 'N/A',
+      userId: entity.user?.id,
+      phoneNumber: entity.user?.profile?.phone || null,
+      kycTier: entity.user?.kyc?.tier || null,
+      businessType: entity.businessType?.name || 'N/A',
+      location: entity.location,
+      totalOrders: parseInt(raw.totalOrders) || 0,
+      totalSalesVolume: parseFloat(raw.totalSalesVolume).toFixed(2),
+      totalProducts: parseInt(raw.totalProducts) || 0,
+      totalTransactions: parseInt(raw.totalTransactions) || 0,
+      isSubaccountActive: entity.paymentAccount?.status === PaymentAccountStatus.ACTIVE,
+      revenueSharePercentage: '95.00', // Default
+      dateRegistered: entity.createdAt,
+      lastUpdated: entity.updatedAt,
     };
   }
 

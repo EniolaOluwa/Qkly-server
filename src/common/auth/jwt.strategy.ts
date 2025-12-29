@@ -24,7 +24,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     const user = await this.userRepository.findOne({
       where: { id: payload.sub },
-      relations: ['role'],
+      relations: ['role', 'profile', 'security'],
     });
 
 
@@ -38,7 +38,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // Check if user is still locked
-    if (user.pinLockedUntil && user.pinLockedUntil > new Date()) {
+    if (user.security?.pinLockedUntil && user.security.pinLockedUntil > new Date()) {
       ErrorHelper.UnauthorizedException('Account is temporarily locked');
     }
 
@@ -46,8 +46,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return {
       userId: payload.sub,
       email: payload.email,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
+      firstName: payload.firstName || user.profile?.firstName,
+      lastName: payload.lastName || user.profile?.lastName,
       userType: user.userType,
       roleName: user.role?.userType,
       roleId: user.roleId,

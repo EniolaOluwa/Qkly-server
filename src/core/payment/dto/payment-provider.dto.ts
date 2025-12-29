@@ -1,7 +1,6 @@
 import { IsString, IsEmail, IsOptional } from "class-validator";
 
 export enum PaymentProviderType {
-  MONNIFY = 'MONNIFY',
   PAYSTACK = 'PAYSTACK',
 }
 
@@ -43,8 +42,12 @@ export class CreateVirtualAccountDto {
   firstName?: string;
 
   @IsOptional()
-  @IsString()
+  @IsOptional()
   lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  subaccount?: string;
 
   @IsOptional()
   @IsString()
@@ -124,6 +127,7 @@ export interface VerifyPaymentResponseDto {
   currency: string;
   metadata?: Record<string, any>;
   provider: PaymentProviderType;
+  providerResponse?: any; // Full response from provider
 }
 
 export enum PaymentVerificationStatus {
@@ -157,11 +161,13 @@ export interface TransferResponseDto {
   dateInitiated: string;
   provider: PaymentProviderType;
   providerResponse?: any;
+  transferCode?: string; // Added for OTP flow
 }
 
 export enum TransferStatus {
   SUCCESS = 'SUCCESS',
   PENDING = 'PENDING',
+  OTP_REQUIRED = 'OTP_REQUIRED', // Added for OTP flow
   FAILED = 'FAILED',
   REVERSED = 'REVERSED',
 }
@@ -195,4 +201,19 @@ export interface WebhookEventDto {
     metadata?: Record<string, any>;
   };
   provider: PaymentProviderType;
+  rawPayload?: any;
+}
+
+export interface RefundRequestDto {
+  transactionReference: string;
+  amount?: number;
+  merchantNote?: string;
+  customerNote?: string;
+}
+
+export interface RefundResponseDto {
+  status: string;
+  message: string;
+  refundReference: string;
+  amount: number;
 }

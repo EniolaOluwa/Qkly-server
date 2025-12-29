@@ -5,13 +5,27 @@ import { Role } from '../../core/roles/entities/role.entity';
 import { User } from '../../core/users';
 import { RolesSeedService } from './roles.seed';
 
+import { Business } from '../../core/businesses/business.entity';
+import { BusinessType } from '../../core/businesses/business-type.entity';
+import { Category } from '../../core/category/entity/category.entity';
+import { Product } from '../../core/product/entity/product.entity';
+import { TestDataSeedService } from './test-data.seed';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forFeature([Role, User]),
+    TypeOrmModule.forFeature([
+      Role,
+      User,
+      Business,
+      BusinessType,
+      Category,
+      Product
+    ]),
+
   ],
-  providers: [RolesSeedService],
-  exports: [RolesSeedService],
+  providers: [RolesSeedService, TestDataSeedService],
+  exports: [RolesSeedService, TestDataSeedService],
 })
 export class SeedModule { }
 

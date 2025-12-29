@@ -19,6 +19,7 @@ export enum TransactionType {
   WITHDRAWAL = 'WITHDRAWAL',
   REFUND = 'REFUND',
   WALLET_FUNDING = 'WALLET_FUNDING',
+  PAYOUT = 'PAYOUT', // Added for transfers
   FEE = 'FEE',
 }
 

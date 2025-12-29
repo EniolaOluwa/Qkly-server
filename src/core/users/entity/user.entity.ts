@@ -4,14 +4,20 @@ import {
   Entity,
   JoinColumn,
   OneToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   ManyToOne
 } from 'typeorm';
 import { UserType } from '../../../common/auth/user-role.enum';
 import { Business } from '../../businesses/business.entity';
-import { OnboardingStep } from '../dto/onboarding-step.enum';
 import { Role } from '../../roles/entities/role.entity';
+import { UserProfile } from '../entities/user-profile.entity';
+import { UserKYC } from '../entities/user-kyc.entity';
+import { UserSecurity } from '../entities/user-security.entity';
+import { UserOnboarding } from '../entities/user-onboarding.entity';
+import { Wallet } from '../../wallets/entities/wallet.entity';
+import { BankAccount } from '../../bank-accounts/entities/bank-account.entity';
 
 
 export enum UserStatus {
@@ -30,26 +36,8 @@ export class User {
   @Column({ unique: true, nullable: false })
   email: string;
 
-  @Column()
-  firstName: string;
-
-  @Column()
-  lastName: string;
-
   @Column({ nullable: false })
   password: string;
-
-  @Column({ length: 20, nullable: false, unique: true })
-  phone: string;
-
-  @Column({ name: 'profile_picture', nullable: true})
-  profilePicture?: string
-
-  @Column({ length: 11, nullable: true })
-  bvn: string;
-
-  @Column({ nullable: true, comment: 'Encrypted PIN for user authentication' })
-  pin: string;
 
   @Column({
     type: 'enum',
@@ -83,33 +71,6 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   suspendedUntil?: Date | null;
 
-  @Column({ nullable: true, comment: 'Monnify wallet reference' })
-  walletReference: string;
-
-  @Column({ nullable: true, comment: 'Monnify wallet account number' })
-  walletAccountNumber: string;
-
-  @Column({ nullable: true, comment: 'Monnify wallet account name' })
-  walletAccountName: string;
-
-  @Column({ nullable: true, comment: 'Monnify wallet bank name' })
-  walletBankName: string;
-
-  @Column({ nullable: true, comment: 'Monnify wallet bank code' })
-  walletBankCode: string;
-
-  @Column({ nullable: true })
-  personalAccountNumber: string;
-
-  @Column({ nullable: true })
-  personalAccountName: string;
-
-  @Column({ nullable: true })
-  personalBankName: string;
-
-  @Column({ nullable: true })
-  personalBankCode: string;
-
   @Column({ nullable: true, unique: true })
   businessId: number;
 
@@ -119,52 +80,6 @@ export class User {
 
   @Column({ default: false })
   isEmailVerified: boolean;
-
-  @Column({ default: false })
-  isPhoneVerified: boolean;
-
-  @Column({
-    type: 'enum',
-    enum: OnboardingStep,
-    default: OnboardingStep.PERSONAL_INFORMATION,
-  })
-  onboardingStep: OnboardingStep;
-
-  @Column({ default: false })
-  isOnboardingCompleted: boolean;
-
-  @Column({ nullable: false })
-  deviceId: string;
-
-  @Column({ type: 'float', nullable: false })
-  longitude: number;
-
-  @Column({ type: 'float', nullable: false })
-  latitude: number;
-
-  @Column({ nullable: true })
-  paystackCustomerCode: string;
-
-  @Column({ nullable: true })
-  paystackDedicatedAccountId: string;
-
-  @Column({ type: 'varchar', default: 'PENDING' })
-  paystackAccountStatus: string;
-
-  @Column({ type: 'varchar', default: 'PAYSTACK' })
-  paymentProvider: string;
-
-  @Column({ default: 0 })
-  pinFailedAttempts: number;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  pinLockedUntil?: Date | null;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  lastLoginAt?: Date | null;
-
-  @Column({ nullable: true })
-  lastLoginIp?: string;
 
   @CreateDateColumn()
   createdAt: Date;
@@ -177,4 +92,23 @@ export class User {
 
   @Column({ nullable: true })
   suspendedBy?: number;
+
+  // Relationships to new separated entities
+  @OneToOne(() => UserProfile, (profile) => profile.user, { cascade: true })
+  profile: UserProfile;
+
+  @OneToOne(() => UserKYC, (kyc) => kyc.user, { cascade: true })
+  kyc: UserKYC;
+
+  @OneToOne(() => UserSecurity, (security) => security.user, { cascade: true })
+  security: UserSecurity;
+
+  @OneToOne(() => UserOnboarding, (onboarding) => onboarding.user, { cascade: true })
+  onboarding: UserOnboarding;
+
+  @OneToOne(() => Wallet, (wallet) => wallet.user)
+  wallet: Wallet;
+
+  @OneToMany(() => BankAccount, (account) => account.user)
+  bankAccounts: BankAccount[];
 }

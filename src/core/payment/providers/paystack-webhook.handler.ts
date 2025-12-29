@@ -1,10 +1,12 @@
 // src/core/payment/providers/paystack-webhook.handler.ts
 
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Order } from '../../order/entity/order.entity';
-import { OrderStatus, PaymentStatus } from '../../order/interfaces/order.interface';
+import { OrderStatus } from '../../../common/enums/order.enum';
+import { PaymentStatus } from '../../../common/enums/payment.enum';
 import {
   Transaction,
   TransactionFlow,
@@ -12,7 +14,11 @@ import {
   TransactionType,
 } from '../../transaction/entity/transaction.entity';
 import { User } from '../../users/entity/user.entity';
+import { Wallet } from '../../wallets/entities/wallet.entity';
+import { WalletStatus } from '../../../common/enums/payment.enum';
 import { PaystackIntegrationService } from '../paystack-integration.service';
+import { NotificationService } from '../../notifications/notification.service';
+import { AuditService } from '../../audit/audit.service';
 
 
 @Injectable()
@@ -24,9 +30,14 @@ export class PaystackWebhookHandler {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly paystackIntegrationService: PaystackIntegrationService,
+    private readonly notificationService: NotificationService,
+    private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) { }
 
   async handleWebhook(event: string, data: any): Promise<void> {
@@ -80,28 +91,28 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[DVA ASSIGNED] Customer: ${customerCode}, Account: ${accountNumber}`);
 
-      // Find user by customer code
-      const user = await this.userRepository.findOne({
-        where: { paystackCustomerCode: customerCode },
+      // Find wallet by customer code (provider customer ID)
+      const wallet = await this.walletRepository.findOne({
+        where: { providerCustomerId: customerCode },
       });
 
-      if (!user) {
-        this.logger.warn(`User not found for customer code: ${customerCode}`);
+      if (!wallet) {
+        this.logger.warn(`Wallet not found for customer code: ${customerCode}`);
         return;
       }
 
-      // Update user with DVA details
-      await this.userRepository.update(user.id, {
-        walletAccountNumber: accountNumber,
-        walletAccountName: accountName,
-        walletBankName: bankName,
-        walletBankCode: bankCode,
-        paystackDedicatedAccountId: accountId.toString(),
-        paystackAccountStatus: 'ACTIVE',
-        updatedAt: new Date(),
+      // Update wallet with DVA details
+      await this.walletRepository.update(wallet.id, {
+        accountNumber: accountNumber,
+        accountName: accountName,
+        bankName: bankName,
+        bankCode: bankCode,
+        providerAccountId: accountId.toString(),
+        status: WalletStatus.ACTIVE,
+        activatedAt: new Date(),
       });
 
-      this.logger.log(`[DVA UPDATED] User ${user.id} account activated`);
+      this.logger.log(`[DVA UPDATED] Wallet ${wallet.id} account activated`);
     } catch (error) {
       this.logger.error('[DVA ASSIGNMENT ERROR]', error);
       throw error;
@@ -122,21 +133,21 @@ export class PaystackWebhookHandler {
         `[DVA PAYMENT] ₦${amount} received in account ${accountNumber} for customer ${customerCode}`,
       );
 
-      // Find user by customer code
-      const user = await this.userRepository.findOne({
-        where: { paystackCustomerCode: customerCode },
-        relations: ['business'],
+      // Find wallet by customer code
+      const wallet = await this.walletRepository.findOne({
+        where: { providerCustomerId: customerCode },
+        relations: ['user', 'user.business'],
       });
 
-      if (!user) {
-        this.logger.warn(`User not found for customer code: ${customerCode}`);
+      if (!wallet) {
+        this.logger.warn(`Wallet not found for customer code: ${customerCode}`);
         return;
       }
 
       // Record transaction - wallet funding
       await this.paystackIntegrationService.recordTransaction({
-        userId: user.id,
-        businessId: user.business?.id,
+        userId: wallet.userId,
+        businessId: wallet.user?.businessId,
         type: TransactionType.WALLET_FUNDING,
         flow: TransactionFlow.CREDIT,
         amount: amount,
@@ -153,7 +164,29 @@ export class PaystackWebhookHandler {
         providerResponse: data,
       });
 
-      this.logger.log(`[DVA PAYMENT RECORDED] User ${user.id} wallet credited with ₦${amount}`);
+      this.logger.log(`[DVA PAYMENT RECORDED] Wallet ${wallet.id} credited with ₦${amount}`);
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'WALLET_FUNDED',
+        entityId: wallet.id,
+        entityType: 'WALLET',
+        performedBy: wallet.userId,
+        metadata: {
+          businessId: wallet.user?.businessId,
+          details: {
+            amount: amount,
+            reference: reference,
+            channel: 'DVA_TRANSFER'
+          },
+          ...data
+        },
+      });
+
+      // Send notification
+      if (wallet.user?.email) {
+        await this.notificationService.sendWalletFundedNotification(wallet.user.email, amount, reference);
+      }
     } catch (error) {
       this.logger.error('[DVA PAYMENT ERROR]', error);
     }
@@ -191,7 +224,6 @@ export class PaystackWebhookHandler {
       // Update order
       order.paymentStatus = PaymentStatus.PAID;
       order.status = OrderStatus.PROCESSING;
-      order.paymentDate = new Date();
       await this.orderRepository.save(order);
 
       // Record transaction for business (they received settlement via subaccount)
@@ -222,6 +254,23 @@ export class PaystackWebhookHandler {
       this.logger.log(
         `[PAYMENT SUCCESS] Order ${orderId} paid, business ${order.businessId} credited ₦${businessAmount}`,
       );
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'PAYMENT_SUCCESSFUL',
+        entityId: orderId,
+        entityType: 'ORDER',
+        performedBy: order.userId || undefined,
+        metadata: {
+          businessId: order.businessId,
+          details: {
+            amount: order.total,
+            reference: reference,
+            provider: 'PAYSTACK'
+          },
+          ...data
+        },
+      });
     } catch (error) {
       this.logger.error('[PAYMENT SUCCESS ERROR]', error);
     }
@@ -240,6 +289,7 @@ export class PaystackWebhookHandler {
       // Find the transaction by reference
       const transaction = await this.transactionRepository.findOne({
         where: { reference },
+        relations: ['user'],
       });
 
       if (!transaction) {
@@ -255,6 +305,30 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[TRANSFER SUCCESS] Transaction ${transaction.id} marked as successful`);
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'TRANSFER_SUCCESSFUL',
+        entityId: transaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: transaction.userId || undefined,
+        metadata: {
+          businessId: transaction.businessId,
+          details: {
+            amount: transferAmount,
+            reference: reference,
+          },
+          ...data
+        },
+      });
+
+      if (transaction.user?.email) {
+        await this.notificationService.sendPayoutSuccessNotification(
+          transaction.user.email,
+          transferAmount,
+          reference,
+        );
+      }
     } catch (error) {
       this.logger.error('[TRANSFER SUCCESS ERROR]', error);
     }
@@ -273,6 +347,7 @@ export class PaystackWebhookHandler {
       // Find the transaction by reference
       const transaction = await this.transactionRepository.findOne({
         where: { reference },
+        relations: ['user'],
       });
 
       if (!transaction) {
@@ -288,7 +363,19 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[TRANSFER FAILED] Transaction ${transaction.id} marked as failed`);
 
-      // TODO: Implement retry logic or notification to admin
+      if (transaction.user?.email) {
+        await this.notificationService.sendPayoutFailedNotification(
+          transaction.user.email,
+          transferAmount,
+          reference,
+          data.reason // Paystack often sends reason
+        );
+      }
+
+      await this.alertAdmin(
+        `Transfer Failed for Transaction ${reference}`,
+        `Reason: ${data.reason}\nReference: ${reference}\nProvider Response: ${JSON.stringify(data)}`
+      );
     } catch (error) {
       this.logger.error('[TRANSFER FAILED ERROR]', error);
     }
@@ -322,6 +409,22 @@ export class PaystackWebhookHandler {
       });
 
       this.logger.log(`[REFUND PROCESSED] Transaction ${refundTransaction.id} completed`);
+
+      // Audit Log
+      await this.auditService.log({
+        action: 'REFUND_PROCESSED',
+        entityId: refundTransaction.id,
+        entityType: 'TRANSACTION',
+        performedBy: refundTransaction.userId || undefined,
+        metadata: {
+          businessId: refundTransaction.businessId,
+          details: {
+            amount: data.transaction.amount / 100,
+            reference: reference,
+          },
+          ...data
+        },
+      });
     } catch (error) {
       this.logger.error('[REFUND PROCESSED ERROR]', error);
     }
@@ -355,9 +458,35 @@ export class PaystackWebhookHandler {
 
       this.logger.log(`[REFUND FAILED] Transaction ${refundTransaction.id} marked as failed`);
 
-      // TODO: Alert admin or retry
+      await this.alertAdmin(
+        `Refund Failed for Transaction ${reference}`,
+        `Reason: ${data.status}\nReference: ${reference}\nProvider Response: ${JSON.stringify(data)}`
+      );
     } catch (error) {
       this.logger.error('[REFUND FAILED ERROR]', error);
+    }
+  }
+
+  /**
+   * Alert Admin about critical failures
+   */
+  private async alertAdmin(subject: string, message: string): Promise<void> {
+    try {
+      const adminEmail = this.configService.get<string>('ADMIN_EMAIL') || 'admin@qkly.com';
+      await this.notificationService.sendEmail(
+        adminEmail,
+        `[CRITICAL] ${subject}`,
+        `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2 style="color: red;">System Alert</h2>
+          <p><strong>Subject:</strong> ${subject}</p>
+          <pre style="background: #f4f4f4; padding: 10px; overflow-x: auto;">${message}</pre>
+          <p>Please check the system logs for more details.</p>
+        </div>
+        `
+      );
+    } catch (error) {
+      this.logger.error('Failed to send admin alert', error);
     }
   }
 }
