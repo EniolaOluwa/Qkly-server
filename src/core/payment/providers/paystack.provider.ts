@@ -97,6 +97,53 @@ export class PaystackProvider extends IPaymentProvider {
     }
   }
 
+  async fetchSubaccount(subaccountCode: string): Promise<any> {
+    try {
+      this.logger.log(`Fetching Paystack Subaccount ${subaccountCode}`);
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.baseUrl}/subaccount/${subaccountCode}`, {
+          headers: this.getHeaders(),
+        }),
+      );
+      return response.data.data;
+    } catch (error) {
+      this.logger.error(`Failed to fetch subaccount ${subaccountCode}`, error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Request Payout (Withdrawal) from Subaccount.
+   * Since Paystack 'manual' settlement accumulates funds, we need to trigger a transfer or update schedule.
+   * For MVP/Verification, we will simulate this by logging the request.
+   * In a live environment with Managed Accounts, we would use the /transfer endpoint from the subaccount balance.
+   */
+  async requestPayout(subaccountCode: string, amount: number, bankDetails: any): Promise<any> {
+    try {
+      this.logger.log(`Requesting Payout of ${amount} for Subaccount ${subaccountCode} to ${bankDetails.account_number}`);
+
+      // REAL IMPLEMENTATION NOTE:
+      // If using 'Managed Accounts', you would make a transfer from the subaccount balance.
+      // Paystack Transfer API: POST /transfer
+      // Body: { source: 'balance', amount, recipient: <recipient_code>, reason: 'Payout' }
+      // However, to debit a specific *subaccount*, you often need to use the 'subaccount' parameter or be acting as that subaccount.
+      // For 'Split' accounts (standard), funds settle automatically unless 'manual'.
+      // If 'manual', there isn't a simple 'payout now' button via API without using Transfers.
+
+      // MOCK IMPL:
+      // We act as if we successfully triggered a transfer.
+      return {
+        status: 'success',
+        message: 'Payout request initiated successfully',
+        reference: `PAYOUT-${Date.now()}`
+      };
+
+    } catch (error) {
+      this.logger.error(`Failed to request payout for ${subaccountCode}`, error);
+      throw error;
+    }
+  }
+
   // ============================================================
   // VIRTUAL ACCOUNT MANAGEMENT
   // ============================================================

@@ -81,6 +81,13 @@ export class BusinessesService {
     await this.paymentAccountRepo.save(account);
   }
 
+  async getBusinessPaymentAccount(userId: number): Promise<BusinessPaymentAccount | null> {
+    const business = await this.businessRepo.findOne({
+      where: { userId },
+      relations: ['paymentAccount']
+    });
+    return business?.paymentAccount || null;
+  }
 
   private readonly logger = new Logger(BusinessesService.name);
 

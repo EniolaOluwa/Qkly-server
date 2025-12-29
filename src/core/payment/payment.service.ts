@@ -91,9 +91,23 @@ export class PaymentService {
     }
   }
 
+  async fetchSubaccount(subaccountCode: string): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK) {
+      return (this.provider as any).fetchSubaccount(subaccountCode);
+    }
+    throw new Error('Provider does not support subaccount fetching');
+  }
+
   /**
    * Create a subaccount (Delegates to provider)
    */
+  async requestPayout(subaccountCode: string, amount: number, bankDetails: any): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK) {
+      return (this.provider as any).requestPayout(subaccountCode, amount, bankDetails);
+    }
+    throw new Error('Provider does not support payouts');
+  }
+
   async createSubaccount(payload: any): Promise<any> {
     // Check if provider supports it
     if (this.providerType === PaymentProviderType.PAYSTACK && 'createSubaccount' in this.provider) {

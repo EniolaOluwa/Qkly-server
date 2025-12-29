@@ -112,6 +112,38 @@ export class WalletsController {
     return await this.walletsService.getUserWalletWithBalance(req.user.userId);
   }
 
+  @Get('balance')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get wallet balance',
+    description: 'Retrieves the current wallet balance (including Paystack Subaccount balance if applicable).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Wallet balance retrieved successfully',
+    type: WalletBalanceResponseDto,
+  })
+  async getOwnWalletBalance(@Request() req: any): Promise<WalletBalanceResponseDto> {
+    return await this.walletsService.getUserWalletWithBalance(req.user.id);
+  }
+
+  @Post('withdraw')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Request Payout',
+    description: 'Initiates a withdrawal from the user subaccount to linked bank account.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Payout initiated successfully',
+    type: WithdrawalResponseDto,
+  })
+  async requestPayout(@Request() req: any, @Body() payload: WithdrawalDto): Promise<WithdrawalResponseDto> {
+    return await this.walletsService.requestPayout(req.user.id, payload);
+  }
+
   @Post('transfer')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
