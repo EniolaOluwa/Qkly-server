@@ -48,10 +48,13 @@ export class CartScheduler {
       if (existing) continue;
 
       // Create abandonment record
+      // Use cart.customerEmail (guest) or cart.user?.email (user)
+      const email = cart.customerEmail || cart.user?.email;
+
       const abandonment = this.abandonmentRepository.create({
         cartId: cart.id,
         status: 'IDENTIFIED',
-        customerEmail: cart.user?.email,
+        customerEmail: email,
         cartValue: cart.subtotal,
         itemCount: cart.itemCount,
         nextReminderAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Schedule 1st reminder in 24h
