@@ -5,6 +5,7 @@ import {
   NestInterceptor,
   Logger,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Observable, of } from 'rxjs';
@@ -44,9 +45,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       }
     } catch (error) {
       this.logger.error('Redis error in idempotency check', error);
-      // Fallback to processing if redis fails? Or fail safe?
-      // Proceeding might be dangerous if it causes duplication, but failing blocks user.
-      // Let's proceed but log.
+      throw new ServiceUnavailableException('Idempotency check failed. Please try again later.');
     }
 
     return next.handle().pipe(
