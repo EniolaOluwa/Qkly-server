@@ -102,6 +102,7 @@ export class CartScheduler {
       .leftJoinAndSelect('abandonment.cart', 'cart')
       .leftJoinAndSelect('cart.items', 'items')
       .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('product.business', 'business')
       .leftJoinAndSelect('items.variant', 'variant')
       .where('abandonment.nextReminderAt <= :now', { now })
       .andWhere('abandonment.isRecovered = :recovered', { recovered: false })

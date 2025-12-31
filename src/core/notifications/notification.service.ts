@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { Cart } from '../cart/entities/cart.entity';
 
 @Injectable()
 export class NotificationService {
@@ -200,13 +201,23 @@ export class NotificationService {
     await this.sendEmail(businessEmail, subject, html);
   }
 
-  async sendCartReminder(email: string, cart: any, stage: number) {
+  async sendCartReminder(email: string, cart: Cart, stage: number) {
     let subject = '';
     let message = '';
 
+    // Determine business name from first item
+    let businessName = 'Qkly';
+    if (cart.items && cart.items.length > 0) {
+      const firstItem = cart.items[0];
+      // Check if business relation is loaded
+      if (firstItem.product && firstItem.product.business) {
+        businessName = firstItem.product.business.businessName;
+      }
+    }
+
     switch (stage) {
       case 1:
-        subject = 'You left something behind!';
+        subject = `You left something behind at ${businessName}!`;
         message = 'We noticed you left some items in your cart. They are selling out fast, so grab them while you can!';
         break;
       case 2:
@@ -233,6 +244,7 @@ export class NotificationService {
     const html = `
       <div style="font-family: sans-serif; padding: 20px;">
         <h2>${subject}</h2>
+        <p>Hi,</p>
         <p>${message}</p>
         
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
@@ -248,7 +260,11 @@ export class NotificationService {
         </table>
 
         <p style="margin-top: 20px;">
-          <a href="https://app.qkly.com/cart" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Return to Cart</a>
+          <a href="https://app.qkly.com/cart?sessionId=${cart.sessionId || ''}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Return to Cart</a>
+        </p>
+        
+        <p style="font-size: 12px; color: #888; margin-top: 30px;">
+          You are receiving this email because you visited ${businessName}.
         </p>
       </div>
     `;
