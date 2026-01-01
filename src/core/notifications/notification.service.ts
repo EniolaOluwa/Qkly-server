@@ -20,7 +20,7 @@ export class NotificationService {
     this.fromEmail = this.configService.get<string>('FROM_EMAIL', 'no-reply@qkly.com');
   }
 
-  async sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+  async sendEmail(to: string, subject: string, html: string, senderName?: string): Promise<boolean> {
     const enableNotifications = this.configService.get<string>('ENABLE_NOTIFICATIONS');
     if (enableNotifications === 'false') {
       this.logger.debug(`Skipping email to ${to}: Notifications disabled globally.`);
@@ -33,8 +33,10 @@ export class NotificationService {
     }
 
     try {
+      const fromAddress = senderName ? `${senderName} <${this.fromEmail}>` : this.fromEmail;
+
       const { data, error } = await this.resend.emails.send({
-        from: this.fromEmail,
+        from: fromAddress,
         to,
         subject,
         html,
@@ -131,7 +133,18 @@ export class NotificationService {
         <p>We will notify you when your order ships.</p>
       </div>
     `;
-    await this.sendEmail(email, subject, html);
+
+    // Try to extract business name from order items if possible, or order relations
+    let businessName = undefined;
+    if (order.items && order.items.length > 0 && order.items[0].product && order.items[0].product.business) {
+      businessName = order.items[0].product.business.businessName;
+    }
+    // Alternatively, if Order entity has business relation loaded
+    if (order.business && order.business.businessName) {
+      businessName = order.business.businessName;
+    }
+
+    await this.sendEmail(email, subject, html, businessName);
   }
 
   async sendNewOrderAlert(businessEmail: string, order: any) {
