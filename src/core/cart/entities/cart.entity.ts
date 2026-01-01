@@ -30,6 +30,12 @@ export class Cart {
   id: number;
 
   /**
+   * Guest email (for abandoned cart tracking)
+   */
+  @Column({ length: 255, nullable: true })
+  customerEmail: string;
+
+  /**
    * User ID (null for guest carts)
    */
   /**

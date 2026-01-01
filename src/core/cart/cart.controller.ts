@@ -15,6 +15,7 @@ import { ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CartService } from './cart.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { UpdateCartEmailDto } from './dto/update-cart-email.dto';
 import { v4 as uuidv4 } from 'uuid';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -105,5 +106,16 @@ export class CartController {
   async clearCart(@Req() req, @Headers() headers) {
     const sessionId = this.getSessionId(headers);
     return this.cartService.clearCart(null, sessionId);
+  }
+
+  @Patch('email')
+  @ApiOperation({ summary: 'Update guest cart email' })
+  async updateEmail(
+    @Req() req,
+    @Body() dto: UpdateCartEmailDto,
+    @Headers() headers
+  ) {
+    const sessionId = this.getSessionId(headers);
+    return this.cartService.updateCustomerEmail(null, sessionId, dto);
   }
 }

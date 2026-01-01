@@ -106,7 +106,7 @@ export interface PaymentSplitConfig {
 }
 
 export interface InitializePaymentResponseDto {
-  authorizationUrl: string;
+  authorizationUrl?: string;
   accessCode: string;
   paymentReference: string;
   provider: PaymentProviderType;
