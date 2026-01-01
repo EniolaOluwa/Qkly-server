@@ -12,6 +12,7 @@ import { Product } from '../product/entity/product.entity';
 import { ProductVariant } from '../product/entity/product-variant.entity';
 import { AddToCartDto } from './dto/add-to-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { UpdateCartEmailDto } from './dto/update-cart-email.dto';
 
 @Injectable()
 export class CartService {
@@ -93,6 +94,7 @@ export class CartService {
     const {
       userId, customerIp, customerUserAgent,
       convertedToOrderId, abandonedAt, convertedAt,
+      // customerEmail should remain if present
       createdAt, updatedAt,
       ...cleanCart
     } = cart;
@@ -178,7 +180,7 @@ export class CartService {
    * Add item to cart
    */
   async addToCart(userId: number | null, sessionId: string, dto: AddToCartDto) {
-    let { productId, variantId, quantity, notes } = dto;
+    let { productId, variantId, quantity, notes, email } = dto;
 
     // 1. Validate Product & Variant
     const product = await this.productRepository.findOne({ where: { id: productId }, relations: ['images'] });
@@ -227,6 +229,13 @@ export class CartService {
 
     // 2. Get Cart
     const cart = await this.getCart(userId, sessionId);
+
+    // Update email if provided and not set or overwrite?
+    // Usually capturing it is good.
+    if (email) {
+      cart.customerEmail = email;
+      await this.cartRepository.save(cart);
+    }
 
     // 3. Check if item exists
     let item = await this.cartItemRepository.findOne({
@@ -337,6 +346,16 @@ export class CartService {
     await this.cartRepository.save(cart);
 
     return cart;
+  }
+
+  /**
+   * Update guest customer email
+   */
+  async updateCustomerEmail(userId: number | null, sessionId: string, dto: UpdateCartEmailDto) {
+    const cart = await this.getCart(userId, sessionId);
+    cart.customerEmail = dto.email;
+    await this.cartRepository.save(cart);
+    return this.getFullCart(userId, sessionId);
   }
 
   /**

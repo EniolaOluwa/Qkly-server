@@ -469,7 +469,7 @@ export class PaystackProvider extends IPaymentProvider {
         email: dto.customerEmail,
         amount: Math.round(dto.amount * 100), // Convert to kobo
         reference: dto.paymentReference,
-        callback_url: dto.redirectUrl,
+
         metadata: dto.metadata,
         channels: this.mapPaymentMethods(dto.paymentMethods),
       };
@@ -490,7 +490,7 @@ export class PaystackProvider extends IPaymentProvider {
       const data = response.data.data;
 
       return {
-        authorizationUrl: data.authorization_url,
+
         accessCode: data.access_code,
         paymentReference: data.reference,
         provider: PaymentProviderType.PAYSTACK,

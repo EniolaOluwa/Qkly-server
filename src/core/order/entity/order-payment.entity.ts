@@ -112,7 +112,7 @@ export class OrderPayment {
    * Payment authorization URL (for card payments)
    */
   @Column({ type: 'text', nullable: true })
-  authorizationUrl: string;
+  authorizationUrl?: string;
 
   /**
    * Payment access code (Paystack)

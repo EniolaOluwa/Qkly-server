@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsPositive, IsString, IsEmail } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AddToCartDto {
@@ -7,6 +7,11 @@ export class AddToCartDto {
   @IsPositive()
   @IsNotEmpty()
   productId: number;
+
+  @ApiProperty({ description: 'Guest Email (optional)', example: 'guest@example.com', required: false })
+  @IsEmail()
+  @IsOptional()
+  email?: string;
 
   @ApiProperty({ description: 'Product Variant ID (SKU). Optional for simple products.', example: 12, required: false })
   @IsInt()
