@@ -7,6 +7,7 @@ import { Transaction, TransactionStatus } from '../transaction/entity/transactio
 import { User } from '../users/entity/user.entity';
 import { PaymentService } from '../payment/payment.service';
 import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
+import { BusinessesService } from '../businesses/businesses.service';
 import { DataSource, EntityManager } from 'typeorm';
 import { WalletTransferRequestDto } from './dto/wallet-transfer.dto';
 import { BadRequestException, InternalServerErrorException, HttpException } from '@nestjs/common';
@@ -46,6 +47,11 @@ describe('WalletsService', () => {
     getBankAccount: jest.fn(),
   };
 
+  const mockBusinessesService = {
+    getBusinessPaymentAccount: jest.fn(),
+    updateSubaccountCode: jest.fn(),
+  };
+
   const mockTransactionRepository = {
     update: jest.fn(),
   };
@@ -82,6 +88,10 @@ describe('WalletsService', () => {
         {
           provide: BankAccountsService,
           useValue: mockBankAccountsService,
+        },
+        {
+          provide: BusinessesService,
+          useValue: mockBusinessesService,
         },
         {
           provide: DataSource,

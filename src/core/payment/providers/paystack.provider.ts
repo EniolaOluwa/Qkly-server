@@ -490,10 +490,10 @@ export class PaystackProvider extends IPaymentProvider {
       const data = response.data.data;
 
       return {
-
         accessCode: data.access_code,
         paymentReference: data.reference,
         provider: PaymentProviderType.PAYSTACK,
+        authorizationUrl: data.authorization_url, // Return authorization_url
       };
     } catch (error) {
       this.logger.error('Payment initialization failed:', error);

@@ -99,23 +99,60 @@ export class TransactionService {
    */
   async getMetrics(): Promise<TransactionMetricsDto> {
     try {
+      const now = new Date();
+      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      // Helper for calculating percentage change and trend
+      const calculateTrend = (current: number, previous: number) => {
+        if (previous === 0) return { percentageChange: current > 0 ? 100 : 0, trend: 'stable' as const }; // Handle div by 0
+        const change = ((current - previous) / previous) * 100;
+        return {
+          percentageChange: parseFloat(change.toFixed(2)),
+          trend: change > 0 ? 'increase' as const : change < 0 ? 'decrease' as const : 'stable' as const
+        };
+      };
+
+      // Helper to fetch consolidated metrics for a period
+      const getPeriodMetrics = async (start: Date, end?: Date) => {
+        const query = this.transactionRepository.createQueryBuilder('transaction')
+          .select('SUM(CASE WHEN transaction.status = :success THEN transaction.amount ELSE 0 END)', 'totalVolume')
+          .addSelect('COUNT(transaction.id)', 'totalCount')
+          .addSelect('COUNT(CASE WHEN transaction.status = :success THEN 1 END)', 'successCount')
+          .where('transaction.createdAt >= :start', { start })
+          .setParameters({ success: TransactionStatus.SUCCESS });
+
+        if (end) {
+          query.andWhere('transaction.createdAt <= :end', { end });
+        }
+
+        const result = await query.getRawOne();
+        const totalVolume = parseFloat(result.totalVolume) || 0;
+        const totalCount = parseInt(result.totalCount) || 0;
+        const successCount = parseInt(result.successCount) || 0;
+
+        return {
+          totalVolume,
+          totalCount,
+          successCount,
+          averageTransactionValue: successCount > 0 ? totalVolume / successCount : 0,
+          successRate: totalCount > 0 ? (successCount / totalCount) * 100 : 0
+        };
+      };
+
+      // 1. Get Metrics for Current Month and Previous Month
+      const currentMetrics = await getPeriodMetrics(currentMonthStart);
+      const previousMetrics = await getPeriodMetrics(previousMonthStart, previousMonthEnd);
+
+      // 2. Breakdown by Type (All Time)
       const totalVolumeResult = await this.transactionRepository
         .createQueryBuilder('transaction')
         .select('SUM(transaction.amount)', 'total')
         .where('transaction.status = :status', { status: TransactionStatus.SUCCESS })
         .getRawOne();
+      const allTimeTotalVolume = parseFloat(totalVolumeResult.total) || 0;
 
-      const totalVolume = parseFloat(totalVolumeResult.total) || 0;
-      const totalCount = await this.transactionRepository.count();
-
-      const successCount = await this.transactionRepository.count({
-        where: { status: TransactionStatus.SUCCESS }
-      });
-
-      const successRate = totalCount > 0 ? (successCount / totalCount) * 100 : 0;
-      const averageTransactionValue = successCount > 0 ? totalVolume / successCount : 0;
-
-      // Breakdown by Type
       const breakdownResult = await this.transactionRepository
         .createQueryBuilder('transaction')
         .select('transaction.type', 'type')
@@ -128,10 +165,10 @@ export class TransactionService {
         type: b.type,
         count: parseInt(b.count),
         volume: parseFloat(b.volume) || 0,
-        percentage: totalVolume > 0 ? ((parseFloat(b.volume) || 0) / totalVolume) * 100 : 0
+        percentage: allTimeTotalVolume > 0 ? ((parseFloat(b.volume) || 0) / allTimeTotalVolume) * 100 : 0
       }));
 
-      // Volume Over Time (Last 30 days)
+      // 3. Volume Over Time (Last 30 days)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -152,11 +189,24 @@ export class TransactionService {
         count: parseInt(v.count)
       }));
 
+      // Construct Response
       return {
-        totalVolume,
-        totalCount,
-        successRate: parseFloat(successRate.toFixed(2)),
-        averageTransactionValue: parseFloat(averageTransactionValue.toFixed(2)),
+        totalVolume: {
+          value: currentMetrics.totalVolume,
+          ...calculateTrend(currentMetrics.totalVolume, previousMetrics.totalVolume)
+        },
+        totalTransactions: {
+          value: currentMetrics.totalCount,
+          ...calculateTrend(currentMetrics.totalCount, previousMetrics.totalCount)
+        },
+        averageTransactionValue: {
+          value: parseFloat(currentMetrics.averageTransactionValue.toFixed(2)),
+          ...calculateTrend(currentMetrics.averageTransactionValue, previousMetrics.averageTransactionValue)
+        },
+        successRate: {
+          value: parseFloat(currentMetrics.successRate.toFixed(2)),
+          ...calculateTrend(currentMetrics.successRate, previousMetrics.successRate)
+        },
         breakdownByType,
         volumeOverTime
       };

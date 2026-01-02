@@ -17,8 +17,8 @@ export class AdminTransactionsController {
 
   @Get('metrics')
   @ApiOperation({
-    summary: 'Get comprehensive transaction metrics',
-    description: 'Retrieves total volume, success rates, channel breakdown, and volume trends.',
+    summary: 'Get comprehensive transaction metrics with trends',
+    description: 'Retrieves total volume, transaction counts, success rates, and average values with percentage trends comparing the current month to the last month. Also includes channel breakdown and 30-day volume history.',
   })
   @ApiResponse({
     status: 200,
