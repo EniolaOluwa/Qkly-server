@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { CartService } from './cart.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ProductImage } from '../product/entity/product-image.entity';
+import { ProductVariant } from '../product/entity/product-variant.entity';
+import { Product } from '../product/entity/product.entity';
 import { CartController } from './cart.controller';
 import { CartScheduler } from './cart.scheduler';
-import { Cart } from './entities/cart.entity';
-import { CartItem } from './entities/cart-item.entity';
-import { Product } from '../product/entity/product.entity';
-import { ProductVariant } from '../product/entity/product-variant.entity';
+import { CartService } from './cart.service';
 import { CartAbandonment } from './entities/cart-abandonment.entity';
+import { CartItem } from './entities/cart-item.entity';
+import { Cart } from './entities/cart.entity';
 
 @Module({
   imports: [
@@ -17,7 +18,8 @@ import { CartAbandonment } from './entities/cart-abandonment.entity';
       CartItem,
       Product,
       ProductVariant,
-      CartAbandonment
+      CartAbandonment,
+      ProductImage
     ]),
     ScheduleModule.forRoot(),
   ],

@@ -106,10 +106,10 @@ export interface PaymentSplitConfig {
 }
 
 export interface InitializePaymentResponseDto {
-  authorizationUrl?: string;
   accessCode: string;
   paymentReference: string;
   provider: PaymentProviderType;
+  authorizationUrl?: string; // Added authorizationUrl
   expiresAt?: string;
 }
 

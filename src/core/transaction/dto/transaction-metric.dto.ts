@@ -1,5 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+export class MetricTrendDto {
+  @ApiProperty()
+  value: number;
+
+  @ApiProperty()
+  percentageChange: number;
+
+  @ApiProperty({ enum: ['increase', 'decrease', 'stable'] })
+  trend: 'increase' | 'decrease' | 'stable';
+}
+
 export class TransactionVolumeDto {
   @ApiProperty()
   date: string;
@@ -26,17 +37,17 @@ export class TransactionTypeBreakdownDto {
 }
 
 export class TransactionMetricsDto {
-  @ApiProperty()
-  totalVolume: number;
+  @ApiProperty({ type: MetricTrendDto })
+  totalVolume: MetricTrendDto;
 
-  @ApiProperty()
-  totalCount: number;
+  @ApiProperty({ type: MetricTrendDto })
+  totalTransactions: MetricTrendDto;
 
-  @ApiProperty()
-  successRate: number;
+  @ApiProperty({ type: MetricTrendDto })
+  averageTransactionValue: MetricTrendDto;
 
-  @ApiProperty()
-  averageTransactionValue: number;
+  @ApiProperty({ type: MetricTrendDto })
+  successRate: MetricTrendDto;
 
   @ApiProperty({ type: [TransactionTypeBreakdownDto] })
   breakdownByType: TransactionTypeBreakdownDto[];

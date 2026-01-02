@@ -1575,40 +1575,57 @@ export class OrderService {
       const paymentData = {
         paymentMethod: this.mapPaymentMethod(transaction.paymentMethod),
         paymentStatus: transaction.paymentStatus === 'SUCCESS' ? PaymentStatus.PAID : PaymentStatus.FAILED,
-        orderStatus: transaction.paymentStatus === 'SUCCESS' ? OrderStatus.PROCESSING : OrderStatus.PENDING, // Revert to PENDING on failure? Or Keep INITIATED? Only SUCCESS moves to PROCESSING
+        orderStatus: transaction.paymentStatus === 'SUCCESS' ? OrderStatus.PROCESSING : OrderStatus.PENDING,
         amount: transaction.amountPaid,
         paymentReference: transaction.paymentReference,
         transactionReference: transaction.transactionReference,
         paymentDate: transaction.paidOn ? new Date(transaction.paidOn) : new Date(),
         meta: transaction.metadata || {},
         provider: provider,
-        // Unwrap: Store the raw payload, not the wrapper
         providerResponse: transaction.providerResponse || transaction,
       };
 
-      // Only update Order Status if success. If failed, we just record the failed payment in OrderPayment but keep Order available for retry?
-      // Actually processOrderPayment updates order.status. 
-      // If we pass OrderStatus.PENDING, it resets order status. This is good for retry.
+      // Process order payment WITHOUT settlement (settlement will be handled separately)
+      await this.processOrderPaymentWithoutSettlement(order, paymentData, queryRunner.manager);
 
-      try {
-        await this.processOrderPayment(order, paymentData, queryRunner.manager);
-      } catch (processError) {
-        console.error('DEBUG: processOrderPayment Failed:', processError);
-        throw processError; // Re-throw to trigger rollback
+      // Create Transaction Record for ORDER_PAYMENT
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        const paymentTransaction = queryRunner.manager.create(Transaction, {
+          reference: paymentData.paymentReference || `TXN-${uuidv4().substring(0, 8).toUpperCase()}`,
+          userId: order.userId || null,
+          businessId: order.businessId,
+          orderId: order.id,
+          type: TransactionType.ORDER_PAYMENT,
+          flow: TransactionFlow.CREDIT,
+          status: TransactionStatus.SUCCESS,
+          amount: paymentData.amount || order.total,
+          fee: 0,
+          netAmount: paymentData.amount || order.total,
+          currency: 'NGN',
+          paymentMethod: paymentData.paymentMethod?.toString() || 'UNKNOWN',
+          paymentProvider: paymentData.provider || 'PAYSTACK',
+          providerReference: paymentData.transactionReference || order.transactionReference,
+          description: `Payment for Order ${order.orderReference}`,
+          metadata: paymentData.meta,
+          providerResponse: paymentData.providerResponse,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        await queryRunner.manager.save(Transaction, paymentTransaction);
       }
 
+      // COMMIT payment transaction BEFORE attempting settlement
       await queryRunner.commitTransaction();
-      this.logger.log(`Processed verified payment for order ${order.id}: ${transaction.paymentStatus}`);
+      this.logger.log(`Payment transaction committed for order ${order.id}: ${transaction.paymentStatus}`);
 
-      // Trigger Instant Settlement (Best effort)
+      // Handle settlement in a separate transaction (best effort - won't rollback payment if it fails)
       if (paymentData.paymentStatus === PaymentStatus.PAID) {
         try {
-          console.log(`DEBUG: Triggering Settlement for Order ${order.id}`); // DEBUG LOG
-          await this.settlementsService.processInstantSettlement(order);
+          this.logger.log(`Triggering settlement for order ${order.id}`);
+          await this.handleBusinessSettlementSafe(order.id);
         } catch (settlementError) {
-          console.error(`DEBUG: Settlement Error for Order ${order.id}:`, settlementError); // DEBUG LOG
-          this.logger.error(`Failed to process settlement for order ${order.id}`, settlementError);
-          // Don't throw, let the order succeed as PAID. Admin can reconcile.
+          this.logger.error(`Settlement failed for order ${order.id}, but payment is recorded: ${settlementError.message}`, settlementError.stack);
+          // Payment is already committed, so this won't cause a rollback
         }
       }
     } catch (error) {
@@ -1621,6 +1638,94 @@ export class OrderService {
   }
 
 
+  /**
+   * Process order payment WITHOUT settlement (settlement handled separately to avoid rollback)
+   */
+  private async processOrderPaymentWithoutSettlement(
+    order: Order,
+    paymentData: {
+      paymentMethod: PaymentMethod;
+      paymentStatus: PaymentStatus;
+      orderStatus: OrderStatus;
+      amount?: number;
+      paymentReference?: string;
+      transactionReference?: string;
+      paymentDate?: Date;
+      meta?: any;
+      provider?: string;
+      providerResponse?: any;
+    },
+    entityManager: EntityManager,
+  ): Promise<Order> {
+    try {
+      if (order.paymentStatus === PaymentStatus.PAID) {
+        this.logger.log(`Order ${order.id} is already paid, skipping processing`);
+        return order;
+      }
+
+      // Update order with payment information
+      order.paymentStatus = paymentData.paymentStatus;
+      order.status = paymentData.orderStatus;
+      order.paymentMethod = paymentData.paymentMethod;
+
+      // Create or update OrderPayment entity
+      let orderPayment = await entityManager.findOne(OrderPayment, {
+        where: { orderId: order.id },
+      });
+
+      if (!orderPayment) {
+        orderPayment = entityManager.create(OrderPayment, {
+          orderId: order.id,
+          paymentReference: paymentData.paymentReference || `PAY-${uuidv4().substring(0, 8).toUpperCase()}`,
+          provider: paymentData.provider as any,
+          providerReference: paymentData.transactionReference || order.transactionReference,
+          paymentMethod: paymentData.paymentMethod,
+          status: paymentData.paymentStatus,
+          amount: paymentData.amount || order.total,
+          fee: 0,
+          netAmount: paymentData.amount || order.total,
+          currency: 'NGN',
+          providerResponse: paymentData.providerResponse,
+          initiatedAt: new Date(),
+        });
+      }
+
+      // Update payment status and timestamps
+      orderPayment.status = paymentData.paymentStatus;
+
+      if (paymentData.providerResponse) {
+        orderPayment.providerResponse = paymentData.providerResponse;
+      }
+
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        orderPayment.paidAt = paymentData.paymentDate || new Date();
+      }
+
+      await entityManager.save(OrderPayment, orderPayment);
+
+      // If payment is successful, update order items (but NOT settlement)
+      if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        this.logger.log(`Processing successful payment for order ${order.id}`);
+
+        // Update order items status
+        for (const item of order.items) {
+          item.status = OrderItemStatus.PROCESSING;
+          await entityManager.save(OrderItem, item);
+        }
+      }
+
+      await entityManager.save(Order, order);
+      return order;
+    } catch (error) {
+      this.logger.error(`Failed to process payment: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  /**
+   * Legacy method that includes settlement (kept for backward compatibility)
+   * Only used in non-webhook flows
+   */
   private async processOrderPayment(
     order: Order,
     paymentData: {
@@ -1806,6 +1911,123 @@ export class OrderService {
     } catch (error) {
       this.logger.error(`Failed to process business settlement: ${error.message}`, error.stack);
       throw error;
+    }
+  }
+
+  /**
+   * Handle business settlement in a SEPARATE transaction (won't rollback payment if it fails)
+   * This is used by webhook flow to ensure payment transaction is committed even if settlement fails
+   */
+  private async handleBusinessSettlementSafe(orderId: number): Promise<void> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const order = await queryRunner.manager.findOne(Order, {
+        where: { id: orderId },
+        relations: ['business', 'items', 'business.user', 'settlement'],
+      });
+
+      if (!order || order.paymentStatus !== PaymentStatus.PAID) {
+        this.logger.warn(`Cannot settle order ${orderId}: Order not found or not paid`);
+        await queryRunner.release();
+        return;
+      }
+
+      // Check if settlement already exists
+      if (order.settlement) {
+        this.logger.log(`Settlement already exists for order ${orderId}`);
+        await queryRunner.release();
+        return;
+      }
+
+      const business = order.business;
+
+      if (!business) {
+        this.logger.error(`No business found for order ${orderId}`);
+        throw new Error(`No business found for order ${orderId}`);
+      }
+
+      const platformFeePercentage = SETTLEMENT_PERCENTAGE;
+      const platformFee = order.total * platformFeePercentage;
+      const payoutAmount = order.total - platformFee;
+
+      const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
+
+      // Create Settlement entity
+      const settlement = queryRunner.manager.create(Settlement, {
+        settlementReference,
+        businessId: business.id,
+        orderId: order.id,
+        status: SettlementStatus.COMPLETED,
+        orderAmount: order.total,
+        platformFee,
+        gatewayFee: 0,
+        settlementAmount: payoutAmount,
+        currency: 'NGN',
+        transferProvider: 'WALLET',
+        settledAt: new Date(),
+      });
+
+      await queryRunner.manager.save(Settlement, settlement);
+
+      this.logger.log(
+        `Business settlement initiated for order ${orderId}, business ${business.id}, amount ${payoutAmount}`,
+      );
+
+      // Get business owner's wallet
+      const wallet = await queryRunner.manager.findOne(Wallet, {
+        where: { userId: business.userId },
+      });
+
+      if (!wallet) {
+        this.logger.error(`No wallet found for business user ${business.userId} - Settlement cannot complete`);
+        throw new Error(`No wallet found for business user ${business.userId}`);
+      }
+
+      // Credit Wallet
+      const balanceBefore = Number(wallet.availableBalance);
+      const balanceAfter = balanceBefore + payoutAmount;
+
+      wallet.availableBalance = balanceAfter;
+      wallet.ledgerBalance = Number(wallet.ledgerBalance) + payoutAmount;
+
+      await queryRunner.manager.save(Wallet, wallet);
+
+      // Create Transaction Record
+      const transaction = queryRunner.manager.create(Transaction, {
+        userId: business.userId,
+        businessId: business.id,
+        orderId: order.id,
+        reference: `TRX-${uuidv4().substring(0, 12).toUpperCase()}`,
+        type: TransactionType.SETTLEMENT,
+        flow: TransactionFlow.CREDIT,
+        status: TransactionStatus.SUCCESS,
+        amount: payoutAmount,
+        fee: platformFee,
+        netAmount: payoutAmount,
+        currency: 'NGN',
+        description: `Settlement for Order ${order.orderReference}`,
+        balanceBefore,
+        balanceAfter,
+        metadata: {
+          settlementId: settlement.id,
+          orderReference: order.orderReference,
+        },
+        settledAt: new Date(),
+      });
+
+      await queryRunner.manager.save(Transaction, transaction);
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`Settlement completed for order ${orderId}, wallet credited for business ${business.id}, amount: ${payoutAmount}`);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Failed to process business settlement for order ${orderId}: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 

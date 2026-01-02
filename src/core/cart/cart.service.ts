@@ -180,102 +180,114 @@ export class CartService {
    * Add item to cart
    */
   async addToCart(userId: number | null, sessionId: string, dto: AddToCartDto) {
-    let { productId, variantId, quantity, notes, email } = dto;
+    // this.logger.log(`[CartService] addToCart: userId=${userId}, sessionId=${sessionId}, productId=${dto.productId}`);
+    try {
+      let { productId, variantId, quantity, notes, email } = dto;
 
-    // 1. Validate Product & Variant
-    const product = await this.productRepository.findOne({ where: { id: productId }, relations: ['images'] });
-    if (!product) throw new NotFoundException('Product not found');
+      // 1. Validate Product & Variant
+      const product = await this.productRepository.findOne({ where: { id: productId } });
+      if (!product) {
+        this.logger.error(`[CartService] Product not found: ${productId}`);
+        throw new NotFoundException('Product not found');
+      }
+      // this.logger.log(`[CartService] Product found: ${product.name} (ID: ${product.id})`);
 
-    let variant;
+      let variant;
 
-    if (variantId) {
-      variant = await this.productVariantRepository.findOne({ where: { id: variantId, productId } });
-      if (!variant) throw new NotFoundException('Product variant not found');
-    } else {
-      // Auto-resolve for simple products
-      if (product.hasVariation) {
-        throw new BadRequestException('This product has variations. Please select a specific option (variantId).');
+      if (variantId) {
+        variant = await this.productVariantRepository.findOne({ where: { id: variantId, productId } });
+        if (!variant) throw new NotFoundException('Product variant not found');
+      } else {
+        // Auto-resolve for simple products
+        if (product.hasVariation) {
+          throw new BadRequestException('This product has variations. Please select a specific option (variantId).');
+        }
+
+        // Find the "default" variant for simple products (there should be only one)
+        variant = await this.productVariantRepository.findOne({ where: { productId } });
+
+        if (!variant) {
+          // Self-healing: Create default variant if it doesn't exist
+          this.logger.warn(`Fixing missing default variant for product ${productId}`);
+
+          variant = this.productVariantRepository.create({
+            productId,
+            sku: `SKU-P-${productId}-${Date.now()}`, // Simple unique SKU
+            variantName: 'Default',
+            price: product.price,
+            quantityInStock: product.quantityInStock,
+            lowStockThreshold: product.lowStockThreshold,
+            isActive: true,
+            isDefault: true,
+            options: {}, // Empty options for simple product
+          });
+
+          variant = await this.productVariantRepository.save(variant);
+        }
+
+        // Assign resolved ID
+        variantId = variant.id;
+      }
+      // this.logger.log(`[CartService] Variant resolved: ${variant.id}`);
+
+      if (variant.quantityInStock < quantity) {
+        throw new BadRequestException('Insufficient stock');
       }
 
-      // Find the "default" variant for simple products (there should be only one)
-      variant = await this.productVariantRepository.findOne({ where: { productId } });
+      // 2. Get Cart
+      const cart = await this.getCart(userId, sessionId);
 
-      if (!variant) {
-        // Self-healing: Create default variant if it doesn't exist
-        this.logger.warn(`Fixing missing default variant for product ${productId}`);
-
-        variant = this.productVariantRepository.create({
-          productId,
-          sku: `SKU-P-${productId}-${Date.now()}`, // Simple unique SKU
-          variantName: 'Default',
-          price: product.price,
-          quantityInStock: product.quantityInStock,
-          lowStockThreshold: product.lowStockThreshold,
-          isActive: true,
-          isDefault: true,
-          options: {}, // Empty options for simple product
-        });
-
-        variant = await this.productVariantRepository.save(variant);
+      // Update email if provided and not set or overwrite?
+      // Usually capturing it is good.
+      if (email) {
+        cart.customerEmail = email;
+        await this.cartRepository.save(cart);
       }
 
-      // Assign resolved ID
-      variantId = variant.id;
-    }
-
-    if (variant.quantityInStock < quantity) {
-      throw new BadRequestException('Insufficient stock');
-    }
-
-    // 2. Get Cart
-    const cart = await this.getCart(userId, sessionId);
-
-    // Update email if provided and not set or overwrite?
-    // Usually capturing it is good.
-    if (email) {
-      cart.customerEmail = email;
-      await this.cartRepository.save(cart);
-    }
-
-    // 3. Check if item exists
-    let item = await this.cartItemRepository.findOne({
-      where: { cartId: cart.id, variantId },
-    });
-
-    if (item) {
-      // Update quantity
-      item.quantity += quantity;
-      item.subtotal = Number(item.quantity) * Number(item.unitPrice);
-    } else {
-      // Get main image URL safely
-      // Product entity has imageUrls (string[]) or images (OneToMany)
-      // We will look at imageUrls first as it's a simple array, or check images relation if loaded
-      let imageUrl = '';
-      if (product.imageUrls && product.imageUrls.length > 0) {
-        imageUrl = product.imageUrls[0];
-      }
-
-      // Create new item
-      item = this.cartItemRepository.create({
-        cartId: cart.id,
-        productId,
-        variantId,
-        quantity,
-        unitPrice: variant.price || product.price, // Use variant price if set, else product price
-        subtotal: Number(quantity) * Number(variant.price || product.price),
-        productName: product.name,
-        variantName: variant.variantName || variant.sku,
-        imageUrl: imageUrl,
-        notes,
+      // 3. Check if item exists
+      let item = await this.cartItemRepository.findOne({
+        where: { cartId: cart.id, variantId },
       });
+
+      if (item) {
+        // Update quantity
+        item.quantity += quantity;
+        item.subtotal = Number(item.quantity) * Number(item.unitPrice);
+      } else {
+        // Get main image URL safely
+        // Product entity has imageUrls (string[]) or images (OneToMany)
+        // We will look at imageUrls first as it's a simple array, or check images relation if loaded
+        let imageUrl = '';
+        if (product.imageUrls && product.imageUrls.length > 0) {
+          imageUrl = product.imageUrls[0];
+        }
+
+        // Create new item
+        item = this.cartItemRepository.create({
+          cartId: cart.id,
+          productId,
+          variantId,
+          quantity,
+          unitPrice: variant.price || product.price, // Use variant price if set, else product price
+          subtotal: Number(quantity) * Number(variant.price || product.price),
+          productName: product.name,
+          variantName: variant.variantName || variant.sku,
+          imageUrl: imageUrl,
+          notes,
+        });
+      }
+
+      await this.cartItemRepository.save(item);
+      // this.logger.log(`[CartService] CartItem saved: ${item.id || 'new'}`);
+
+      // 4. Update Cart Totals
+      await this.calculateCartTotals(cart.id);
+
+      return this.getFullCart(userId, sessionId);
+    } catch (e) {
+      this.logger.error(`[CartService] addToCart ERROR: ${e.message}`, e.stack);
+      throw e;
     }
-
-    await this.cartItemRepository.save(item);
-
-    // 4. Update Cart Totals
-    await this.calculateCartTotals(cart.id);
-
-    return this.getFullCart(userId, sessionId);
   }
 
   /**
