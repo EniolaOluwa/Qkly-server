@@ -128,7 +128,7 @@ export class WalletsController {
     return await this.walletsService.getUserWalletWithBalance(req.user.id);
   }
 
-  @Post('withdraw')
+  @Post('payout')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
