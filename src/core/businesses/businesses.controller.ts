@@ -314,6 +314,52 @@ export class BusinessesController {
     return businesses.map((business) => this.mapBusinessToResponse(business));
   }
 
+  // GET business by store name - specific route, must come before :id
+  @Public()
+  @Get('store/:storeName')
+  @ApiOperation({
+    summary: 'Get business by store name',
+    description: 'Retrieves a business using its store name',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business retrieved successfully',
+    type: BusinessResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found',
+  })
+  async getBusinessByStoreName(
+    @Param('storeName') storeName: string,
+  ): Promise<BusinessResponseDto> {
+    const business = await this.businessesService.getBusinessByStoreName(storeName);
+    return this.mapBusinessToResponse(business);
+  }
+
+  // GET business by slug - specific route, must come before :id
+  @Public()
+  @Get('slug/:slug')
+  @ApiOperation({
+    summary: 'Get business by slug',
+    description: 'Retrieves a business using its slug',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business retrieved successfully',
+    type: BusinessResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Business not found',
+  })
+  async getBusinessBySlug(
+    @Param('slug') slug: string,
+  ): Promise<BusinessResponseDto> {
+    const business = await this.businessesService.getBusinessBySlug(slug);
+    return this.mapBusinessToResponse(business);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -402,53 +448,6 @@ export class BusinessesController {
       id,
     );
 
-    return this.mapBusinessToResponse(business);
-  }
-
-
-  // GET business by store name
-  @Public()
-  @Get('store/:storeName')
-  @ApiOperation({
-    summary: 'Get business by store name',
-    description: 'Retrieves a business using its store name',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Business retrieved successfully',
-    type: BusinessResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Business not found',
-  })
-  async getBusinessByStoreName(
-    @Param('storeName') storeName: string,
-  ): Promise<BusinessResponseDto> {
-    const business = await this.businessesService.getBusinessByStoreName(storeName);
-    return this.mapBusinessToResponse(business);
-  }
-
-  // GET business by slug
-  @Public()
-  @Get('slug/:slug')
-  @ApiOperation({
-    summary: 'Get business by slug',
-    description: 'Retrieves a business using its slug',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Business retrieved successfully',
-    type: BusinessResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Business not found',
-  })
-  async getBusinessBySlug(
-    @Param('slug') slug: string,
-  ): Promise<BusinessResponseDto> {
-    const business = await this.businessesService.getBusinessBySlug(slug);
     return this.mapBusinessToResponse(business);
   }
 

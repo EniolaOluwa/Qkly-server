@@ -249,7 +249,7 @@ export class ProductsController {
     };
 
     return HttpResponse.success({
-      data: products,
+      data: sanitizedData,
       message: `Products for business ${businessId} retrieved successfully`
     });
   }
@@ -388,66 +388,8 @@ export class ProductsController {
   // ============================================
   // PATCH ROUTES
   // ============================================
+  // NOTE: Specific routes (restock) must come BEFORE generic routes (:id)
 
-  @Patch(':id')
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Update product',
-    description: `Updates an existing product by its ID. Only the product owner (merchant who created it) or admin users can update products. 
-  Merchants can only update products in their own business. All fields are optional - only provided fields will be updated.`
-  })
-  @ApiParam({
-    name: 'id',
-    required: true,
-    type: Number,
-    description: 'Product ID to update',
-    example: 42
-  })
-  @ApiBody({
-    type: UpdateProductDto,
-    description: 'Product fields to update (all fields optional)',
-    examples: {
-      updatePrice: {
-        summary: 'Update only price and stock',
-        value: {
-          price: 24.99,
-          quantityInStock: 75
-        }
-      },
-      updateVariations: {
-        summary: 'Update product variations',
-        value: {
-          hasVariation: true,
-          sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-          colors: ['#000080', '#808080', '#000000'] // hex codes
-        }
-      },
-      updateCategory: {
-        summary: 'Update category by name',
-        value: {
-          category: 'T-Shirts'
-        }
-      },
-      fullUpdate: {
-        summary: 'Update multiple fields',
-        value: {
-          name: 'Updated Product Name',
-          description: 'Updated description',
-          price: 39.99,
-          quantityInStock: 100,
-          images: ['https://example.com/new-image.jpg'],
-          category: 'Hoodies',
-          hasVariation: true,
-          sizes: ['M', 'L'],
-          colors: ['#FF5733', '#C70039']
-        }
-      }
-    }
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Product updated successfully'
-  })
   @Patch('restock/:id')
   @ApiBearerAuth()
   @ApiOperation({
@@ -477,7 +419,7 @@ export class ProductsController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Update product',
-    description: `Updates an existing product by its ID. Only the product owner (merchant who created it) or admin users can update products. 
+    description: `Updates an existing product by its ID. Only the product owner (merchant who created it) or admin users can update products.
   Merchants can only update products in their own business. All fields are optional - only provided fields will be updated.`
   })
   @ApiParam({
@@ -503,7 +445,7 @@ export class ProductsController {
         value: {
           hasVariation: true,
           sizes: ['S', 'M', 'L', 'XL', 'XXL'],
-          colors: ['#000080', '#808080', '#000000'] // hex codes
+          colors: ['#000080', '#808080', '#000000']
         }
       },
       updateCategory: {
@@ -576,7 +518,6 @@ export class ProductsController {
       message: 'Product updated successfully'
     });
   }
-
 
 
   // ============================================
