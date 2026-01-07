@@ -68,3 +68,40 @@ export class ChangePinDto {
   @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
   confirmPin: string;
 }
+
+export class CreateTransactionPinDto {
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  userId: number;
+
+  @ApiProperty({ example: '1234' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'Transaction PIN must be exactly 4 digits' })
+  pin: string;
+
+  @ApiProperty({ example: '1234' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'Confirm Transaction PIN must be exactly 4 digits' })
+  confirmPin: string;
+}
+
+export class ChangeTransactionPinDto {
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  userId: number;
+
+  @ApiProperty({ example: '1234' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'Old PIN must be exactly 4 digits' })
+  oldPin: string;
+
+  @ApiProperty({ example: '5678' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'New PIN must be exactly 4 digits' })
+  newPin: string;
+
+  @ApiProperty({ example: '5678' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
+  confirmPin: string;
+}

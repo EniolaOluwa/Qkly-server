@@ -4,10 +4,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { DeliveryMethod, OrderItemStatus, OrderStatus, RefundMethod, RefundStatus, RefundType } from '../../common/enums/order.enum';
-import { PaymentMethod, PaymentProvider, PaymentStatus, PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { PaymentAccountStatus, PaymentMethod, PaymentProvider, PaymentStatus } from '../../common/enums/payment.enum';
 import { SettlementStatus } from '../../common/enums/settlement.enum';
 import { PaginationDto, PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
-import { ErrorHelper } from '../../common/utils';
+import { ErrorHelper, ReferenceGenerator } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
 import { CartService } from '../cart/cart.service';
 import { NotificationService } from '../notifications/notification.service';
@@ -479,7 +479,7 @@ export class OrderService {
           await queryRunner.manager.save(history);
 
           // 2. Regenerate Reference
-          const newRef = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+          const newRef = ReferenceGenerator.generate('TXN');
           order.transactionReference = newRef;
 
           // 3. Reset Payment Status on Order (will be set to INITIATED below)
@@ -490,7 +490,7 @@ export class OrderService {
       } else if (order.paymentStatus === PaymentStatus.INITIATED) {
         // Orphaned state (INITIATED but no OrderPayment record)
         this.logger.warn(`Order ${order.id} is INITIATED but missing OrderPayment. Regenerating reference.`);
-        order.transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+        order.transactionReference = ReferenceGenerator.generate('TXN');
       }
 
       if (order.paymentStatus === PaymentStatus.PAID) {
@@ -1410,8 +1410,8 @@ export class OrderService {
       const total = subtotal + shippingFee + tax - discount;
 
       // Generate order reference
-      const orderReference = `ORD-${uuidv4().substring(0, 8).toUpperCase()}`;
-      const transactionReference = `TXN-${uuidv4().substring(0, 8).toUpperCase()}`;
+      const orderReference = ReferenceGenerator.generate('ORD');
+      const transactionReference = ReferenceGenerator.generate('TXN');
 
       // Create order
       const order = this.orderRepository.create({

@@ -9,9 +9,11 @@ import {
   forwardRef,
   HttpException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
+import { SystemConfigService } from '../system-config/system-config.service';
 import { validateOrReject } from 'class-validator';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from './entities/wallet.entity';
@@ -31,7 +33,9 @@ import { PaymentService } from '../payment/payment.service';
 import { BusinessesService } from '../businesses/businesses.service'; // Import
 import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
 import { WithdrawalDto, WithdrawalResponseDto } from './dto/withdraw.dto';
-import { ErrorHelper } from '../../common/utils';
+import { ErrorHelper, ReferenceGenerator } from '../../common/utils';
+
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class WalletsService {
@@ -46,10 +50,14 @@ export class WalletsService {
     private readonly transactionRepository: Repository<Transaction>,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
     @Inject(forwardRef(() => BusinessesService)) // Inject BusinessesService
     private readonly businessesService: BusinessesService,
     private readonly bankAccountsService: BankAccountsService,
     private readonly dataSource: DataSource,
+    private readonly configService: ConfigService,
+    private readonly systemConfigService: SystemConfigService,
   ) { }
 
   /**
@@ -308,6 +316,7 @@ export class WalletsService {
           transactionType: TransactionType.WITHDRAWAL,
           destinationBank: dto.destinationBankCode,
           destinationAccount: dto.destinationAccountNumber,
+          fee: dto.fee, // Pass fee to debit logic
         }
       );
 
@@ -644,13 +653,16 @@ export class WalletsService {
         ErrorHelper.NotFoundException('User wallet not found');
       }
 
-      if (Number(wallet.availableBalance) < Number(amount)) {
-        ErrorHelper.BadRequestException('Insufficient wallet balance');
+      const fee = metadata?.fee || 0;
+      const totalDeduction = Number(amount) + Number(fee);
+
+      if (Number(wallet.availableBalance) < totalDeduction) {
+        ErrorHelper.BadRequestException(`Insufficient wallet balance. Amount: ${amount}, Fee: ${fee}, Total: ${totalDeduction}, Balance: ${wallet.availableBalance}`);
       }
 
       // Update balance
-      wallet.availableBalance = Number(wallet.availableBalance) - Number(amount);
-      wallet.ledgerBalance = Number(wallet.ledgerBalance) - Number(amount);
+      wallet.availableBalance = Number(wallet.availableBalance) - totalDeduction;
+      wallet.ledgerBalance = Number(wallet.ledgerBalance) - totalDeduction;
 
       await em.save(Wallet, wallet);
 
@@ -661,11 +673,12 @@ export class WalletsService {
         type: TransactionType.WITHDRAWAL, // Default
         flow: TransactionFlow.DEBIT,
         status: TransactionStatus.SUCCESS,
-        amount,
-        netAmount: amount,
+        amount: totalDeduction, // Total amount leaving wallet
+        fee: fee,
+        netAmount: amount, // Amount sent / used
         currency: wallet.currency,
         description,
-        balanceBefore: Number(wallet.availableBalance) + Number(amount),
+        balanceBefore: Number(wallet.availableBalance) + totalDeduction,
         balanceAfter: Number(wallet.availableBalance),
         metadata,
       });
@@ -701,21 +714,43 @@ export class WalletsService {
       ErrorHelper.NotFoundException('Bank account not found or does not belong to user');
     }
 
-    // 2. Validate PIN (TODO: Integrate with UserSecurityService when ready)
+    // 2. Validate PIN
     if (!dto.pin) {
       ErrorHelper.BadRequestException('Transaction PIN is required');
     }
-    // const isPinValid = await this.userSecurityService.validatePin(userId, dto.pin);
-    // if (!isPinValid) ErrorHelper.BadRequestException('Invalid PIN');
+    const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
+    if (!isPinValid) {
+      ErrorHelper.BadRequestException('Invalid Transaction PIN');
+    }
 
-    // 3. Get User Wallet to get reference
+    // 3. Security: Check for recent PIN change and limit withdrawal
+    const lastPinChange = await this.usersService.getTransactionPinLastChanged(userId);
+    if (lastPinChange) {
+      const COOL_DOWN_HOURS = await this.systemConfigService.get<number>('SECURITY_PIN_COOLDOWN_HOURS', 24);
+      const MAX_LIMIT_DURING_COOL_DOWN = await this.systemConfigService.get<number>('SECURITY_MAX_LIMIT_DURING_COOL_DOWN', 5000);
+      const hoursSinceChange = (Date.now() - new Date(lastPinChange).getTime()) / (1000 * 60 * 60);
+
+      if (hoursSinceChange < COOL_DOWN_HOURS && dto.amount > MAX_LIMIT_DURING_COOL_DOWN) {
+        const remainingHours = Math.ceil(COOL_DOWN_HOURS - hoursSinceChange);
+        ErrorHelper.ForbiddenException(
+          `For security, withdrawals are limited to ₦${MAX_LIMIT_DURING_COOL_DOWN} for ${COOL_DOWN_HOURS} hours after a PIN change. Please try again in ${remainingHours} hours.`,
+        );
+      }
+    }
+
+    // 4. Get User Wallet to get reference
     const wallet = await this.walletRepository.findOne({ where: { userId } });
     if (!wallet) ErrorHelper.NotFoundException('Wallet not found');
 
-    // 4. Construct Transfer Payload
+    // 4. Calculate Fee
+    const fee = this.calculateTransferFee(dto.amount);
+    const totalDebit = Number(dto.amount) + Number(fee);
+
+    // 5. Construct Transfer Payload
     const transferPayload: WalletTransferRequestDto = {
       amount: dto.amount,
-      reference: `WDR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      fee: fee, // Pass calculated fee
+      reference: ReferenceGenerator.generate('WDR'),
       narration: dto.narration || 'Withdrawal to Bank Account',
       destinationAccountNumber: bankAccount.accountNumber,
       destinationBankCode: bankAccount.bankCode,
@@ -731,6 +766,23 @@ export class WalletsService {
       success: transferResult.status === 'SUCCESS' || transferResult.status === 'PENDING',
       message: 'Withdrawal initiated successfully',
       reference: transferPayload.reference,
+      data: transferResult,
     };
+  }
+
+  /**
+   * Calculate Transfer Fee based on Paystack Schedule
+   * <= 5000: 10
+   * 5001 - 50000: 25
+   * > 50000: 50
+   */
+  calculateTransferFee(amount: number): number {
+    if (amount <= 5000) {
+      return 10;
+    } else if (amount <= 50000) {
+      return 25;
+    } else {
+      return 50;
+    }
   }
 }
