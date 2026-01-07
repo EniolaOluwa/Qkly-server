@@ -9,11 +9,20 @@ import { ResendProvider } from "./provider/resend.provider";
 @Injectable()
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
-    private provider: EmailProvider;
+    private provider: EmailProvider | null = null;
+    private readonly isEnabled: boolean;
 
     constructor(private readonly configService: ConfigService) {
-        const emailProvider = this.configService.get<string>("EMAIL_PROVIDER");
+        // Check if notifications are enabled
+        const enableNotifications = this.configService.get<string>('ENABLE_NOTIFICATIONS');
+        this.isEnabled = enableNotifications?.toLowerCase() === 'true';
 
+        if (!this.isEnabled) {
+            this.logger.warn('Email notifications are disabled (ENABLE_NOTIFICATIONS=false)');
+            return; // Skip provider initialization
+        }
+
+        const emailProvider = this.configService.get<string>("EMAIL_PROVIDER");
 
         switch (emailProvider) {
             case "resend": {
@@ -47,6 +56,12 @@ export class EmailService {
     }
 
     async emailDispatcher(mailDispatcher: MailDispatcherDto) {
+        // Skip if notifications are disabled
+        if (!this.isEnabled || !this.provider) {
+            this.logger.log(`[Email Disabled] Would have sent to: ${mailDispatcher.to}, subject: ${mailDispatcher.subject}`);
+            return { success: true, message: 'Email skipped (notifications disabled)' };
+        }
+
         try {
             return await this.provider.sendEmail(mailDispatcher);
         } catch (error) {

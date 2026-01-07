@@ -21,11 +21,12 @@ async function runE2E() {
   console.log(`Session ID: ${sessionId}\n`);
 
   try {
-    // 1. Add to Cart
+    // 1. Add to Cart (using new array format)
     console.log('[1] Adding item to cart...');
     const addToCartRes = await axios.post(`${API_URL}/cart/items`, {
-      productId: 1,
-      quantity: 1
+      items: [
+        { productId: 1, quantity: 1 }
+      ]
     }, { headers: { 'x-session-id': sessionId } });
     console.log(`Cart updated: ${addToCartRes.data.data.itemCount} items\n`);
 
