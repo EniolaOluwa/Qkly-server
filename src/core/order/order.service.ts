@@ -80,7 +80,7 @@ export class OrderService {
    * This retrieves the cart, converts items to order structure,
    * creates the order, and then clears the cart.
    */
-  async createOrderFromCart(sessionId: string, createOrderDto: CreateOrderFromCartDto): Promise<Order> {
+  async createOrderFromCart(sessionId: string, createOrderDto: CreateOrderFromCartDto): Promise<any> {
     const userId = null; // Buyers are always guests
     const cart = await this.cartService.getFullCart(userId, sessionId);
 
@@ -120,7 +120,24 @@ export class OrderService {
     // Clear Cart
     await this.cartService.clearCart(userId, sessionId);
 
-    return order;
+    // Initialize Payment automatically
+    let paymentDetails: any = null;
+    try {
+      const paymentInitRes = await this.initializePayment({
+        orderId: order.id,
+        paymentMethod: createOrderDto.paymentMethod,
+      });
+      paymentDetails = paymentInitRes.data;
+    } catch (error) {
+      this.logger.error(`Failed to automatically initialize payment for order ${order.id}: ${error.message}`);
+      // We don't throw here to ensure the order creation is still considered successful
+      // but the frontend will see null payment details and might need to retry manually
+    }
+
+    return {
+      order,
+      payment: paymentDetails,
+    };
   }
 
   async findOrdersByCustomerEmail(

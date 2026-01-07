@@ -345,6 +345,13 @@ export class TestDataSeedService {
         await this.userRepository.save(merchant1);
 
         this.logger.log('  ✓ Created business: TechHub Store');
+      } else {
+        // Ensure user has businessId set anyway
+        if (merchant1.businessId !== existingBusiness.id) {
+          merchant1.businessId = existingBusiness.id;
+          await this.userRepository.save(merchant1);
+          this.logger.log('  ✓ Linked existing business TechHub Store to merchant1');
+        }
       }
     }
 
