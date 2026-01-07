@@ -5,23 +5,18 @@ import { MailDispatcherDto } from "./dto/sendMail.dto";
 import { EmailProvider } from "./interfaces/mail.interfaces";
 import { MailgunProvider } from "./provider/mailgun.provider";
 import { ResendProvider } from "./provider/resend.provider";
+import { SystemConfigService } from "../system-config/system-config.service";
 
 @Injectable()
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
     private provider: EmailProvider | null = null;
-    private readonly isEnabled: boolean;
 
-    constructor(private readonly configService: ConfigService) {
-        // Check if notifications are enabled
-        const enableNotifications = this.configService.get<string>('ENABLE_NOTIFICATIONS');
-        this.isEnabled = enableNotifications?.toLowerCase() === 'true';
-
-        if (!this.isEnabled) {
-            this.logger.warn('Email notifications are disabled (ENABLE_NOTIFICATIONS=false)');
-            return; // Skip provider initialization
-        }
-
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly systemConfigService: SystemConfigService
+    ) {
+        // Initialize provider regardless of initial status to allow dynamic enabling
         const emailProvider = this.configService.get<string>("EMAIL_PROVIDER");
 
         switch (emailProvider) {
@@ -51,13 +46,21 @@ export class EmailService {
             }
 
             default:
-                ErrorHelper.InternalServerErrorException("No valid email provider configured.");
+                if (!emailProvider) {
+                    this.logger.warn("No EMAIL_PROVIDER configured. Emails will not be sent even if enabled.");
+                } else {
+                    ErrorHelper.InternalServerErrorException(`Invalid email provider configured: ${emailProvider}`);
+                }
         }
     }
 
     async emailDispatcher(mailDispatcher: MailDispatcherDto) {
+        // Dynamic check
+        const isEnabledVal = await this.systemConfigService.get('ENABLE_NOTIFICATIONS', false);
+        const isEnabled = String(isEnabledVal).toLowerCase() === 'true';
+
         // Skip if notifications are disabled
-        if (!this.isEnabled || !this.provider) {
+        if (!isEnabled || !this.provider) {
             this.logger.log(`[Email Disabled] Would have sent to: ${mailDispatcher.to}, subject: ${mailDispatcher.subject}`);
             return { success: true, message: 'Email skipped (notifications disabled)' };
         }

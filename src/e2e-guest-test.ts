@@ -16,24 +16,51 @@ const askQuestion = (query: string): Promise<string> => {
 };
 
 async function runE2E() {
-  console.log('\nStarting E2E Guest Checkout Test (Settlement Verification)');
+  console.log('\nStarting E2E Guest Checkout & Merchant Settlement Test');
   const sessionId = uuidv4();
   console.log(`Session ID: ${sessionId}\n`);
 
   try {
-    // 1. Add to Cart (using new array format)
-    console.log('[1] Adding item to cart...');
+    // --- MERCHANT SETUP START ---
+    console.log('[0] Merchant Setup Checking...');
+    // Login Merchant 1 to check initial balance
+    const merchantLogin = await axios.post(`${API_URL}/users/login`, {
+      email: 'merchant1@test.com',
+      password: 'Test@123'
+    });
+    const merchantToken = merchantLogin.data.data.accessToken;
+    console.log('Merchant logged in.');
+
+    // Get Initial Balance
+    const initialBalanceRes = await axios.get(`${API_URL}/wallets/balance`, {
+      headers: { Authorization: `Bearer ${merchantToken}` }
+    });
+    const initialBalance = Number(initialBalanceRes.data.data.availableBalance);
+    console.log(`Merchant Initial Balance: ₦${initialBalance}\n`);
+    // --- MERCHANT SETUP END ---
+
+
+    // 1. Add to Cart (Batch)
+    console.log('[1] Adding batch items to cart...');
     const addToCartRes = await axios.post(`${API_URL}/cart/items`, {
       items: [
-        { productId: 1, quantity: 1 }
-      ]
+        { productId: 1, quantity: 1, notes: 'Item 1 Note' },
+        { productId: 1, quantity: 2, notes: 'Item 2 Note (Same product, more qty)' }
+        // Note: Using productId 1 twice to test merging or separate lines depending on logic.
+        // DTO supports multiple items. If variantId is not specified, it uses default.
+        // If system merges them, quantity should be 3.
+      ],
+      email: `guest-${Date.now()}@test.com` // Optional context email
     }, { headers: { 'x-session-id': sessionId } });
-    console.log(`Cart updated: ${addToCartRes.data.data.itemCount} items\n`);
+
+    console.log(`Cart updated: ${addToCartRes.data.data.itemCount} items`);
+    console.log(`Cart Subtotal: ₦${addToCartRes.data.data.subtotal}\n`);
+
 
     // 2. Create Order
     console.log('[2] Creating order from cart...');
     const createOrderRes = await axios.post(`${API_URL}/orders/cart`, {
-      businessId: 1,
+      businessId: 1, // Assumes merchant1 (id:1) owns the products or business logic handles it
       customerName: 'Guest Tester',
       customerEmail: `guest-${Date.now()}@example.com`,
       customerPhoneNumber: '+2348000000000',
@@ -47,7 +74,8 @@ async function runE2E() {
 
     const orderId = createOrderRes.data.data.id;
     const orderRef = createOrderRes.data.data.orderReference;
-    console.log(`Order created! ID: ${orderId} Ref: ${orderRef}\n`);
+    const orderTotal = createOrderRes.data.data.total;
+    console.log(`Order created! ID: ${orderId} Ref: ${orderRef} Total: ₦${orderTotal}\n`);
 
     // 3. Initialize Payment
     console.log('[3] Initializing payment...');
@@ -83,27 +111,125 @@ PAYMENT REFERENCE: ${paymentRef}
     if (verifyRes.data.data.paymentStatus === 'paid') {
       console.log('SUCCESS: Order verified as PAID.\n');
 
-      // 6. Wait for Settlement (Implicit in system flow)
-      console.log('[6] Waiting 5 seconds for Settlement processing...');
+      // 6. Verify Merchant Settlement
+      console.log('[6] Verifying Merchant Settlement (Wait 5s)...');
       await new Promise(r => setTimeout(r, 5000));
 
-      // 7. Verify Admin Transactions (Check if Settlement Transaction appeared)
-      console.log('[7] Checking Admin Transactions List...');
-      // Login Admin
-      const loginRes = await axios.post(`${API_URL}/users/login`, SUPER_ADMIN);
-      const token = loginRes.data.data.accessToken;
-
-      const txnsRes = await axios.get(`${API_URL}/admin/transactions/list`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const finalBalanceRes = await axios.get(`${API_URL}/wallets/balance`, {
+        headers: { Authorization: `Bearer ${merchantToken}` }
       });
+      const finalBalance = Number(finalBalanceRes.data.data.availableBalance);
+      console.log(`Merchant Final Balance: ₦${finalBalance}`);
 
-      console.log('Admin Transactions Count:', txnsRes.data.data.length);
-      console.log('Latest Transaction:', JSON.stringify(txnsRes.data.data[0], null, 2));
+      const balanceDiff = finalBalance - initialBalance;
+      console.log(`Balance Increase: ₦${balanceDiff}`);
 
-      if (txnsRes.data.data.length > 0) {
-        console.log('SUCCESS: Transaction found in Admin list!');
+      if (balanceDiff > 0) {
+        console.log('SUCCESS: Merchant wallet credited!');
+
+        // 7. Test Withdrawal
+        console.log('\n[7] Testing Withdrawal...');
+
+        // Check for bank accounts
+        let bankAccountsRes = await axios.get(`${API_URL}/bank-accounts`, {
+          headers: { Authorization: `Bearer ${merchantToken}` }
+        });
+
+        let bankAccountId;
+
+        // Always try to add the test account if list is empty OR to ensure it exists
+        // But if list has accounts, we can just use one. 
+        // Let's try to ADD it specifically to test that flow, but handle if it fails (e.g. already exists)
+
+        try {
+          console.log('Attempting to add Zenith test bank account...');
+          const addBankRes = await axios.post(`${API_URL}/bank-accounts`, {
+            accountNumber: '0000000000', // Zenith Test Account
+            bankCode: '057', // Zenith Bank
+            currency: 'NGN'
+          }, { headers: { Authorization: `Bearer ${merchantToken}` } });
+
+          bankAccountId = addBankRes.data.data.id;
+          console.log(`Added Bank Account ID: ${bankAccountId}`);
+
+        } catch (error: any) {
+          console.log('Bank account addition failed (likely already exists or invalid).');
+          // If addition failed, we MUST find an account from the list
+          // Refresh list just in case
+          bankAccountsRes = await axios.get(`${API_URL}/bank-accounts`, {
+            headers: { Authorization: `Bearer ${merchantToken}` }
+          });
+        }
+
+        if (!bankAccountId) {
+          if (bankAccountsRes.data.data.length > 0) {
+            bankAccountId = bankAccountsRes.data.data[0].id;
+            console.log(`Using existing Bank Account ID: ${bankAccountId}`);
+          } else {
+            console.log('FAILURE: No bank account available for withdrawal test.');
+          }
+        }
+
+        // [7] Helper for Withdrawal Testing
+        const testWithdrawal = async (amount: number, expectedResult: 'SUCCESS' | 'FAILURE', fee: number = 0) => {
+          console.log(`\nTesting Withdrawal: ₦${amount} (Expected: ${expectedResult})...`);
+
+          // Get current balance before attempt
+          const preRes = await axios.get(`${API_URL}/wallets/balance`, { headers: { Authorization: `Bearer ${merchantToken}` } });
+          const preBalance = Number(preRes.data.data.availableBalance);
+
+          try {
+            // Mock PIN validation happens in service, assuming '1234' is valid
+            const withdrawRes = await axios.post(`${API_URL}/wallets/withdraw`, {
+              amount: amount,
+              bankAccountId: bankAccountId,
+              pin: '1234',
+              narration: `Test ${amount}`
+            }, { headers: { Authorization: `Bearer ${merchantToken}` } });
+
+            if (expectedResult === 'FAILURE') {
+              console.log('FAILURE: Expected withdrawal to fail, but it succeeded!');
+              return;
+            }
+
+            console.log('Withdrawal Success Response:', withdrawRes.data.message);
+
+            // Verify Deduction
+            const postRes = await axios.get(`${API_URL}/wallets/balance`, { headers: { Authorization: `Bearer ${merchantToken}` } });
+            const postBalance = Number(postRes.data.data.availableBalance);
+            const expectedDeduction = amount + fee;
+
+            if (postBalance === preBalance - expectedDeduction) {
+              console.log(`SUCCESS: Balance deducted correctly (-₦${expectedDeduction}). New Balance: ₦${postBalance}`);
+            } else {
+              console.log(`FAILURE: Balance mismatch. Expected ₦${preBalance - expectedDeduction}, Got ₦${postBalance}, Diff: ${preBalance - postBalance}`);
+            }
+
+          } catch (error: any) {
+            if (expectedResult === 'FAILURE') {
+              console.log(`SUCCESS: Withdrawal failed as expected. Error: ${error.response?.data?.message || error.message}`);
+            } else {
+              console.log(`FAILURE: Withdrawal failed unexpectedly. Error: ${error.response?.data?.message || error.message}`);
+            }
+          }
+        };
+
+        // Scenario 1: 100 NGN (Fee 10)
+        await testWithdrawal(100, 'SUCCESS', 10);
+
+        // Scenario 2: 50,000 NGN (Fee 25)
+        // Ensure we have enough balance. Initial ~474k + 75k = ~549k. 
+        if (finalBalance > 55000) {
+          await testWithdrawal(50000, 'SUCCESS', 25);
+        } else {
+          console.log('Skipping 50k test due to low balance.');
+        }
+
+        // Scenario 3: 1,000,000 NGN (Insufficient Funds)
+        await testWithdrawal(1000000, 'FAILURE');
+
       } else {
-        console.log('FAILURE: No transactions found. System did not create Settlement transaction?');
+        console.log('FAILURE: Merchant wallet NOT credited. Check webhook or settlement logic.');
       }
 
     } else {

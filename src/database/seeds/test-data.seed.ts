@@ -10,6 +10,7 @@ import { Product } from '../../core/product/entity/product.entity';
 import { OnboardingStep } from '../../common/enums/user.enum';
 import { BusinessType } from '../../core/businesses/business-type.entity';
 import { Category } from '../../core/category/entity/category.entity';
+import { UserSecurity } from '../../core/users/entities/user-security.entity';
 
 @Injectable()
 export class TestDataSeedService {
@@ -28,6 +29,8 @@ export class TestDataSeedService {
     private categoryRepository: Repository<Category>,
     @InjectRepository(Product)
     private productRepository: Repository<Product>,
+    @InjectRepository(UserSecurity)
+    private userSecurityRepository: Repository<UserSecurity>,
   ) { }
 
   async seed() {
@@ -221,6 +224,7 @@ export class TestDataSeedService {
     for (const userData of testUsers) {
       const existing = await this.userRepository.findOne({
         where: { email: userData.email },
+        relations: ['security'],
       });
 
       if (!existing) {
@@ -249,6 +253,8 @@ export class TestDataSeedService {
             deviceId: 'seed-device',
             longitude: 3.3792,
             latitude: 6.5244,
+            transactionPin: CryptoUtil.encryptPin('1234'), // Seed Transaction PIN
+            transactionPinChangedAt: null as any, // Ensure cooling period doesn't block immediate tests
           },
         });
 
@@ -256,6 +262,25 @@ export class TestDataSeedService {
         this.logger.log(
           `  ✓ Created user: ${userData.email} (${userData.userType})`,
         );
+      } else {
+        // Ensure Transaction PIN is set for existing users (Migration support)
+        if (existing.security && !existing.security.transactionPin) {
+          await this.userSecurityRepository.update(existing.security.id, {
+            transactionPin: CryptoUtil.encryptPin('1234'),
+            transactionPinChangedAt: null as any,
+          });
+          this.logger.log(`  ✓ Updated Transaction PIN for existing user: ${userData.email}`);
+        } else if (!existing.security) {
+          // Create security if missing entirely (edge case)
+          const security = this.userSecurityRepository.create({
+            userId: existing.id,
+            deviceId: 'seed-device',
+            transactionPin: CryptoUtil.encryptPin('1234'),
+            transactionPinChangedAt: null as any,
+          });
+          await this.userSecurityRepository.save(security);
+          this.logger.log(`  ✓ Created Security + PIN for existing user: ${userData.email}`);
+        }
       }
     }
   }

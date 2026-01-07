@@ -1,5 +1,4 @@
-import { HttpService } from '@nestjs/axios';
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -50,6 +49,7 @@ export class WalletProvisioningUtil {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private configService: ConfigService,
+    @Inject(forwardRef(() => WalletsService))
     private walletService: WalletsService
   ) { }
 

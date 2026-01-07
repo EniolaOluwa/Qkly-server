@@ -26,4 +26,5 @@ export class WithdrawalResponseDto {
   success: boolean;
   message: string;
   reference: string;
+  data?: any;
 }

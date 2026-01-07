@@ -32,6 +32,11 @@ export class WalletTransferRequestDto {
   @IsBoolean()
   @Type(() => Boolean)
   async?: boolean = false;
+
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  fee?: number;
 }
 
 

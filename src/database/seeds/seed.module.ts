@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Role } from '../../core/roles/entities/role.entity';
 import { User } from '../../core/users';
+import { UserSecurity } from '../../core/users/entities/user-security.entity';
 import { RolesSeedService } from './roles.seed';
 
 import { Business } from '../../core/businesses/business.entity';
@@ -20,7 +21,8 @@ import { TestDataSeedService } from './test-data.seed';
       Business,
       BusinessType,
       Category,
-      Product
+      Product,
+      UserSecurity
     ]),
 
   ],
