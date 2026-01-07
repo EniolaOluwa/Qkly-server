@@ -5,6 +5,7 @@ import { PaymentModule } from '../payment/payment.module';
 import { BankAccountsModule } from '../bank-accounts/bank-accounts.module';
 import { BusinessesModule } from '../businesses/businesses.module'; // Import
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
+import { UsersModule } from '../users/users.module';
 import { WalletsController } from './wallets.controller';
 import { WalletsService } from './wallets.service';
 
@@ -14,6 +15,7 @@ import { WalletsService } from './wallets.service';
     HttpModule,
     SharedRepositoryModule,
     forwardRef(() => PaymentModule),
+    forwardRef(() => UsersModule),
     forwardRef(() => BusinessesModule), // Import BusinessesModule
     BankAccountsModule,
   ],

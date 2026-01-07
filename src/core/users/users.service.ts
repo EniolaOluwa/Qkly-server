@@ -1,49 +1,44 @@
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
-  UnauthorizedException,
-  InternalServerErrorException
+  UnauthorizedException
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { async, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import { UserType } from '../../common/auth/user-role.enum';
 import {
   CreatePinResponseDto,
-  KycVerificationResponseDto,
   LoginDto,
   LoginResponseDto,
   RegisterUserDto,
   RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
+import { OnboardingStep } from '../../common/enums/user.enum';
+import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
+import { CountryCode, PhoneUtil } from '../../common/utils/phone.util';
 import { WalletProvisioningUtil } from '../../common/utils/wallet-provisioning.util';
+import { NotificationService } from '../notifications/notification.service';
 import { Role, RoleStatus } from '../roles/entities/role.entity';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
-import { NotificationService } from '../notifications/notification.service';
 import { ErrorHelper } from './../../common/utils/error.utils';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
-import { OnboardingStep } from '../../common/enums/user.enum';
 import { SuspendUserDto } from './dto/suspend-user.dto';
-import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
+import { ChangePasswordDto, ChangePinDto, ChangeTransactionPinDto, CreateTransactionPinDto, UpdateUserProfileDto } from './dto/user.dto';
+import { UserKYC } from './entities/user-kyc.entity';
+import { UserOnboarding } from './entities/user-onboarding.entity';
+import { UserProfile } from './entities/user-profile.entity';
+import { UserSecurity } from './entities/user-security.entity';
 import { Otp, OtpPurpose, OtpType } from './entity/otp.entity';
 import { User, UserStatus } from './entity/user.entity';
-import { UserProfile } from './entities/user-profile.entity';
-import { UserKYC } from './entities/user-kyc.entity';
-import { UserSecurity } from './entities/user-security.entity';
-import { UserOnboarding } from './entities/user-onboarding.entity';
-import { UserMapper, MappedUser } from './mappers/user.mapper';
-import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
-import { channel, permission } from 'process';
-import { PhoneUtil, CountryCode } from '../../common/utils/phone.util';
-import { response } from 'express';
+import { MappedUser, UserMapper } from './mappers/user.mapper';
 
 
 const EXPIRATION_TIME_SECONDS = 3600; // 1 hour
@@ -1153,6 +1148,172 @@ export class UsersService {
       success: true,
     };
 
+  }
+
+  async createTransactionPin(
+    createTransactionPinDto: CreateTransactionPinDto,
+  ): Promise<{ message: string; success: boolean }> {
+    // Validate PIN format (4 digits only)
+    if (!/^\d{4}$/.test(createTransactionPinDto.pin)) {
+      ErrorHelper.BadRequestException('Transaction PIN must be exactly 4 digits');
+    }
+
+    if (createTransactionPinDto.pin !== createTransactionPinDto.confirmPin) {
+      ErrorHelper.BadRequestException('Transaction PIN and confirm PIN do not match');
+    }
+
+    // Find user by ID with security
+    const user = await this.userRepository.findOne({
+      where: { id: createTransactionPinDto.userId },
+      relations: ['security'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    // Check if security record exists, if not create one
+    if (!user.security) {
+      const security = this.userSecurityRepository.create({
+        userId: user.id,
+      });
+      user.security = await this.userSecurityRepository.save(security);
+    }
+
+    // Check if Transaction PIN already exists
+    if (user.security.transactionPin) {
+      ErrorHelper.BadRequestException(
+        'Transaction PIN is already set. Please use change Transaction PIN endpoint.',
+      );
+    }
+
+    // Encrypt the PIN
+    const encryptedPin = CryptoUtil.encryptPin(createTransactionPinDto.pin);
+
+    // Save encrypted PIN to user security
+    await this.userSecurityRepository.update(user.security.id, {
+      transactionPin: encryptedPin,
+      transactionPinFailedAttempts: 0,
+      transactionPinLockedUntil: null as any,
+      transactionPinChangedAt: new Date(),
+    });
+
+    this.logger.log(`Transaction PIN created successfully for user ${createTransactionPinDto.userId}`);
+
+    return {
+      message: 'Transaction PIN created successfully',
+      success: true,
+    };
+  }
+
+  async changeTransactionPin(
+    changePinDto: ChangeTransactionPinDto,
+  ): Promise<{ message: string; success: boolean }> {
+    // Validate PIN format (4 digits only)
+    if (!/^\d{4}$/.test(changePinDto.newPin)) {
+      ErrorHelper.BadRequestException('New Transaction PIN must be exactly 4 digits');
+    }
+
+    if (changePinDto.newPin !== changePinDto.confirmPin) {
+      ErrorHelper.BadRequestException('New Transaction PIN and confirm PIN do not match');
+    }
+
+    if (changePinDto.oldPin === changePinDto.newPin) {
+      ErrorHelper.BadRequestException('New Transaction PIN must be different from old PIN');
+    }
+
+    // Find user by ID with security
+    const user = await this.userRepository.findOne({
+      where: { id: changePinDto.userId },
+      relations: ['security'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (!user.security?.transactionPin) {
+      ErrorHelper.BadRequestException('User does not have a Transaction PIN set. Please create a Transaction PIN first.');
+    }
+
+    // Verify old PIN
+    const isOldPinValid = CryptoUtil.verifyPin(changePinDto.oldPin, user.security.transactionPin);
+    if (!isOldPinValid) {
+      ErrorHelper.UnauthorizedException('Invalid current Transaction PIN');
+    }
+
+    // Encrypt the new PIN
+    const encryptedPin = CryptoUtil.encryptPin(changePinDto.newPin);
+
+    // Update user security with new encrypted PIN
+    await this.userSecurityRepository.update(user.security.id, {
+      transactionPin: encryptedPin,
+      transactionPinFailedAttempts: 0,
+      transactionPinLockedUntil: null as any,
+      transactionPinChangedAt: new Date(),
+    });
+
+    this.logger.log(`Transaction PIN changed successfully for user ${changePinDto.userId}`);
+
+    return {
+      message: 'Transaction PIN changed successfully',
+      success: true,
+    };
+  }
+
+  async validateTransactionPin(userId: number, pin: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['security'],
+    });
+
+    if (!user || !user.security || !user.security.transactionPin) {
+      ErrorHelper.BadRequestException('Transaction PIN is not set');
+      return false;
+    }
+
+    // Check Lockout
+    if (user.security.transactionPinLockedUntil && user.security.transactionPinLockedUntil > new Date()) {
+      const remainingMs = user.security.transactionPinLockedUntil.getTime() - Date.now();
+      const remainingMinutes = Math.ceil(remainingMs / (60 * 1000));
+      ErrorHelper.UnauthorizedException(
+        `Account locked for transactions due to too many failed PIN attempts. Try again in ${remainingMinutes} minute(s).`,
+      );
+    }
+
+    const isPinValid = CryptoUtil.verifyPin(pin, user.security.transactionPin);
+
+    if (!isPinValid) {
+      const newAttempts = (user.security.transactionPinFailedAttempts || 0) + 1;
+      const securityUpdates: any = { transactionPinFailedAttempts: newAttempts };
+
+      if (newAttempts >= this.MAX_PIN_ATTEMPTS) {
+        const lockUntil = new Date(Date.now() + this.PIN_LOCK_MINUTES * 60 * 1000);
+        securityUpdates.transactionPinLockedUntil = lockUntil;
+      }
+
+      await this.userSecurityRepository.update(user.security.id, securityUpdates);
+      ErrorHelper.UnauthorizedException('Invalid Transaction PIN');
+      return false;
+    }
+
+    // Reset attempts on success
+    if (user.security.transactionPinFailedAttempts && user.security.transactionPinFailedAttempts > 0) {
+      await this.userSecurityRepository.update(user.security.id, {
+        transactionPinFailedAttempts: 0,
+      });
+    }
+
+    return true;
+  }
+
+  async getTransactionPinLastChanged(userId: number): Promise<Date | null> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['security'],
+    });
+
+    return user?.security?.transactionPinChangedAt || null;
   }
 
   async checkUser(

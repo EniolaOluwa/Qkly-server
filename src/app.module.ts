@@ -29,6 +29,7 @@ import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
 import { dataSource } from './database';
 import { SeedModule } from './database/seeds/seed.module';
+import { SystemConfigModule } from './core/system-config/system-config.module';
 
 
 
@@ -56,7 +57,9 @@ import { SeedModule } from './database/seeds/seed.module';
     UserProgressModule,
     AdminModule,
     RolesModule,
+    RolesModule,
     SeedModule,
+    SystemConfigModule,
     NotificationModule,
     AuditModule,
     TransactionModule,

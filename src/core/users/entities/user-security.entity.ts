@@ -58,6 +58,32 @@ export class UserSecurity {
   pinLockedUntil: Date;
 
   /**
+   * Transaction PIN (Separate from Login PIN)
+   * Required for sensitive financial transactions
+   */
+  @Column({ length: 255, nullable: true })
+  transactionPin: string;
+
+  /**
+   * Failed Transaction PIN attempt counter
+   */
+  @Column({ default: 0 })
+  transactionPinFailedAttempts: number;
+
+  /**
+   * Transaction PIN lockout expiry
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  transactionPinLockedUntil: Date;
+
+  /**
+   * Timestamp when Transaction PIN was last changed
+   * Used for security cooling period
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  transactionPinChangedAt: Date;
+
+  /**
    * Device ID for fingerprinting (future use)
    * Can be used for trusted device recognition
    */

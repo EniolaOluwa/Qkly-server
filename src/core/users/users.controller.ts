@@ -52,7 +52,7 @@ import {
 } from '../../common/dto/responses.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
-import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto } from './dto/user.dto';
+import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto, CreateTransactionPinDto, ChangeTransactionPinDto } from './dto/user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UsersService } from './users.service';
 
