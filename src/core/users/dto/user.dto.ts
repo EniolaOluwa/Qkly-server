@@ -3,7 +3,8 @@ import { IsString, IsOptional, IsEmail, IsNumber, Matches, MinLength, MaxLength 
 
 
 export class ChangePasswordDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsNumber()
   userId: number;
 
@@ -49,7 +50,8 @@ export class UpdateUserProfileDto {
 
 
 export class ChangePinDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsNumber()
   userId: number;
 
@@ -70,7 +72,8 @@ export class ChangePinDto {
 }
 
 export class CreateTransactionPinDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsNumber()
   userId: number;
 
@@ -86,7 +89,8 @@ export class CreateTransactionPinDto {
 }
 
 export class ChangeTransactionPinDto {
-  @ApiProperty({ example: 1 })
+  @ApiPropertyOptional({ example: 1 })
+  @IsOptional()
   @IsNumber()
   userId: number;
 
