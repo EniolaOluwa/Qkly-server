@@ -255,6 +255,42 @@ export class OrderResponseDto {
 }
 
 /**
+ * DTO for payment initialization data in order responses
+ */
+export class PaymentInitializationDto {
+  @ApiProperty({ example: 'https://checkout.paystack.com/v2/xxxxxxxx' })
+  @Expose()
+  authorizationUrl: string;
+
+  @ApiProperty({ example: 'xxxxxx' })
+  @Expose()
+  accessCode: string;
+
+  @ApiProperty({ example: 'TXN-ABCDEFGH' })
+  @Expose()
+  paymentReference: string;
+
+  @ApiProperty({ example: 'PAYSTACK' })
+  @Expose()
+  provider: string;
+}
+
+/**
+ * DTO for order creation response with payment details
+ */
+export class OrderWithPaymentResponseDto {
+  @ApiProperty()
+  @Expose()
+  @Type(() => OrderResponseDto)
+  order: OrderResponseDto;
+
+  @ApiProperty()
+  @Expose()
+  @Type(() => PaymentInitializationDto)
+  payment: PaymentInitializationDto;
+}
+
+/**
  * DTO for minimal order information (used in lists)
  */
 export class OrderSummaryDto {
