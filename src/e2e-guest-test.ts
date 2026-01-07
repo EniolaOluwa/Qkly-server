@@ -28,15 +28,39 @@ async function runE2E() {
       email: 'merchant1@test.com',
       password: 'Test@123'
     });
+    console.log('Merchant Login Response:', JSON.stringify(merchantLogin.data, null, 2));
     const merchantToken = merchantLogin.data.data.accessToken;
     console.log('Merchant logged in.');
+
+    // Fetch Profile to get businessId
+    const profileRes = await axios.get(`${API_URL}/users/profile`, {
+      headers: { Authorization: `Bearer ${merchantToken}` }
+    });
+    console.log('Profile Response:', JSON.stringify(profileRes.data, null, 2));
+    const businessId = profileRes.data.data.user.businessId;
+    console.log(`Merchant Business ID: ${businessId}`);
+
+    if (!businessId) {
+      console.error('FAILURE: Merchant has no business!');
+      process.exit(1);
+    }
 
     // Get Initial Balance
     const initialBalanceRes = await axios.get(`${API_URL}/wallets/balance`, {
       headers: { Authorization: `Bearer ${merchantToken}` }
     });
     const initialBalance = Number(initialBalanceRes.data.data.availableBalance);
-    console.log(`Merchant Initial Balance: ₦${initialBalance}\n`);
+    console.log(`Merchant Initial Balance: ₦${initialBalance}`);
+
+    // Fetch a valid product for this business
+    // Endpoint is /v1/products/business/:id
+    const productsRes = await axios.get(`${API_URL}/products/business/${businessId}`);
+    if (!productsRes.data.data.data || productsRes.data.data.data.length === 0) {
+      console.error('FAILURE: No products found for business!');
+      process.exit(1);
+    }
+    const productId = productsRes.data.data.data[0].id;
+    console.log(`Using Product ID: ${productId}\n`);
     // --- MERCHANT SETUP END ---
 
 
@@ -44,11 +68,8 @@ async function runE2E() {
     console.log('[1] Adding batch items to cart...');
     const addToCartRes = await axios.post(`${API_URL}/cart/items`, {
       items: [
-        { productId: 1, quantity: 1, notes: 'Item 1 Note' },
-        { productId: 1, quantity: 2, notes: 'Item 2 Note (Same product, more qty)' }
-        // Note: Using productId 1 twice to test merging or separate lines depending on logic.
-        // DTO supports multiple items. If variantId is not specified, it uses default.
-        // If system merges them, quantity should be 3.
+        { productId: productId, quantity: 1, notes: 'Item 1 Note' },
+        { productId: productId, quantity: 2, notes: 'Item 2 Note (Same product, more qty)' }
       ],
       email: `guest-${Date.now()}@test.com` // Optional context email
     }, { headers: { 'x-session-id': sessionId } });
@@ -60,7 +81,7 @@ async function runE2E() {
     // 2. Create Order
     console.log('[2] Creating order from cart...');
     const createOrderRes = await axios.post(`${API_URL}/orders/cart`, {
-      businessId: 1, // Assumes merchant1 (id:1) owns the products or business logic handles it
+      businessId: businessId, // Dynmically retrieved ID
       customerName: 'Guest Tester',
       customerEmail: `guest-${Date.now()}@example.com`,
       customerPhoneNumber: '+2348000000000',
@@ -72,21 +93,26 @@ async function runE2E() {
       notes: 'Test Order Settlement'
     }, { headers: { 'x-session-id': sessionId } });
 
-    const orderId = createOrderRes.data.data.id;
-    const orderRef = createOrderRes.data.data.orderReference;
-    const orderTotal = createOrderRes.data.data.total;
-    console.log(`Order created! ID: ${orderId} Ref: ${orderRef} Total: ₦${orderTotal}\n`);
+    const order = createOrderRes.data.data.order;
+    const payment = createOrderRes.data.data.payment;
 
-    // 3. Initialize Payment
-    console.log('[3] Initializing payment...');
-    const initPaymentRes = await axios.post(`${API_URL}/orders/payment/initialize`, {
-      orderId: orderId,
-      paymentMethod: 'card'
-    });
-    console.log('Payment Initialized!');
+    const orderId = order.id;
+    const orderRef = order.orderReference;
+    const orderTotal = order.total;
+    console.log(`Order created! ID: ${orderId} Ref: ${orderRef} Total: ₦${orderTotal}`);
 
-    const authUrl = initPaymentRes.data.data.authorizationUrl;
-    const paymentRef = initPaymentRes.data.data.paymentReference;
+    if (payment) {
+      console.log('Payment initialized automatically!');
+      console.log(`Auth URL: ${payment.authorizationUrl}`);
+      console.log(`Access Code: ${payment.accessCode}\n`);
+    } else {
+      console.log('WARNING: Payment NOT initialized automatically. Checking order status...\n');
+    }
+
+    // 3. Skip Manual Initialization and use data from step 2
+    console.log('[3] Using auto-initialized payment...');
+    const authUrl = payment.authorizationUrl;
+    const paymentRef = payment.paymentReference;
 
     console.log(`
 ------------------------------------------------

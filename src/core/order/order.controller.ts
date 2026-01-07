@@ -18,6 +18,7 @@ import { PaymentService } from '../payment/payment.service';
 import { JwtAuthGuard } from '../users';
 import { CreateOrderFromCartDto } from './dto/create-order.dto';
 import { AcceptOrderDto, FindBusinessOrdersDto, RejectOrderDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
+import { OrderBusinessDto, OrderItemDto, OrderResponseDto, OrderUserDto, OrderWithPaymentResponseDto } from './dto/order-response.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
 import { InitiateRefundDto } from './dto/refund.dto';
 import { OrderItem } from './entity/order-items.entity';
@@ -49,20 +50,13 @@ export class OrdersController {
     description: 'Guest Session ID (UUID)',
     required: true,
   })
-  @ApiOperation({
-    summary: 'Create order from active cart',
-    description: 'Creates a new order from the guest active cart',
-  })
-  @ApiResponse({
-    status: HttpStatus.CREATED,
-    description: 'Order created successfully from cart',
-    type: Order,
-  })
+  @ApiOperation({ summary: 'Create order from active cart' })
+  @ApiResponse({ status: 201, description: 'Order created successfully from cart', type: OrderWithPaymentResponseDto })
   async createOrderFromCart(
     @Request() req,
     @Body() createOrderDto: CreateOrderFromCartDto,
     @Headers() headers,
-  ): Promise<Order> {
+  ): Promise<any> {
     const sessionId = headers['x-session-id'];
     if (!sessionId) {
       throw new BadRequestException('Session ID is required');

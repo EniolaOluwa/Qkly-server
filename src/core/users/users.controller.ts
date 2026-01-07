@@ -155,21 +155,12 @@ export class UsersController {
     description:
       'Retrieves the current user profile information using JWT token',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Profile retrieved successfully',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - Invalid or missing token',
-  })
   async getProfile(@Request() req) {
-    return {
-      message: 'Profile retrieved successfully',
-      data: {
-        user: req.user,
-      }
-    };
+    const user = await this.usersService.findUserById(req.user.userId);
+    return HttpResponse.success({
+      data: { user },
+      message: 'Profile retrieved successfully'
+    });
   }
 
   @Get(':id')
