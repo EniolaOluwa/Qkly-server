@@ -650,6 +650,7 @@ export class UsersController {
     }
 
     const data = await this.usersService.changePassword(
+      userId,
       changePasswordDto
     );
 
@@ -747,15 +748,73 @@ export class UsersController {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    // Override userId from DTO with authenticated user ID for security
-    changePinDto.userId = authUserId;
-
-    const data = await this.usersService.changePin(changePinDto);
+    const data = await this.usersService.changePin(authUserId, changePinDto);
 
     return HttpResponse.success({
       data: data,
       message: 'Pin changed successfully'
     })
+  }
+
+
+  @Post('transaction-pin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Create transaction PIN',
+    description: 'Allows an authenticated user to create a 4-digit transaction PIN for sensitive operations.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Transaction PIN created successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - Validation error or PIN already set' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Missing token' })
+  async createTransactionPin(
+    @Body(ValidationPipe) createTransactionPinDto: CreateTransactionPinDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
+    }
+
+    const data = await this.usersService.createTransactionPin(authUserId, createTransactionPinDto);
+
+    return HttpResponse.success({
+      data,
+      message: 'Transaction PIN created successfully',
+    });
+  }
+
+  @Patch('settings/transaction-pin')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change transaction PIN',
+    description: 'Allows an authenticated user to change their transaction PIN by providing the current (old) PIN and a new PIN.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Transaction PIN changed successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Bad request - Validation error or PIN format invalid' })
+  @ApiResponse({ status: 401, description: 'Unauthorized - Invalid current PIN or missing token' })
+  async changeTransactionPin(
+    @Body(ValidationPipe) changeTransactionPinDto: ChangeTransactionPinDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
+    }
+
+    const data = await this.usersService.changeTransactionPin(authUserId, changeTransactionPinDto);
+
+    return HttpResponse.success({
+      data,
+      message: 'Transaction PIN changed successfully',
+    });
   }
 
 

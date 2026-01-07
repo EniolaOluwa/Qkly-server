@@ -980,11 +980,12 @@ export class UsersService {
 
 
   async changePassword(
+    userId: number,
     changePassword: ChangePasswordDto
   ): Promise<any> {
 
     // Validate inputs
-    if (!changePassword.userId || !changePassword.oldPassword || !changePassword.newPassword) {
+    if (!userId || !changePassword.oldPassword || !changePassword.newPassword) {
       ErrorHelper.BadRequestException('User ID, old password, and new password are required');
     }
 
@@ -997,7 +998,7 @@ export class UsersService {
     }
 
     // Find user by ID
-    const user = await this.userRepository.findOne({ where: { id: Number(changePassword.userId) } });
+    const user = await this.userRepository.findOne({ where: { id: Number(userId) } });
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
@@ -1011,9 +1012,9 @@ export class UsersService {
     const hashedPassword = CryptoUtil.hashPassword(changePassword.newPassword);
 
     // Update user password
-    await this.userRepository.update(changePassword.userId, { password: hashedPassword });
+    await this.userRepository.update(userId, { password: hashedPassword });
 
-    this.logger.log(`Password changed successfully for user ${changePassword.userId}`);
+    this.logger.log(`Password changed successfully for user ${userId}`);
   }
 
 
@@ -1098,10 +1099,11 @@ export class UsersService {
 
 
   async changePin(
+    userId: number,
     changePinDto: ChangePinDto,
   ): Promise<{ message: string; success: boolean }> {
     // Validate PIN format (4 digits only)
-    if (!/^\d{ 4 } $ /.test(changePinDto.newPin)) {
+    if (!/^\d{4}$/.test(changePinDto.newPin)) {
       ErrorHelper.BadRequestException('New PIN must be exactly 4 digits');
     }
 
@@ -1115,7 +1117,7 @@ export class UsersService {
 
     // Find user by ID with security
     const user = await this.userRepository.findOne({
-      where: { id: changePinDto.userId },
+      where: { id: userId },
       relations: ['security'],
     });
 
@@ -1141,7 +1143,7 @@ export class UsersService {
       pin: encryptedPin,
     });
 
-    this.logger.log(`PIN changed successfully for user ${changePinDto.userId}`);
+    this.logger.log(`PIN changed successfully for user ${userId}`);
 
     return {
       message: 'PIN changed successfully',
@@ -1151,6 +1153,7 @@ export class UsersService {
   }
 
   async createTransactionPin(
+    userId: number,
     createTransactionPinDto: CreateTransactionPinDto,
   ): Promise<{ message: string; success: boolean }> {
     // Validate PIN format (4 digits only)
@@ -1164,7 +1167,7 @@ export class UsersService {
 
     // Find user by ID with security
     const user = await this.userRepository.findOne({
-      where: { id: createTransactionPinDto.userId },
+      where: { id: userId },
       relations: ['security'],
     });
 
@@ -1198,7 +1201,7 @@ export class UsersService {
       transactionPinChangedAt: new Date(),
     });
 
-    this.logger.log(`Transaction PIN created successfully for user ${createTransactionPinDto.userId}`);
+    this.logger.log(`Transaction PIN created successfully for user ${userId}`);
 
     return {
       message: 'Transaction PIN created successfully',
@@ -1207,6 +1210,7 @@ export class UsersService {
   }
 
   async changeTransactionPin(
+    userId: number,
     changePinDto: ChangeTransactionPinDto,
   ): Promise<{ message: string; success: boolean }> {
     // Validate PIN format (4 digits only)
@@ -1224,7 +1228,7 @@ export class UsersService {
 
     // Find user by ID with security
     const user = await this.userRepository.findOne({
-      where: { id: changePinDto.userId },
+      where: { id: userId },
       relations: ['security'],
     });
 
@@ -1253,7 +1257,7 @@ export class UsersService {
       transactionPinChangedAt: new Date(),
     });
 
-    this.logger.log(`Transaction PIN changed successfully for user ${changePinDto.userId}`);
+    this.logger.log(`Transaction PIN changed successfully for user ${userId}`);
 
     return {
       message: 'Transaction PIN changed successfully',
