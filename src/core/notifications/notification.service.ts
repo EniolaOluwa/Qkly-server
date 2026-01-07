@@ -2,6 +2,24 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { Cart } from '../cart/entities/cart.entity';
+import { baseTemplate, simpleTemplate } from '../email/templates/base-template';
+import { EmailBranding, mergeBranding, EMAIL_CONFIG } from '../email/templates/email.constants';
+import {
+  heading,
+  paragraph,
+  mutedText,
+  button,
+  alertBox,
+  otp,
+  divider,
+  table,
+  itemList,
+  amountBox,
+  infoTable,
+  infoRow,
+} from '../email/templates/components';
+import { EmailPreferencesService } from '../email/email-preferences.service';
+import { EmailCategory } from '../email/entities/email-unsubscription.entity';
 
 @Injectable()
 export class NotificationService {
@@ -9,7 +27,10 @@ export class NotificationService {
   private resend: Resend;
   private readonly fromEmail: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly emailPreferencesService: EmailPreferencesService,
+  ) {
     const resendApiKey = this.configService.get<string>('RESEND_API_KEY');
     if (resendApiKey) {
       this.resend = new Resend(resendApiKey);
@@ -55,182 +76,197 @@ export class NotificationService {
     }
   }
 
+  // ============================================
+  // WALLET NOTIFICATIONS (Platform Branding)
+  // ============================================
+
   async sendWalletFundedNotification(email: string, amount: number, reference: string) {
     const subject = 'Wallet Funded Successfully';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Wallet Funded</h2>
-        <p>Your wallet has been funded with ₦${amount.toLocaleString()}.</p>
-        <p>Reference: ${reference}</p>
-        <p>Thank you for using Qkly!</p>
-      </div>
-    `;
+    const content = [
+      heading('Wallet Funded'),
+      alertBox('success', 'Your wallet has been funded successfully!'),
+      amountBox('Amount Added', amount),
+      infoTable(infoRow('Reference', reference)),
+      paragraph('Thank you for using Qkly!'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
 
   async sendPayoutSuccessNotification(email: string, amount: number, reference: string) {
     const subject = 'Payout Successful';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Payout Successful</h2>
-        <p>Your payout of ₦${amount.toLocaleString()} has been processed successfully.</p>
-        <p>Reference: ${reference}</p>
-        <p>Funds should reflect in your bank account shortly.</p>
-      </div>
-    `;
+    const content = [
+      heading('Payout Successful'),
+      alertBox('success', 'Your payout has been processed successfully!'),
+      amountBox('Amount Sent', amount),
+      infoTable(infoRow('Reference', reference)),
+      paragraph('Funds should reflect in your bank account shortly.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
 
   async sendPayoutFailedNotification(email: string, amount: number, reference: string, reason?: string) {
     const subject = 'Payout Failed';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2 style="color: red;">Payout Failed</h2>
-        <p>Your payout of ₦${amount.toLocaleString()} failed.</p>
-        <p>Reason: ${reason || 'Unknown error'}</p>
-        <p>Reference: ${reference}</p>
-        <p>The amount has been reversed to your wallet.</p>
-      </div>
-    `;
+    const content = [
+      heading('Payout Failed'),
+      alertBox('error', `Your payout of ₦${amount.toLocaleString()} failed.`),
+      infoTable([infoRow('Reason', reason || 'Unknown error'), infoRow('Reference', reference)].join('')),
+      paragraph('The amount has been reversed to your wallet.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
 
+  // ============================================
+  // ORDER NOTIFICATIONS (Business Branding)
+  // ============================================
+
   async sendOrderConfirmation(email: string, order: any) {
     const subject = `Order Confirmation #${order.orderReference}`;
-    const itemsHtml = order.items
-      .map(
-        (item: any) => `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.productName} ${item.variantName ? `(${item.variantName})` : ''}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.quantity}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">₦${Number(item.price).toLocaleString()}</td>
-        </tr>
-      `,
-      )
-      .join('');
 
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Order Confirmation</h2>
-        <p>Hi ${order.customerName},</p>
-        <p>Thank you for your order! We have received it and are processing it.</p>
-        <p><strong>Order Reference:</strong> ${order.orderReference}</p>
-        
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-          <thead>
-            <tr style="text-align: left; background-color: #f4f4f4;">
-              <th style="padding: 8px;">Product</th>
-              <th style="padding: 8px;">Qty</th>
-              <th style="padding: 8px;">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <p style="margin-top: 20px;"><strong>Total: ₦${Number(order.total).toLocaleString()}</strong></p>
-        <p>We will notify you when your order ships.</p>
-      </div>
-    `;
-
-    // Try to extract business name from order items if possible, or order relations
-    let businessName = undefined;
-    if (order.items && order.items.length > 0 && order.items[0].product && order.items[0].product.business) {
-      businessName = order.items[0].product.business.businessName;
+    // Extract business branding
+    let business: any;
+    if (order.items?.[0]?.product?.business) {
+      business = order.items[0].product.business;
+    } else if (order.business) {
+      business = order.business;
     }
-    // Alternatively, if Order entity has business relation loaded
-    if (order.business && order.business.businessName) {
-      businessName = order.business.businessName;
-    }
+    const branding = mergeBranding(business);
 
-    await this.sendEmail(email, subject, html, businessName);
+    const items = order.items.map((item: any) => ({
+      name: item.productName,
+      variant: item.variantName,
+      quantity: item.quantity,
+      price: item.price,
+    }));
+
+    const content = [
+      heading('Order Confirmation'),
+      paragraph(`Hi ${order.customerName},`),
+      paragraph('Thank you for your order! We have received it and are processing it.'),
+      infoTable(infoRow('Order Reference', order.orderReference)),
+      itemList(items, true),
+      divider(),
+      amountBox('Total', Number(order.total), branding.primaryColor),
+      paragraph('We will notify you when your order ships.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL, business?.id);
+    const html = baseTemplate(content, { branding, unsubscribeToken: token });
+    await this.sendEmail(email, subject, html, branding.businessName);
   }
 
   async sendNewOrderAlert(businessEmail: string, order: any) {
     const subject = `New Order Received #${order.orderReference}`;
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>New Order Alert</h2>
-        <p>You have received a new order from <strong>${order.customerName}</strong>.</p>
-        <p><strong>Order Reference:</strong> ${order.orderReference}</p>
-        <p><strong>Total:</strong> ₦${Number(order.total).toLocaleString()}</p>
-        <p>Please login to your dashboard to fulfill this order.</p>
-      </div>
-    `;
+    const content = [
+      heading('New Order Alert'),
+      alertBox('success', `You have received a new order from ${order.customerName}!`),
+      infoTable([infoRow('Order Reference', order.orderReference), infoRow('Total', `₦${Number(order.total).toLocaleString()}`)].join('')),
+      button('View Order', `${EMAIL_CONFIG.appUrl}/dashboard/orders`),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(businessEmail, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(businessEmail, subject, html);
   }
 
   async sendOrderStatusUpdate(email: string, order: any, newStatus: string) {
     const subject = `Order Status Update #${order.orderReference}`;
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Order Update</h2>
-        <p>Hi ${order.customerName},</p>
-        <p>Your order <strong>#${order.orderReference}</strong> status has been updated to:</p>
-        <h3 style="color: #007bff;">${newStatus}</h3>
-        <p>Thank you for shopping with us.</p>
-      </div>
-    `;
-    await this.sendEmail(email, subject, html);
+
+    // Extract business branding
+    const business = order.business || order.items?.[0]?.product?.business;
+    const branding = mergeBranding(business);
+
+    const content = [
+      heading('Order Update'),
+      paragraph(`Hi ${order.customerName},`),
+      paragraph(`Your order <strong>#${order.orderReference}</strong> status has been updated to:`),
+      alertBox('info', newStatus),
+      paragraph('Thank you for shopping with us.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL, business?.id);
+    const html = baseTemplate(content, { branding, unsubscribeToken: token });
+    await this.sendEmail(email, subject, html, branding.businessName);
   }
 
   async sendLowStockAlert(businessEmail: string, productName: string, variantName: string, currentStock: number) {
     const subject = `Low Stock Alert: ${productName}`;
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2 style="color: orange;">Low Stock Alert</h2>
-        <p>Product <strong>${productName}</strong> ${variantName ? `(${variantName})` : ''} is running low.</p>
-        <p><strong>Current Stock:</strong> ${currentStock}</p>
-        <p>Please restock soon to avoid running out of inventory.</p>
-      </div>
-    `;
+    const content = [
+      heading('Low Stock Alert'),
+      alertBox('warning', `Product <strong>${productName}</strong> ${variantName ? `(${variantName})` : ''} is running low.`),
+      infoTable(infoRow('Current Stock', String(currentStock))),
+      paragraph('Please restock soon to avoid running out of inventory.'),
+      button('Manage Inventory', `${EMAIL_CONFIG.appUrl}/dashboard/products`),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(businessEmail, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(businessEmail, subject, html);
   }
+
   async sendRefundSuccess(email: string, order: any, amount: number) {
     const subject = `Refund Processed for Order #${order.orderReference}`;
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Refund Processed</h2>
-        <p>Hi ${order.customerName},</p>
-        <p>A refund of <strong>₦${amount.toLocaleString()}</strong> has been processed for your order <strong>#${order.orderReference}</strong>.</p>
-        <p>The funds should reflect in your account within 5-10 business days depending on your bank.</p>
-        <p>If you have any questions, please reply to this email.</p>
-      </div>
-    `;
-    await this.sendEmail(email, subject, html);
+
+    const business = order.business || order.items?.[0]?.product?.business;
+    const branding = mergeBranding(business);
+
+    const content = [
+      heading('Refund Processed'),
+      paragraph(`Hi ${order.customerName},`),
+      alertBox('success', `A refund has been processed for your order #${order.orderReference}.`),
+      amountBox('Refund Amount', amount, EMAIL_CONFIG.successColor),
+      paragraph('The funds should reflect in your account within 5-10 business days depending on your bank.'),
+      mutedText('If you have any questions, please reply to this email.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL, business?.id);
+    const html = baseTemplate(content, { branding, unsubscribeToken: token });
+    await this.sendEmail(email, subject, html, branding.businessName);
   }
 
   async sendRefundFailureAlert(businessEmail: string, orderId: number | string, reason: string) {
     const subject = `Refund Failed for Order #${orderId}`;
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2 style="color: red;">Refund Failed</h2>
-        <p>Automatic refund failed for Order <strong>#${orderId}</strong>.</p>
-        <p><strong>Reason:</strong> ${reason}</p>
-        <p><strong>Action Required:</strong> Please manually review this order and process the refund if necessary.</p>
-      </div>
-    `;
+    const content = [
+      heading('Refund Failed'),
+      alertBox('error', `Automatic refund failed for Order #${orderId}.`),
+      infoTable(infoRow('Reason', reason)),
+      paragraph('<strong>Action Required:</strong> Please manually review this order and process the refund if necessary.'),
+      button('View Order', `${EMAIL_CONFIG.appUrl}/dashboard/orders`),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(businessEmail, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(businessEmail, subject, html);
   }
 
+  // ============================================
+  // CART NOTIFICATIONS (Business Branding, Marketing)
+  // ============================================
+
   async sendCartReminder(email: string, cart: Cart, stage: number) {
+    // Check if unsubscribed from marketing
+    const business = cart.items?.[0]?.product?.business;
+    const isUnsubscribed = await this.emailPreferencesService.isUnsubscribed(email, EmailCategory.MARKETING, business?.id);
+    if (isUnsubscribed) {
+      this.logger.debug(`Skipping cart reminder to ${email}: User unsubscribed from marketing`);
+      return;
+    }
+
+    const branding = mergeBranding(business);
     let subject = '';
     let message = '';
 
-    // Determine business name from first item
-    let businessName = 'Qkly';
-    if (cart.items && cart.items.length > 0) {
-      const firstItem = cart.items[0];
-      // Check if business relation is loaded
-      if (firstItem.product && firstItem.product.business) {
-        businessName = firstItem.product.business.businessName;
-      }
-    }
-
     switch (stage) {
       case 1:
-        subject = `You left something behind at ${businessName}!`;
+        subject = `You left something behind at ${branding.businessName}!`;
         message = 'We noticed you left some items in your cart. They are selling out fast, so grab them while you can!';
         break;
       case 2:
@@ -243,137 +279,126 @@ export class NotificationService {
         break;
     }
 
-    const itemsHtml = cart.items
-      .map(
-        (item: any) => `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.product.name} ${item.variant ? `(${item.variant.name})` : ''}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.quantity}</td>
-        </tr>
-      `,
-      )
-      .join('');
+    const items = cart.items.map((item: any) => ({
+      name: item.product.name,
+      variant: item.variant?.name,
+      quantity: item.quantity,
+    }));
 
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>${subject}</h2>
-        <p>Hi,</p>
-        <p>${message}</p>
-        
-        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-          <thead>
-            <tr style="text-align: left; background-color: #f4f4f4;">
-              <th style="padding: 8px;">Product</th>
-              <th style="padding: 8px;">Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+    const content = [
+      heading(subject),
+      paragraph('Hi,'),
+      paragraph(message),
+      itemList(items, false),
+      button('Return to Cart', `${EMAIL_CONFIG.appUrl}/cart?sessionId=${cart.sessionId || ''}`, branding.primaryColor),
+      mutedText(`You are receiving this email because you visited ${branding.businessName}.`),
+    ].join('');
 
-        <p style="margin-top: 20px;">
-          <a href="https://app.qkly.com/cart?sessionId=${cart.sessionId || ''}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Return to Cart</a>
-        </p>
-        
-        <p style="font-size: 12px; color: #888; margin-top: 30px;">
-          You are receiving this email because you visited ${businessName}.
-        </p>
-      </div>
-    `;
-    await this.sendEmail(email, subject, html);
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.MARKETING, business?.id);
+    const html = baseTemplate(content, { branding, unsubscribeToken: token });
+    await this.sendEmail(email, subject, html, branding.businessName);
   }
 
+  // ============================================
+  // KYC NOTIFICATIONS (Platform Branding)
+  // ============================================
 
   async sendKycApprovedNotification(email: string, firstName: string, tier: string) {
     const subject = 'KYC Verification Approved';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2 style="color: green;">Verification Successful!</h2>
-        <p>Hi ${firstName},</p>
-        <p>Congratulations! Your identity verification has been successfully approved.</p>
-        <p><strong>Current Level:</strong> ${tier}</p>
-        <p>You can now access higher limits and features on Qkly.</p>
-        <p>Thank you for choosing Qkly.</p>
-      </div>
-    `;
+    const content = [
+      heading('Verification Successful!'),
+      alertBox('success', 'Congratulations! Your identity verification has been approved.'),
+      paragraph(`Hi ${firstName},`),
+      infoTable(infoRow('Current Level', tier)),
+      paragraph('You can now access higher limits and features on Qkly.'),
+      paragraph('Thank you for choosing Qkly.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
 
   async sendKycRejectedNotification(email: string, firstName: string, reason: string) {
     const subject = 'KYC Verification Failed';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2 style="color: red;">Verification Failed</h2>
-        <p>Hi ${firstName},</p>
-        <p>Unfortunately, your identity verification could not be completed.</p>
-        <p><strong>Reason:</strong> ${reason}</p>
-        <p>Please review your details and try again, or contact support for assistance.</p>
-      </div>
-    `;
+    const content = [
+      heading('Verification Failed'),
+      alertBox('error', 'Unfortunately, your identity verification could not be completed.'),
+      paragraph(`Hi ${firstName},`),
+      infoTable(infoRow('Reason', reason)),
+      paragraph('Please review your details and try again, or contact support for assistance.'),
+      button('Try Again', `${EMAIL_CONFIG.appUrl}/settings/verification`),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
 
   async sendKycUnderReviewNotification(email: string, firstName: string) {
     const subject = 'KYC Document Submitted';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Document Under Review</h2>
-        <p>Hi ${firstName},</p>
-        <p>We have received your ID document for verification.</p>
-        <p>Our team will review your submission and notify you shortly via email.</p>
-        <p>This process usually takes 24-48 hours.</p>
-      </div>
-    `;
+    const content = [
+      heading('Document Under Review'),
+      paragraph(`Hi ${firstName},`),
+      paragraph('We have received your ID document for verification.'),
+      alertBox('info', 'Our team will review your submission and notify you shortly via email.'),
+      paragraph('This process usually takes 24-48 hours.'),
+    ].join('');
+
+    const token = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: token });
     await this.sendEmail(email, subject, html);
   }
+
+  // ============================================
+  // AUTH NOTIFICATIONS (Platform Branding, Simple Template)
+  // ============================================
+
   async sendEmailVerification(email: string, firstName: string, token: string) {
     const subject = 'Verify your email address';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Verify your email</h2>
-        <p>Hi ${firstName},</p>
-        <p>Please use the following code to verify your email address:</p>
-        <h1 style="background-color: #f4f4f4; padding: 10px; text-align: center; letter-spacing: 5px;">${token}</h1>
-        <p>This code is valid for 15 minutes.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-      </div>
-    `;
+    const content = [
+      heading('Verify your email'),
+      paragraph(`Hi ${firstName},`),
+      paragraph('Please use the following code to verify your email address:'),
+      otp(token),
+      mutedText('This code is valid for 15 minutes.'),
+      mutedText("If you didn't request this, please ignore this email."),
+    ].join('');
+
+    // Use simple template for OTP emails (no unsubscribe needed)
+    const html = simpleTemplate(content);
     await this.sendEmail(email, subject, html);
   }
 
   async sendLoginNotification(email: string, firstName: string, time: string, device: string, location: string) {
     const subject = 'New Login Alert';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>New Sign-in Detected</h2>
-        <p>Hi ${firstName},</p>
-        <p>We noticed a new sign-in to your Qkly account.</p>
-        <ul style="list-style: none; padding: 0;">
-          <li><strong>Time:</strong> ${time}</li>
-          <li><strong>Device:</strong> ${device}</li>
-          <li><strong>Location:</strong> ${location}</li>
-        </ul>
-        <p>If this was you, you can ignore this email.</p>
-        <p style="color: red;">If you did not sign in, please contact support immediately and change your PIN.</p>
-      </div>
-    `;
+    const content = [
+      heading('New Sign-in Detected'),
+      paragraph(`Hi ${firstName},`),
+      alertBox('warning', 'We noticed a new sign-in to your Qkly account.'),
+      infoTable([infoRow('Time', time), infoRow('Device', device), infoRow('Location', location)].join('')),
+      paragraph('If this was you, you can ignore this email.'),
+      alertBox('error', "If you did not sign in, please contact support immediately and change your PIN."),
+    ].join('');
+
+    const unsubToken = await this.emailPreferencesService.getOrCreateToken(email, EmailCategory.TRANSACTIONAL);
+    const html = baseTemplate(content, { unsubscribeToken: unsubToken });
     await this.sendEmail(email, subject, html);
   }
 
-  async sendForgotPasswordEmail(email: string, firstName: string, otp: string, validity: string) {
+  async sendForgotPasswordEmail(email: string, firstName: string, otpCode: string, validity: string) {
     const subject = 'Password Reset Request';
-    const html = `
-      <div style="font-family: sans-serif; padding: 20px;">
-        <h2>Reset Your Password</h2>
-        <p>Hi ${firstName},</p>
-        <p>You requested to reset your password. Use the code below to proceed:</p>
-        <h1 style="background-color: #f4f4f4; padding: 10px; text-align: center; letter-spacing: 5px;">${otp}</h1>
-        <p>This code is valid for ${validity}.</p>
-        <p>If you didn't request this, please ignore this email or contact support.</p>
-      </div>
-    `;
+    const content = [
+      heading('Reset Your Password'),
+      paragraph(`Hi ${firstName},`),
+      paragraph('You requested to reset your password. Use the code below to proceed:'),
+      otp(otpCode),
+      mutedText(`This code is valid for ${validity}.`),
+      mutedText("If you didn't request this, please ignore this email or contact support."),
+    ].join('');
+
+    // Use simple template for OTP emails
+    const html = simpleTemplate(content);
     await this.sendEmail(email, subject, html);
   }
 }
-
