@@ -3,11 +3,6 @@ import { IsString, IsOptional, IsEmail, IsNumber, Matches, MinLength, MaxLength 
 
 
 export class ChangePasswordDto {
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsNumber()
-  userId: number;
-
   @ApiProperty({ example: 'oldPassword123' })
   @IsString()
   oldPassword: string;
@@ -21,8 +16,6 @@ export class ChangePasswordDto {
   @IsString()
   confirmPassword: string;
 }
-
-
 
 export class UpdateUserProfileDto {
   @ApiPropertyOptional({ example: 'John' })
@@ -48,13 +41,7 @@ export class UpdateUserProfileDto {
   phone?: string;
 }
 
-
 export class ChangePinDto {
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsNumber()
-  userId: number;
-
   @ApiProperty({ example: '1234' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Old PIN must be exactly 4 digits' })
@@ -72,11 +59,6 @@ export class ChangePinDto {
 }
 
 export class CreateTransactionPinDto {
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsNumber()
-  userId: number;
-
   @ApiProperty({ example: '1234' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Transaction PIN must be exactly 4 digits' })
@@ -89,11 +71,6 @@ export class CreateTransactionPinDto {
 }
 
 export class ChangeTransactionPinDto {
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsNumber()
-  userId: number;
-
   @ApiProperty({ example: '1234' })
   @IsString()
   @Matches(/^\d{4}$/, { message: 'Old PIN must be exactly 4 digits' })

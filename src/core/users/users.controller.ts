@@ -650,6 +650,7 @@ export class UsersController {
     }
 
     const data = await this.usersService.changePassword(
+      userId,
       changePasswordDto
     );
 
@@ -747,10 +748,7 @@ export class UsersController {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    // Override userId from DTO with authenticated user ID for security
-    changePinDto.userId = authUserId;
-
-    const data = await this.usersService.changePin(changePinDto);
+    const data = await this.usersService.changePin(authUserId, changePinDto);
 
     return HttpResponse.success({
       data: data,
@@ -781,8 +779,7 @@ export class UsersController {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    createTransactionPinDto.userId = authUserId;
-    const data = await this.usersService.createTransactionPin(createTransactionPinDto);
+    const data = await this.usersService.createTransactionPin(authUserId, createTransactionPinDto);
 
     return HttpResponse.success({
       data,
@@ -812,8 +809,7 @@ export class UsersController {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    changeTransactionPinDto.userId = authUserId;
-    const data = await this.usersService.changeTransactionPin(changeTransactionPinDto);
+    const data = await this.usersService.changeTransactionPin(authUserId, changeTransactionPinDto);
 
     return HttpResponse.success({
       data,
