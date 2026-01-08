@@ -797,9 +797,32 @@ export class WalletsService {
     }
 
     if (!bankAccount.providerRecipientCode) {
-      ErrorHelper.BadRequestException(
-        'Bank account not set up for instant payout. Please remove and re-add your bank account.',
-      );
+      this.logger.warn(`Bank account ${bankAccount.id} missing recipient code. Attempting to create one...`);
+      try {
+        const recipient = await this.paymentService.createTransferRecipient({
+          type: 'nuban',
+          name: bankAccount.accountName,
+          account_number: bankAccount.accountNumber,
+          bank_code: bankAccount.bankCode,
+          currency: bankAccount.currency || 'NGN',
+        });
+
+        if (recipient && recipient.recipient_code) {
+          bankAccount.providerRecipientCode = recipient.recipient_code;
+          // Save for future use
+          await this.bankAccountsService.updateBankAccount(bankAccount.id, userId, {
+            providerRecipientCode: recipient.recipient_code
+          });
+          this.logger.log(`Created and saved new recipient code: ${recipient.recipient_code}`);
+        } else {
+          throw new Error('Failed to generate recipient code');
+        }
+      } catch (error) {
+        this.logger.error('Failed to create recipient code on the fly', error);
+        ErrorHelper.BadRequestException(
+          'Bank account not set up for instant payout and failed to repair. Please remove and re-add your bank account.',
+        );
+      }
     }
 
     // 4. Check balance (from local wallet for Main Balance mode)
