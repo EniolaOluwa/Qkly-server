@@ -17,6 +17,7 @@ import { ProductVariant } from '../product/entity/product-variant.entity';
 import { Product } from '../product/entity/product.entity';
 import { Settlement } from '../settlements/entities/settlement.entity';
 import { SettlementsService } from '../settlements/settlements.service'; // Import Service
+import { SystemConfigService } from '../system-config/system-config.service';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
@@ -29,9 +30,13 @@ import { OrderRefund } from './entity/order-refund.entity';
 import { OrderStatusHistory } from './entity/order-status-history.entity';
 import { Order } from './entity/order.entity';
 
-const SETTLEMENT_PERCENTAGE = 0.00;
-const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
-const PLATFORM_FEE_PERCENTAGE = 0
+/**
+ * Configurable values via SystemConfig (DB → Env → Default fallback):
+ * - PLATFORM_FEE_PERCENTAGE: Platform fee (default: 0.015 = 1.5%)
+ * - PLATFORM_FEE_MAX: Max platform fee cap (default: 2000)
+ * - SETTLEMENT_PERCENTAGE: Settlement deduction (default: 0.00)
+ * - SETTLEMENT_MODE: SUBACCOUNT (T+1) or MAIN_BALANCE (instant payout)
+ */
 
 
 @Injectable()
@@ -70,6 +75,7 @@ export class OrderService {
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly dataSource: DataSource,
+    private readonly systemConfigService: SystemConfigService,
   ) { }
 
 
@@ -536,7 +542,7 @@ export class OrderService {
       let bearer: 'account' | 'subaccount' | 'all-proportional' | 'all' | undefined = undefined;
 
       // Check SETTLEMENT_MODE: SUBACCOUNT (default) or MAIN_BALANCE
-      const settlementMode = this.configService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
       const isMainBalanceMode = settlementMode === 'MAIN_BALANCE';
 
       if (isMainBalanceMode) {
@@ -554,9 +560,9 @@ export class OrderService {
           ErrorHelper.BadRequestException('Merchant account is not set up to receive payments. Please contact support or update banking details.');
         }
 
-        // Calculate Platform Fee (1.5% capped at 2000)
-        const FEE_PERCENTAGE = 0.015;
-        const MAX_FEE = 2000;
+        // Calculate Platform Fee (configurable via SystemConfig)
+        const FEE_PERCENTAGE = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const MAX_FEE = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
 
         let platformFee = order.total * FEE_PERCENTAGE;
         if (platformFee > MAX_FEE) platformFee = MAX_FEE;
@@ -1860,7 +1866,7 @@ export class OrderService {
       }
 
       const business = order.business;
-      const platformFeePercentage = SETTLEMENT_PERCENTAGE;
+      const platformFeePercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
       const platformFee = order.total * platformFeePercentage;
       const payoutAmount = order.total - platformFee;
 
@@ -1975,7 +1981,7 @@ export class OrderService {
         throw new Error(`No business found for order ${orderId}`);
       }
 
-      const platformFeePercentage = SETTLEMENT_PERCENTAGE;
+      const platformFeePercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
       const platformFee = order.total * platformFeePercentage;
       const payoutAmount = order.total - platformFee;
 
@@ -2373,7 +2379,8 @@ export class OrderService {
       }
 
       // Calculate refund split
-      const platformFee = order.total * (PLATFORM_FEE_PERCENTAGE / 100);
+      const platformFeePercentageRaw = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+      const platformFee = order.total * platformFeePercentageRaw;
       const businessAmount = order.total - platformFee;
 
       // References for tracking platform and business refunds
@@ -2514,7 +2521,7 @@ export class OrderService {
       orderRefund.businessRefundReference = businessRefundRef;
       orderRefund.providerMetadata = {
         transactions: refundTransactions,
-        platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
+        platformFeePercentage: await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015),
       };
 
       if (allSuccess) {
