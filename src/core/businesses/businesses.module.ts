@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { Role } from '../roles/entities/role.entity';
 import { UserProgressModule } from '../user-progress/user-progress.module';
 import { User } from '../users/entity/user.entity';
+import { UsersModule } from '../users/users.module';
 import { BusinessType } from './business-type.entity';
 import { Business } from './business.entity';
 import { BusinessesController } from './businesses.controller';
@@ -23,7 +24,8 @@ import { BusinessPaymentAccount } from './entities/business-payment-account.enti
   imports: [
     TypeOrmModule.forFeature([Business, BusinessType, User, Role, Order, Product, TrafficEvent, Review, Transaction, BusinessPaymentAccount]),
     ConfigModule,
-    UserProgressModule
+    UserProgressModule,
+    forwardRef(() => UsersModule),
   ],
   controllers: [BusinessesController, DashboardController],
   providers: [BusinessesService, CloudinaryUtil, DashboardService],

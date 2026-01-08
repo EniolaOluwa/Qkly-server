@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException
@@ -14,7 +16,6 @@ import {
   UpdateBusinessTypeDto,
 } from '../../common/dto/responses.dto';
 import { PaymentAccountStatus } from '../../common/enums/payment.enum';
-import { OnboardingStep } from '../../common/enums/user.enum';
 import { PaginationMetadataDto, PaginationOrder } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
@@ -25,6 +26,7 @@ import { Role, RoleStatus } from '../roles/entities/role.entity';
 import { UserProgressEvent } from '../user-progress/entities/user-progress.entity';
 import { UserProgressService } from '../user-progress/user-progress.service';
 import { User, UserStatus } from '../users/entity/user.entity';
+import { UsersService } from '../users/users.service';
 import { BusinessType } from './business-type.entity';
 import { Business } from './business.entity';
 import { MerchantFilterDto } from './dto/merchant-filter.dto';
@@ -36,6 +38,8 @@ import { BusinessPaymentAccount } from './entities/business-payment-account.enti
 export class BusinessesService {
   constructor(
     private readonly userProgressService: UserProgressService,
+    @Inject(forwardRef(() => UsersService))
+    private readonly usersService: UsersService,
     @InjectRepository(Business)
     private businessRepo: Repository<Business>,
     @InjectRepository(BusinessType)
@@ -175,6 +179,9 @@ export class BusinessesService {
     createBusinessDto: CreateBusinessDto,
     userId: number,
   ): Promise<Business> {
+    // Validate all prerequisites are complete (phone, KYC, PIN)
+    await this.usersService.validateBusinessPrerequisites(userId);
+
     // Find user
     const user = await this.userRepos.findOne({
       where: { id: userId },
@@ -199,18 +206,6 @@ export class BusinessesService {
     // Check if user already has a business
     if (user.businessId) {
       ErrorHelper.BadRequestException('User already has a business registered');
-    }
-
-    console.log({
-      onboarding: user.onboarding
-    })
-
-
-    // Verify phone is verified (prerequisite for business creation)
-    if (!user.profile?.isPhoneVerified) {
-      ErrorHelper.ConflictException(
-        'User must verify phone number before creating a business.',
-      );
     }
 
     await this.findBusinessTypeById(createBusinessDto.businessTypeId);
@@ -247,11 +242,8 @@ export class BusinessesService {
       businessId: savedBusiness.id,
     });
 
-    // Update onboarding step in user_onboarding table
-    if (user.onboarding && user.onboarding.currentStep !== OnboardingStep.AUTHENTICATION_PIN) {
-      user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
-      await this.userRepos.save(user);
-    }
+    // Mark onboarding as complete (business is the final step)
+    await this.usersService.completeOnboarding(userId);
 
     return await this.findBusinessById(savedBusiness.id);
   }
