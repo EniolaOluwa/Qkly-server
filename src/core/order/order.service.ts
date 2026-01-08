@@ -1866,9 +1866,29 @@ export class OrderService {
       }
 
       const business = order.business;
-      const platformFeePercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
-      const platformFee = order.total * platformFeePercentage;
-      const payoutAmount = order.total - platformFee;
+
+      // Check SETTLEMENT_MODE to determine fee calculation
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      let platformFee: number;
+      let payoutAmount: number;
+
+      if (settlementMode === 'MAIN_BALANCE') {
+        // MAIN_BALANCE mode: All funds went to platform, calculate merchant share
+        // Use the same fee percentage used during payment initialization
+        const feePercentage = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const maxFee = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
+
+        platformFee = order.total * feePercentage;
+        if (platformFee > maxFee) platformFee = maxFee;
+
+        payoutAmount = order.total - platformFee;
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+      } else {
+        // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
+        const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
+        platformFee = order.total * settlementPercentage;
+        payoutAmount = order.total - platformFee;
+      }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
@@ -1883,7 +1903,7 @@ export class OrderService {
         gatewayFee: 0,
         settlementAmount: payoutAmount,
         currency: 'NGN',
-        transferProvider: 'WALLET',
+        transferProvider: settlementMode === 'MAIN_BALANCE' ? 'PLATFORM_BALANCE' : 'WALLET',
         settledAt: new Date(),
       });
 
@@ -1981,9 +2001,27 @@ export class OrderService {
         throw new Error(`No business found for order ${orderId}`);
       }
 
-      const platformFeePercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
-      const platformFee = order.total * platformFeePercentage;
-      const payoutAmount = order.total - platformFee;
+      // Check SETTLEMENT_MODE to determine fee calculation
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      let platformFee: number;
+      let payoutAmount: number;
+
+      if (settlementMode === 'MAIN_BALANCE') {
+        // MAIN_BALANCE mode: All funds went to platform, calculate merchant share
+        const feePercentage = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const maxFee = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
+
+        platformFee = order.total * feePercentage;
+        if (platformFee > maxFee) platformFee = maxFee;
+
+        payoutAmount = order.total - platformFee;
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+      } else {
+        // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
+        const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
+        platformFee = order.total * settlementPercentage;
+        payoutAmount = order.total - platformFee;
+      }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
@@ -1998,7 +2036,7 @@ export class OrderService {
         gatewayFee: 0,
         settlementAmount: payoutAmount,
         currency: 'NGN',
-        transferProvider: 'WALLET',
+        transferProvider: settlementMode === 'MAIN_BALANCE' ? 'PLATFORM_BALANCE' : 'WALLET',
         settledAt: new Date(),
       });
 

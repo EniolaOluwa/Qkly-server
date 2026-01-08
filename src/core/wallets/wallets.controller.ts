@@ -125,7 +125,7 @@ export class WalletsController {
     type: WalletBalanceResponseDto,
   })
   async getOwnWalletBalance(@Request() req: any): Promise<WalletBalanceResponseDto> {
-    return await this.walletsService.getUserWalletWithBalance(req.user.id);
+    return await this.walletsService.getUserWalletWithBalance(req.user.userId);
   }
 
   @Post('payout')

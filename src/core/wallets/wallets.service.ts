@@ -235,6 +235,7 @@ export class WalletsService {
 
       if (!wallet) {
         ErrorHelper.NotFoundException('User does not have a wallet');
+        throw new Error('User does not have a wallet');
       }
 
       // Wallet balance is maintained locally via transactions (Ledger System)
@@ -250,7 +251,6 @@ export class WalletsService {
           // Paystack Subaccount object usually has { balance: number, currency: string ... }
           // Note: 'balance' might be in cobo (minor unit) or major depending on endpoint version.
           // Verify integration returns. For now assuming major or we map it.
-          console.log('DEBUG: Subaccount Data from Paystack:', JSON.stringify(subaccountData, null, 2));
           if (subaccountData) {
             // Paystack balances are often in minor units (kobo).
             // We assume integration layer returns raw response.
@@ -286,14 +286,20 @@ export class WalletsService {
         this.logger.warn(`Failed to fetch external subaccount balance for user ${userId}: ${e.message}`);
       }
 
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      const useLocalBalance = settlementMode === 'MAIN_BALANCE';
+
+
+
       const walletDto = plainToInstance(WalletBalanceResponseDto, {
         walletReference: wallet.providerAccountId,
         accountNumber: wallet.accountNumber,
         accountName: wallet.accountName,
         bankName: wallet.bankName,
         bankCode: wallet.bankCode,
-        availableBalance: externalBalance !== null ? externalBalance : wallet.availableBalance,
-        ledgerBalance: externalBalance !== null ? externalBalance : wallet.ledgerBalance,
+        // Ensure numeric conversion for decimal fields
+        availableBalance: Number(useLocalBalance ? wallet.availableBalance : (externalBalance !== null ? externalBalance : wallet.availableBalance)),
+        ledgerBalance: Number(useLocalBalance ? wallet.ledgerBalance : (externalBalance !== null ? externalBalance : wallet.ledgerBalance)),
       });
 
       return walletDto;
@@ -619,10 +625,15 @@ export class WalletsService {
    */
   async withdrawToBankAccount(userId: number, dto: WithdrawalDto): Promise<WithdrawalResponseDto> {
     // 1. Detect Scenario: Merchant Subaccount vs Personal Wallet
+    const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+    if (settlementMode === 'MAIN_BALANCE') {
+      return this.instantPayout(userId, dto);
+    }
+
     const businessAccount = await this.businessesService.getBusinessPaymentAccount(userId);
     const isMerchantSubaccount = businessAccount && businessAccount.providerSubaccountCode;
 
-    if (isMerchantSubaccount) {
+    if (isMerchantSubaccount && settlementMode === 'SUBACCOUNT') {
       // --- MERCHANT SUBACCOUNT PAYOUT API ---
       // We ignore 'dto.bankAccountId' because Subaccounts can ONLY pay out to their linked Primary Bank Account.
       // We ignore 'dto.pin' check technically because the provider manages ownership, 
