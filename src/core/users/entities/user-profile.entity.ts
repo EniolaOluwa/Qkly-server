@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 import { User } from '../entity/user.entity';
 
 /**
@@ -34,12 +35,14 @@ export class UserProfile {
   /**
    * First name (required for account creation)
    */
+  @ApiProperty({ description: 'First name', example: 'John' })
   @Column({ length: 100 })
   firstName: string;
 
   /**
    * Last name (required for account creation)
    */
+  @ApiProperty({ description: 'Last name', example: 'Doe' })
   @Column({ length: 100 })
   lastName: string;
 
@@ -47,6 +50,7 @@ export class UserProfile {
    * Phone number (unique, required for business creation)
    * Format: E.164 (+2348012345678)
    */
+  @ApiProperty({ description: 'Phone number in E.164 format', example: '+2348012345678' })
   @Column({ unique: true, length: 20 })
   phone: string;
 
@@ -54,6 +58,7 @@ export class UserProfile {
    * Phone verification status
    * Set to true after SMS OTP verification
    */
+  @ApiProperty({ description: 'Whether phone is verified', example: true })
   @Column({ default: false })
   isPhoneVerified: boolean;
 
