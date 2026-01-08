@@ -535,27 +535,38 @@ export class OrderService {
       let transactionCharge = 0;
       let bearer: 'account' | 'subaccount' | 'all-proportional' | 'all' | undefined = undefined;
 
-      // Logic: If business has a valid subaccount, we split payment.
-      // Platform takes commission (transaction_charge), Business takes remainder.
-      // Merchant pays Paystack fees (bearer='subaccount').
-      // Logic: Enforce Subaccount Existence for Merchants
-      if (!business.paymentAccount || !business.paymentAccount.providerSubaccountCode || business.paymentAccount.status !== PaymentAccountStatus.ACTIVE) {
-        // STRICT MODE: Fail if no subaccount
-        ErrorHelper.BadRequestException('Merchant account is not set up to receive payments. Please contact support or update banking details.');
+      // Check SETTLEMENT_MODE: SUBACCOUNT (default) or MAIN_BALANCE
+      const settlementMode = this.configService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      const isMainBalanceMode = settlementMode === 'MAIN_BALANCE';
+
+      if (isMainBalanceMode) {
+        // MAIN_BALANCE MODE: All funds go to platform, no split
+        // Merchant share tracked locally, instant payout available
+        this.logger.log(`MAIN_BALANCE Mode: No split, all funds to platform balance`);
+        // subaccountCode stays undefined, no split
+      } else {
+        // SUBACCOUNT MODE (Default): Split payments to merchant subaccount
+        // Logic: If business has a valid subaccount, we split payment.
+        // Platform takes commission (transaction_charge), Business takes remainder.
+        // Merchant pays Paystack fees (bearer='subaccount').
+        if (!business.paymentAccount || !business.paymentAccount.providerSubaccountCode || business.paymentAccount.status !== PaymentAccountStatus.ACTIVE) {
+          // STRICT MODE: Fail if no subaccount
+          ErrorHelper.BadRequestException('Merchant account is not set up to receive payments. Please contact support or update banking details.');
+        }
+
+        // Calculate Platform Fee (1.5% capped at 2000)
+        const FEE_PERCENTAGE = 0.015;
+        const MAX_FEE = 2000;
+
+        let platformFee = order.total * FEE_PERCENTAGE;
+        if (platformFee > MAX_FEE) platformFee = MAX_FEE;
+
+        transactionCharge = Math.round(platformFee * 100);
+        subaccountCode = business.paymentAccount.providerSubaccountCode;
+        bearer = 'subaccount'; // Merchant bears Paystack processing fee
+
+        this.logger.log(`SUBACCOUNT Mode: Split to ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
       }
-
-      // Calculate Platform Fee (1.5% capped at 2000)
-      const FEE_PERCENTAGE = 0.015;
-      const MAX_FEE = 2000;
-
-      let platformFee = order.total * FEE_PERCENTAGE;
-      if (platformFee > MAX_FEE) platformFee = MAX_FEE;
-
-      transactionCharge = Math.round(platformFee * 100);
-      subaccountCode = business.paymentAccount.providerSubaccountCode;
-      bearer = 'subaccount'; // Merchant bears Paystack processing fee
-
-      this.logger.log(`Split Payment Enforced: Subaccount ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
 
       // Prepare payload
       const paymentPayload: InitializePaymentRequestDto = {
@@ -569,6 +580,7 @@ export class OrderService {
         metadata: {
           orderId: order.id,
           businessId: order.businessId,
+          settlementMode: settlementMode,
           ...initiatePaymentDto.metadata,
         },
         subaccount: subaccountCode,
