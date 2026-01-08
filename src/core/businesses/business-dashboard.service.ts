@@ -20,7 +20,7 @@ import {
   PaymentMethodDistributionDto,
   RecentOrderDto,
   SalesChartDataDto,
-  TopProductDto,
+  BusinessTopProductDto,
   TrafficSourceMetric
 } from './dto/dashboard-response.dto';
 
@@ -234,7 +234,7 @@ export class DashboardService {
     startDate?: Date,
     endDate?: Date,
     limit: number = 10,
-  ): Promise<TopProductDto[]> {
+  ): Promise<BusinessTopProductDto[]> {
     // Use default date range if not provided
     const dateRange = this.getDateRange({ startDate, endDate });
     const finalStartDate = startDate || dateRange.startDate;

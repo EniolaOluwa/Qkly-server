@@ -11,7 +11,7 @@ import {
   DashboardMetricsDto,
   DashboardQueryDto,
   RecentOrderDto,
-  TopProductDto,
+  BusinessTopProductDto,
   SalesChartDataDto,
   OrderStatusDistributionDto,
   PaymentMethodDistributionDto,
@@ -212,7 +212,7 @@ export class DashboardController {
   @ApiResponse({
     status: 200,
     description: 'Top products retrieved successfully',
-    type: [TopProductDto],
+    type: [BusinessTopProductDto],
   })
   @ApiResponse({
     status: 404,
@@ -223,7 +223,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
     @Query('limit') limit: number = 10,
-  ): Promise<TopProductDto[]> {
+  ): Promise<BusinessTopProductDto[]> {
     await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }

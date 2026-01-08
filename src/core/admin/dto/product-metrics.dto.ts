@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class TopProductDto {
+export class AdminTopProductDto {
   @ApiProperty({
     description: 'Product ID',
     example: 1,
@@ -127,9 +127,9 @@ export class ProductMetricsDto {
 
   @ApiProperty({
     description: 'Top 10 best-selling products',
-    type: [TopProductDto],
+    type: [AdminTopProductDto],
   })
-  topProducts: TopProductDto[];
+  topProducts: AdminTopProductDto[];
 
   @ApiProperty({
     description: 'Product distribution across categories',
