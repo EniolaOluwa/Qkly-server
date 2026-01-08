@@ -15,7 +15,7 @@ import {
 } from '../../common/dto/responses.dto';
 import { PaymentAccountStatus } from '../../common/enums/payment.enum';
 import { OnboardingStep } from '../../common/enums/user.enum';
-import { PaginationMetadataDto } from '../../common/queries/dto';
+import { PaginationMetadataDto, PaginationOrder } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
 import { DateFilterUtil } from '../../common/utils/date-filter.util';
@@ -260,7 +260,32 @@ export class BusinessesService {
     return await this.businessRepo.find({
       relations: ['businessType', 'user'],
       order: { businessName: 'ASC' },
+      take: 100, // Safety limit
     });
+  }
+
+  async findAllBusinessesPaginated(
+    queryDto: { page: number; limit: number; order: PaginationOrder; search?: string; skip: number }
+  ): Promise<{ data: Business[]; total: number }> {
+    const queryBuilder = this.businessRepo.createQueryBuilder('business')
+      .leftJoinAndSelect('business.businessType', 'businessType')
+      .leftJoinAndSelect('business.user', 'user');
+
+    if (queryDto.search) {
+      queryBuilder.andWhere(
+        '(business.businessName ILIKE :search OR business.storeName ILIKE :search)',
+        { search: `%${queryDto.search}%` }
+      );
+    }
+
+    queryBuilder
+      .orderBy('business.createdAt', queryDto.order)
+      .skip(queryDto.skip)
+      .take(queryDto.limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return { data, total };
   }
 
   async findBusinessById(id: number): Promise<Business> {

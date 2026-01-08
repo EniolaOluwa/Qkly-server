@@ -4,16 +4,19 @@ import { Repository } from 'typeorm';
 import { PaginationOrder, PaginationResultDto } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { Business } from '../businesses/business.entity';
+import { BusinessesService } from '../businesses/businesses.service';
 import { Category } from '../category/entity/category.entity';
 import { FindAllProductsDto } from '../product/dto/create-product.dto';
 import { Product } from '../product/entity/product.entity';
 import { ProductService } from '../product/product.service';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
+import { StoreFrontStoreQueryDto } from './dto/store-front-store-query.dto';
 import {
+  PublicBusinessInfoDto,
   PublicProductDetailDto,
   StoreFrontCategoryDto
 } from './dto/store-front-response.dto';
-import { BusinessesService } from '../businesses/businesses.service';
+
 
 
 @Injectable()
@@ -65,10 +68,10 @@ export class StoreFrontService {
     };
   }
 
-  async getAllStores() {
-    const businesses = await this.businessService.findAllBusinesses();
+  async getAllStores(query: StoreFrontStoreQueryDto): Promise<PaginationResultDto<PublicBusinessInfoDto>> {
+    const { data: businesses, total } = await this.businessService.findAllBusinessesPaginated(query);
 
-    return businesses.map((business) => ({
+    const publicBusinesses = businesses.map((business) => ({
       id: business.id,
       businessName: business.businessName,
       businessDescription: business.businessDescription,
@@ -84,6 +87,11 @@ export class StoreFrontService {
       },
       createdAt: business.createdAt,
     }));
+
+    return new PaginationResultDto(publicBusinesses, {
+      itemCount: total,
+      pageOptionsDto: query,
+    });
   }
 
   async getProductDetail(
