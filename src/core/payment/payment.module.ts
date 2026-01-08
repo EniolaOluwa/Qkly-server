@@ -15,7 +15,10 @@ import { PaymentController } from './payment.controller';
 @Module({
   controllers: [PaymentController],
   imports: [
-    HttpModule,
+    HttpModule.register({
+      timeout: 30000,
+      maxRedirects: 5,
+    }),
     ScheduleModule.forRoot(),
     SharedRepositoryModule,
     forwardRef(() => OrderModule),

@@ -6,7 +6,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import * as readline from 'readline';
 
-const API_URL = 'http://localhost:4000/v1';
+const API_URL = process.env.TEST_API_URL || 'http://localhost:4000/v1';
 const SUPER_ADMIN = { email: 'superadmin@qkly.com', password: '!535wiiwiw7QWRWT@3I3I!' };
 
 const rl = readline.createInterface({
