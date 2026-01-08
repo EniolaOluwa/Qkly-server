@@ -55,7 +55,24 @@ export class BankAccountsService {
       throw new BadRequestException('Could not resolve bank account details');
     }
 
-    // 3. Save bank account
+    // 3. Create Transfer Recipient on Paystack (for instant payouts)
+    let recipientCode: string | undefined = undefined;
+    try {
+      const recipient = await this.paymentService.createTransferRecipient({
+        type: 'nuban',
+        name: resolvedAccount.accountName,
+        account_number: accountNumber,
+        bank_code: bankCode,
+        currency: currency,
+      });
+      recipientCode = recipient?.recipient_code || undefined;
+      this.logger.log(`Transfer Recipient created: ${recipientCode}`);
+    } catch (error) {
+      this.logger.warn(`Failed to create Transfer Recipient: ${error.message}`);
+      // Continue without recipient - can be created later
+    }
+
+    // 4. Save bank account
     const bankAccount = this.bankAccountRepository.create({
       userId,
       accountNumber,
@@ -63,6 +80,7 @@ export class BankAccountsService {
       bankCode,
       bankName: await this.getBankName(bankCode),
       currency,
+      providerRecipientCode: recipientCode,
     });
 
     await this.bankAccountRepository.save(bankAccount);

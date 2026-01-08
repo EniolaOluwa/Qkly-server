@@ -226,4 +226,30 @@ export class WalletsController {
       query.limit || 20,
     );
   }
+
+  @Post('instant-payout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Instant payout to bank account',
+    description: 'Instantly transfer funds to bank account using Paystack Transfer API. Funds arrive within minutes.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Instant payout initiated successfully',
+    type: WithdrawalResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid PIN, insufficient balance, or bank account not set up',
+  })
+  async instantPayout(
+    @Body(ValidationPipe) withdrawalDto: WithdrawalDto,
+    @Request() req,
+  ): Promise<WithdrawalResponseDto> {
+    return await this.walletsService.instantPayout(
+      req.user.userId,
+      withdrawalDto,
+    );
+  }
 }

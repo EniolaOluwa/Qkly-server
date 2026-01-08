@@ -756,6 +756,107 @@ export class WalletsService {
     }
   }
 
+  // ============================================================
+  // INSTANT PAYOUT (Option 2: Main Balance Mode)
+  // ============================================================
+
+  /**
+   * Instant payout to merchant's bank account
+   * Uses Paystack Transfer API - money sent within minutes
+   * Requires: Transaction PIN, bank account with providerRecipientCode
+   */
+  async instantPayout(userId: number, dto: WithdrawalDto): Promise<WithdrawalResponseDto> {
+    // 1. Validate PIN
+    if (!dto.pin) ErrorHelper.BadRequestException('Transaction PIN is required');
+    const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
+    if (!isPinValid) ErrorHelper.BadRequestException('Invalid Transaction PIN');
+
+    // 2. Check for PIN Reset Restriction (24-hour cooldown)
+    const restriction = await this.usersService.getTransactionPinResetRestriction(userId);
+    if (restriction.restricted) {
+      ErrorHelper.BadRequestException(
+        `Withdrawals are restricted for ${restriction.remainingHours} hour(s) after a PIN reset.`,
+      );
+    }
+
+    // 3. Get bank account with recipient code
+    const bankAccount = await this.bankAccountsService.getBankAccount(dto.bankAccountId, userId);
+    if (!bankAccount) {
+      ErrorHelper.NotFoundException('Bank account not found');
+    }
+
+    if (!bankAccount.providerRecipientCode) {
+      ErrorHelper.BadRequestException(
+        'Bank account not set up for instant payout. Please remove and re-add your bank account.',
+      );
+    }
+
+    // 4. Check balance (from local wallet for Main Balance mode)
+    const wallet = await this.walletRepository.findOne({ where: { userId } });
+    if (!wallet) {
+      ErrorHelper.NotFoundException('Wallet not found');
+    }
+
+    const fee = this.calculateTransferFee(dto.amount);
+    const totalDebit = Number(dto.amount) + Number(fee);
+
+    if (Number(wallet.availableBalance) < totalDebit) {
+      ErrorHelper.BadRequestException('Insufficient funds');
+    }
+
+    // 5. Generate reference and initiate transfer via Paystack
+    const reference = ReferenceGenerator.generate('WDR');
+
+    try {
+      const transferResult = await this.paymentService.transferToBank({
+        amount: dto.amount,
+        reference,
+        destinationAccountNumber: bankAccount.accountNumber,
+        destinationBankCode: bankAccount.bankCode,
+        destinationAccountName: bankAccount.accountName,
+        currency: bankAccount.currency || 'NGN',
+        narration: dto.narration || 'Instant Payout',
+      });
+
+      // 6. Deduct from local wallet
+      wallet.availableBalance = Number(wallet.availableBalance) - totalDebit;
+      await this.walletRepository.save(wallet);
+
+      // 7. Record transaction
+      const transaction = this.transactionRepository.create({
+        userId,
+        amount: dto.amount,
+        netAmount: dto.amount,
+        fee,
+        type: TransactionType.WITHDRAWAL,
+        flow: TransactionFlow.DEBIT,
+        status: transferResult.status === 'SUCCESS' ? TransactionStatus.SUCCESS : TransactionStatus.PENDING,
+        reference,
+        providerReference: transferResult.transferReference,
+        description: dto.narration || 'Instant Payout',
+        currency: 'NGN',
+        metadata: {
+          bankAccountId: bankAccount.id,
+          recipientCode: bankAccount.providerRecipientCode,
+          source: 'INSTANT_PAYOUT',
+        },
+      });
+      await this.transactionRepository.save(transaction);
+
+      this.logger.log(`Instant payout initiated for user ${userId}: ${dto.amount} (Ref: ${reference})`);
+
+      return {
+        success: true,
+        message: 'Instant payout initiated. Funds will arrive within minutes.',
+        reference,
+        data: transferResult,
+      };
+    } catch (error) {
+      this.logger.error(`Instant payout failed for user ${userId}: ${error.message}`);
+      ErrorHelper.InternalServerErrorException(`Payout failed: ${error.message}`);
+    }
+  }
+
   /**
    * Process Webhook Events (Transfers)
    */

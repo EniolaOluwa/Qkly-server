@@ -111,6 +111,26 @@ export class PaymentService {
   }
 
   /**
+   * Create a Transfer Recipient for instant payouts
+   */
+  async createTransferRecipient(payload: {
+    type: string;
+    name: string;
+    account_number: string;
+    bank_code: string;
+    currency: string;
+  }): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK && 'createOrGetTransferRecipient' in this.provider) {
+      return await (this.provider as any).createOrGetTransferRecipient(payload);
+    }
+    // Try direct method name
+    if ('createTransferRecipient' in this.provider) {
+      return await (this.provider as any).createTransferRecipient(payload);
+    }
+    throw new Error(`Provider ${this.providerType} does not support transfer recipient creation`);
+  }
+
+  /**
    * Get wallet balance
    */
   async getWalletBalance(walletReference: string): Promise<WalletBalanceDto> {
