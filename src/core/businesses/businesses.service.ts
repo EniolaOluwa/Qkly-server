@@ -214,6 +214,18 @@ export class BusinessesService {
       ErrorHelper.BadRequestException('Logo is required for business creation');
     }
 
+    // Check if store name already exists
+    if (createBusinessDto.storeName) {
+      const existingBusiness = await this.businessRepo.findOne({
+        where: { storeName: createBusinessDto.storeName },
+      });
+
+      if (existingBusiness) {
+        ErrorHelper.BadRequestException(
+          `Store name "${createBusinessDto.storeName}" is already taken. Please choose a different name.`
+        );
+      }
+    }
 
     const uploadImage = async (file: Express.Multer.File): Promise<string> => {
       const uploaded = await this.cloudinaryUtil.uploadImage(file.buffer);
