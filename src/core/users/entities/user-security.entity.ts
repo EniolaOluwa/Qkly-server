@@ -84,6 +84,13 @@ export class UserSecurity {
   transactionPinChangedAt: Date;
 
   /**
+   * Timestamp when Transaction PIN was last RESET (forgot PIN flow)
+   * Used for 24-hour withdrawal restriction after reset
+   */
+  @Column({ type: 'timestamp', nullable: true })
+  transactionPinResetAt: Date;
+
+  /**
    * Device ID for fingerprinting (future use)
    * Can be used for trusted device recognition
    */
