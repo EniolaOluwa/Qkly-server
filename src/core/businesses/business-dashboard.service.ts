@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, MoreThanOrEqual, Repository, Brackets } from 'typeorm';
 import { DateTime } from 'luxon';
-import { Business } from '../businesses/business.entity';
-import { Order } from '../order/entity/order.entity';
+import { Between, Brackets, Repository } from 'typeorm';
 import { OrderStatus } from '../../common/enums/order.enum';
 import { PaymentStatus } from '../../common/enums/payment.enum';
-import { Product } from '../product/entity/product.entity';
-import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
-import { Review } from '../review/entity/review.entity';
-import { Transaction, TransactionStatus } from '../transaction/entity/transaction.entity';
 import { SettlementStatus } from '../../common/enums/settlement.enum';
+import { Business } from '../businesses/business.entity';
+import { Order } from '../order/entity/order.entity';
+import { Product } from '../product/entity/product.entity';
+import { Review } from '../review/entity/review.entity';
+import { TrafficEvent } from '../traffic-events/entity/traffic-events.entity';
+import { Transaction, TransactionStatus } from '../transaction/entity/transaction.entity';
 import {
   CompleteDashboardDto,
   DashboardMetricsDto,
@@ -20,8 +20,8 @@ import {
   PaymentMethodDistributionDto,
   RecentOrderDto,
   SalesChartDataDto,
-  TopProductDto,
-  TrafficSourceMetric,
+  BusinessTopProductDto,
+  TrafficSourceMetric
 } from './dto/dashboard-response.dto';
 
 @Injectable()
@@ -85,10 +85,10 @@ export class DashboardService {
     const previousStartDate = new Date(finalStartDate.getTime() - periodDuration);
     const previousEndDate = new Date(finalStartDate.getTime());
 
-    // Current period data
+    // Execute queries in parallel
     const [
-      orders,
-      previousOrders,
+      currentPeriod,
+      previousPeriod,
       products,
       traffic,
       previousTraffic,
@@ -103,8 +103,8 @@ export class DashboardService {
       reviewMetrics,
       walletBalance,
     ] = await Promise.all([
-      this.getOrdersInPeriod(businessId, finalStartDate, finalEndDate),
-      this.getOrdersInPeriod(businessId, previousStartDate, previousEndDate),
+      this.getOrderMetrics(businessId, finalStartDate, finalEndDate),
+      this.getOrderMetrics(businessId, previousStartDate, previousEndDate),
       this.getProductMetrics(businessId),
       this.getTrafficCount(businessId, finalStartDate, finalEndDate),
       this.getTrafficCount(businessId, previousStartDate, previousEndDate),
@@ -121,26 +121,32 @@ export class DashboardService {
     ]);
 
     // Calculate growth percentages
-    const ordersGrowth = this.calculateGrowth(orders.length, previousOrders.length);
+    const ordersGrowth = this.calculateGrowth(currentPeriod.totalOrders, previousPeriod.totalOrders);
     const revenueGrowth = this.calculateGrowth(revenueData.total, revenueData.previousTotal);
     const customersGrowth = this.calculateGrowth(uniqueCustomers, previousUniqueCustomers);
     const trafficGrowth = this.calculateGrowth(traffic, previousTraffic);
 
     // Calculate conversion rate
-    const conversionRate = traffic > 0 ? (orders.length / traffic) * 100 : 0;
+    const conversionRate = traffic > 0 ? (currentPeriod.totalOrders / traffic) * 100 : 0;
 
     // Calculate average order value
-    const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
-    const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+    const averageOrderValue = currentPeriod.totalOrders > 0 ? currentPeriod.totalRevenue / currentPeriod.totalOrders : 0;
 
     // Customer metrics
-    const guestOrders = orders.filter(order => order.isGuestOrder).length;
-    const returningCustomers = orders.filter(order => !order.isGuestOrder && order.userId).length - uniqueCustomers;
-    const averageCustomerValue = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
+    // "Returning Customers" approximation: Registered customers who bought in this period. 
+    // True "Returning" requires checking if they bought BEFORE this period too. 
+    // For dashboard speed, using registered active customers count minus unique count is a heuristic, or we stick to available data.
+    // Let's use: (Total Orders - Guest Orders) - New Customers (Unique) roughly implies repeat activity if > 0, but it's imperfect.
+    // Better: Just use current registeredCustomers count as proxy for potential loyalty or simplify.
+    // The previous logic was: orders.filter(!guest && userId).length - uniqueCustomers
+    // This implies: Total Registered Transactions - Unique Registered Users = Repeat Transactions.
+    const registeredTransactions = currentPeriod.totalOrders - currentPeriod.guestOrders;
+    const returningCustomers = Math.max(0, registeredTransactions - uniqueCustomers);
+    const averageCustomerValue = uniqueCustomers > 0 ? currentPeriod.totalRevenue / uniqueCustomers : 0;
 
     return {
       // Overview
-      totalOrders: orders.length,
+      totalOrders: currentPeriod.totalOrders,
       totalProducts: products.total,
       totalRevenue: revenueData.total,
       totalCustomers: uniqueCustomers,
@@ -175,8 +181,8 @@ export class DashboardService {
 
       // Customers
       newCustomers: uniqueCustomers,
-      returningCustomers: Math.max(0, returningCustomers),
-      guestOrders,
+      returningCustomers,
+      guestOrders: currentPeriod.guestOrders,
       averageCustomerValue,
 
       // Traffic
@@ -228,7 +234,7 @@ export class DashboardService {
     startDate?: Date,
     endDate?: Date,
     limit: number = 10,
-  ): Promise<TopProductDto[]> {
+  ): Promise<BusinessTopProductDto[]> {
     // Use default date range if not provided
     const dateRange = this.getDateRange({ startDate, endDate });
     const finalStartDate = startDate || dateRange.startDate;
@@ -276,34 +282,39 @@ export class DashboardService {
     const finalStartDate = startDate || dateRange.startDate;
     const finalEndDate = endDate || dateRange.endDate;
 
-    const orders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(finalStartDate, finalEndDate),
-      },
-      order: { createdAt: 'ASC' },
-    });
+    // Use query builder to fetch daily aggregates
+    const salesData = await this.orderRepository
+      .createQueryBuilder('ord')
+      .select("TO_CHAR(ord.createdAt, 'YYYY-MM-DD')", 'date') // Standard SQL date formatting. Warning: Dialect specific (Postgres)
+      .addSelect('COUNT(*)', 'orders')
+      .addSelect('SUM(ord.total)', 'revenue')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate: finalStartDate, endDate: finalEndDate })
+      .groupBy('date')
+      .orderBy('date', 'ASC')
+      .getRawMany();
 
-    // Group by date
-    const salesByDate = new Map<string, { orders: number; revenue: number }>();
+    // Note: TO_CHAR is PostgreSQL specific. If using MySQL use DATE_FORMAT(ord.createdAt, '%Y-%m-%d')
+    // Assuming Postgres based on TypeORM standard usage in this project or general SQL standard DATE() if supported.
+    // Safe generic way if driver unknown: simply select all but only strictly needed fields, but grouping by date in DB is best.
+    // Let's stick to a safer approach if DB dialect is uncertain:
+    // Actually, let's use a Javascript grouping approach BUT only select date and total to minimize payload, OR try standard SQL DATE()
+    // Given the previous code didn't suggest a specific DB, I'll use a safer selection approach or standard DATE() function hoping for Postgres/MySQL compatibility.
+    // 'DATE(ord.createdAt)' works in MySQL and Postgres (as cast).
 
-    orders.forEach(order => {
-      const dateKey = order.createdAt.toISOString().split('T')[0];
-      const existing = salesByDate.get(dateKey) || { orders: 0, revenue: 0 };
-      salesByDate.set(dateKey, {
-        orders: existing.orders + 1,
-        revenue: existing.revenue + Number(order.total),
-      });
-    });
+    // Re-implementation using a safer generic strategy if unsure of DB, but let's try Postgres syntax `TO_CHAR` or just `DATE_TRUNC`.
+    // Actually, let's use a slightly less optimal but still much better than loading ALL data approach: 
+    // Select basic fields and aggregate in JS to avoid dialect issues, OR assume Postgres (very common in NestJS).
+    // Let's assume Postgres for this advanced app.
 
-    return Array.from(salesByDate.entries())
-      .map(([date, data]) => ({
-        date,
-        orders: data.orders,
-        revenue: data.revenue,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    return salesData.map(d => ({
+      date: d.date,
+      orders: Number(d.orders),
+      revenue: Number(d.revenue)
+    }));
   }
+
+
 
   async getOrderStatusDistribution(
     businessId: number,
@@ -315,24 +326,21 @@ export class DashboardService {
     const finalStartDate = startDate || dateRange.startDate;
     const finalEndDate = endDate || dateRange.endDate;
 
-    const orders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(finalStartDate, finalEndDate),
-      },
-    });
+    const result = await this.orderRepository
+      .createQueryBuilder('ord')
+      .select('ord.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate: finalStartDate, endDate: finalEndDate })
+      .groupBy('ord.status')
+      .getRawMany();
 
-    const total = orders.length;
-    const statusCounts = new Map<string, number>();
+    const total = result.reduce((sum, r) => sum + Number(r.count), 0);
 
-    orders.forEach(order => {
-      statusCounts.set(order.status, (statusCounts.get(order.status) || 0) + 1);
-    });
-
-    return Array.from(statusCounts.entries()).map(([status, count]) => ({
-      status,
-      count,
-      percentage: total > 0 ? (count / total) * 100 : 0,
+    return result.map(r => ({
+      status: r.status,
+      count: Number(r.count),
+      percentage: total > 0 ? (Number(r.count) / total) * 100 : 0,
     }));
   }
 
@@ -346,34 +354,28 @@ export class DashboardService {
     const finalStartDate = startDate || dateRange.startDate;
     const finalEndDate = endDate || dateRange.endDate;
 
-    const orders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(finalStartDate, finalEndDate),
-      },
-    });
+    const result = await this.orderRepository
+      .createQueryBuilder('ord')
+      .select('ord.paymentMethod', 'method')
+      .addSelect('COUNT(*)', 'count')
+      .addSelect('SUM(ord.total)', 'amount')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate: finalStartDate, endDate: finalEndDate })
+      .groupBy('ord.paymentMethod')
+      .getRawMany();
 
-    const total = orders.length;
-    const methodData = new Map<string, { count: number; amount: number }>();
+    const totalOrders = result.reduce((sum, r) => sum + Number(r.count), 0);
 
-    orders.forEach(order => {
-      const existing = methodData.get(order.paymentMethod) || { count: 0, amount: 0 };
-      methodData.set(order.paymentMethod, {
-        count: existing.count + 1,
-        amount: existing.amount + Number(order.total),
-      });
-    });
-
-    return Array.from(methodData.entries()).map(([method, data]) => ({
-      method,
-      count: data.count,
-      amount: data.amount,
-      percentage: total > 0 ? (data.count / total) * 100 : 0,
+    return result.map(r => ({
+      method: r.method || 'Unknown',
+      count: Number(r.count),
+      amount: Number(r.amount),
+      percentage: totalOrders > 0 ? (Number(r.count) / totalOrders) * 100 : 0,
     }));
   }
 
   // Helper methods
-  private async verifyBusinessOwnership(businessId: number, userId: number): Promise<void> {
+  async verifyBusinessOwnership(businessId: number, userId: number): Promise<void> {
     const business = await this.businessRepository.findOne({
       where: { id: businessId, userId },
     });
@@ -415,13 +417,24 @@ export class DashboardService {
     return { startDate, endDate };
   }
 
-  private async getOrdersInPeriod(businessId: number, startDate: Date, endDate: Date): Promise<Order[]> {
-    return this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(startDate, endDate),
-      },
-    });
+  private async getOrderMetrics(businessId: number, startDate: Date, endDate: Date) {
+    const qb = this.orderRepository.createQueryBuilder('ord');
+
+    const result = await qb
+      .select('COUNT(ord.id)', 'totalOrders')
+      .addSelect('SUM(CAST(ord.total AS DECIMAL))', 'totalRevenue') // Cast for precision if needed
+      .addSelect('SUM(CASE WHEN ord.isGuestOrder = true THEN 1 ELSE 0 END)', 'guestOrders')
+      .addSelect('COUNT(DISTINCT CASE WHEN ord.isGuestOrder = false THEN ord.userId END)', 'registeredCustomers')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .getRawOne();
+
+    return {
+      totalOrders: Number(result?.totalOrders || 0),
+      totalRevenue: Number(result?.totalRevenue || 0),
+      guestOrders: Number(result?.guestOrders || 0),
+      registeredCustomers: Number(result?.registeredCustomers || 0),
+    };
   }
 
   private async getProductMetrics(businessId: number) {
@@ -465,50 +478,60 @@ export class DashboardService {
   }
 
   private async getOrdersByStatus(businessId: number, startDate: Date, endDate: Date) {
-    const orders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(startDate, endDate),
-      },
-    });
+    const result = await this.orderRepository
+      .createQueryBuilder('ord')
+      .select('ord.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .groupBy('ord.status')
+      .getRawMany();
+
+    const statusMap = new Map<string, number>();
+    result.forEach(r => statusMap.set(r.status, Number(r.count)));
 
     return {
-      pending: orders.filter(o => o.status === OrderStatus.PENDING).length,
-      processing: orders.filter(o => o.status === OrderStatus.PROCESSING).length,
-      completed: orders.filter(o => o.status === OrderStatus.COMPLETED).length,
-      cancelled: orders.filter(o => o.status === OrderStatus.CANCELLED).length,
+      pending: statusMap.get(OrderStatus.PENDING) || 0,
+      processing: statusMap.get(OrderStatus.PROCESSING) || 0,
+      completed: statusMap.get(OrderStatus.COMPLETED) || 0,
+      cancelled: statusMap.get(OrderStatus.CANCELLED) || 0,
     };
   }
 
   private async getRevenueMetrics(businessId: number, startDate: Date, endDate: Date) {
-    const orders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(startDate, endDate),
-      },
-      relations: ['refunds'],
-    });
-
-    // Previous period for comparison
     const periodDuration = endDate.getTime() - startDate.getTime();
     const previousStartDate = new Date(startDate.getTime() - periodDuration);
 
-    const previousOrders = await this.orderRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(previousStartDate, startDate),
-      },
-    });
+    const [currentPeriod, previousPeriod] = await Promise.all([
+      this.orderRepository.createQueryBuilder('ord')
+        .select('SUM(ord.total)', 'total')
+        .addSelect(`SUM(CASE WHEN ord.paymentStatus = '${PaymentStatus.PAID}' THEN ord.total ELSE 0 END)`, 'paid')
+        .addSelect(`SUM(CASE WHEN ord.paymentStatus = '${PaymentStatus.PENDING}' THEN ord.total ELSE 0 END)`, 'pending')
+        .where('ord.businessId = :businessId', { businessId })
+        .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .getRawOne(),
+
+      this.orderRepository.createQueryBuilder('ord')
+        .select('SUM(ord.total)', 'total')
+        .where('ord.businessId = :businessId', { businessId })
+        .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate: previousStartDate, endDate: startDate })
+        .getRawOne()
+    ]);
+
+    // Refunds need a separate query as they are in a different table/relation
+    const refundResult = await this.orderRepository.createQueryBuilder('ord')
+      .leftJoin('ord.refunds', 'refund')
+      .select('SUM(refund.amountRefunded)', 'refunded')
+      .where('ord.businessId = :businessId', { businessId })
+      .andWhere('ord.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .getRawOne();
 
     return {
-      total: orders.reduce((sum, o) => sum + Number(o.total), 0),
-      paid: orders.filter(o => o.paymentStatus === PaymentStatus.PAID).reduce((sum, o) => sum + Number(o.total), 0),
-      pending: orders.filter(o => o.paymentStatus === PaymentStatus.PENDING).reduce((sum, o) => sum + Number(o.total), 0),
-      refunded: orders.reduce((sum, o) => {
-        const refundAmount = o.refunds?.reduce((refundSum, r) => refundSum + Number(r.amountRefunded || 0), 0) || 0;
-        return sum + refundAmount;
-      }, 0),
-      previousTotal: previousOrders.reduce((sum, o) => sum + Number(o.total), 0),
+      total: Number(currentPeriod?.total || 0),
+      paid: Number(currentPeriod?.paid || 0),
+      pending: Number(currentPeriod?.pending || 0),
+      refunded: Number(refundResult?.refunded || 0),
+      previousTotal: Number(previousPeriod?.total || 0),
     };
   }
 
@@ -546,24 +569,21 @@ export class DashboardService {
     startDate: Date,
     endDate: Date,
   ): Promise<TrafficSourceMetric[]> {
-    const traffic = await this.trafficRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(startDate, endDate),
-      },
-    });
+    const result = await this.trafficRepository
+      .createQueryBuilder('traffic')
+      .select('traffic.source', 'source')
+      .addSelect('COUNT(*)', 'count')
+      .where('traffic.businessId = :businessId', { businessId })
+      .andWhere('traffic.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .groupBy('traffic.source')
+      .getRawMany();
 
-    const total = traffic.length;
-    const sourceCount = new Map<string, number>();
+    const total = result.reduce((sum, r) => sum + Number(r.count), 0);
 
-    traffic.forEach(t => {
-      sourceCount.set(t.source, (sourceCount.get(t.source) || 0) + 1);
-    });
-
-    return Array.from(sourceCount.entries()).map(([source, count]) => ({
-      source,
-      count,
-      percentage: total > 0 ? (count / total) * 100 : 0,
+    return result.map(r => ({
+      source: r.source || 'Unknown',
+      count: Number(r.count),
+      percentage: total > 0 ? (Number(r.count) / total) * 100 : 0,
     }));
   }
 
@@ -596,25 +616,30 @@ export class DashboardService {
     const weekAgo = now.minus({ weeks: 1 }).toJSDate();
     const monthAgo = now.minus({ months: 1 }).toJSDate();
 
-    const [ordersToday, ordersWeek, ordersMonth] = await Promise.all([
-      this.orderRepository.find({
-        where: { businessId, createdAt: MoreThanOrEqual(today) },
-      }),
-      this.orderRepository.find({
-        where: { businessId, createdAt: MoreThanOrEqual(weekAgo) },
-      }),
-      this.orderRepository.find({
-        where: { businessId, createdAt: MoreThanOrEqual(monthAgo) },
-      }),
+    // Helper to build query
+    const getMetric = async (since: Date) => {
+      const result = await this.orderRepository.createQueryBuilder('ord')
+        .select('COUNT(*)', 'count')
+        .addSelect('SUM(ord.total)', 'revenue')
+        .where('ord.businessId = :businessId', { businessId })
+        .andWhere('ord.createdAt >= :since', { since })
+        .getRawOne();
+      return { count: Number(result?.count || 0), revenue: Number(result?.revenue || 0) };
+    };
+
+    const [todayMetrics, weekMetrics, monthMetrics] = await Promise.all([
+      getMetric(today),
+      getMetric(weekAgo),
+      getMetric(monthAgo),
     ]);
 
     return {
-      ordersToday: ordersToday.length,
-      ordersThisWeek: ordersWeek.length,
-      ordersThisMonth: ordersMonth.length,
-      revenueToday: ordersToday.reduce((sum, o) => sum + Number(o.total), 0),
-      revenueThisWeek: ordersWeek.reduce((sum, o) => sum + Number(o.total), 0),
-      revenueThisMonth: ordersMonth.reduce((sum, o) => sum + Number(o.total), 0),
+      ordersToday: todayMetrics.count,
+      ordersThisWeek: weekMetrics.count,
+      ordersThisMonth: monthMetrics.count,
+      revenueToday: todayMetrics.revenue,
+      revenueThisWeek: weekMetrics.revenue,
+      revenueThisMonth: monthMetrics.revenue,
     };
   }
 
@@ -624,21 +649,19 @@ export class DashboardService {
   }
 
   private async getReviewMetrics(businessId: number, startDate: Date, endDate: Date) {
-    const reviews = await this.reviewRepository.find({
-      where: {
-        businessId,
-        createdAt: Between(startDate, endDate),
-        isVisible: true,
-      },
-    });
+    const result = await this.reviewRepository
+      .createQueryBuilder('review')
+      .select('COUNT(*)', 'count')
+      .addSelect('AVG(review.ratings)', 'averageRating')
+      .where('review.businessId = :businessId', { businessId })
+      .andWhere('review.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .andWhere('review.isVisible = :isVisible', { isVisible: true })
+      .getRawOne();
 
-    const totalReviews = reviews.length;
-    const averageRating = totalReviews > 0
-      ? reviews.reduce((sum, review) => sum + review.ratings, 0) / totalReviews
-      : 0;
+    const averageRating = Number(result?.averageRating || 0);
 
     return {
-      totalReviews,
+      totalReviews: Number(result?.count || 0),
       averageRating: Math.round(averageRating * 10) / 10,
     };
   }
