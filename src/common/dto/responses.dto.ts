@@ -178,6 +178,12 @@ export class RegisterUserResponseDto {
     example: 'personal_information',
   })
   onboardingStep: string;
+
+  @ApiProperty({
+    description: 'Whether user has completed onboarding',
+    example: false,
+  })
+  isOnboardingCompleted: boolean;
 }
 
 export class CreateBusinessTypeDto {
@@ -676,6 +682,12 @@ export class LoginResponseDto {
     example: 'personal_information',
   })
   onboardingStep: string;
+
+  @ApiProperty({
+    description: 'Whether user has completed onboarding',
+    example: false,
+  })
+  isOnboardingCompleted: boolean;
 }
 
 export class VerifyKycDto {

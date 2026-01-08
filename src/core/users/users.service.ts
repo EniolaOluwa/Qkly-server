@@ -1,9 +1,9 @@
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
+  forwardRef,
   Inject,
   Injectable,
-  forwardRef,
   Logger,
   NotFoundException,
   UnauthorizedException
@@ -34,7 +34,6 @@ import { ErrorHelper } from './../../common/utils/error.utils';
 import { ChangeUserStatusDto } from './dto/change-user-status.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
 import { ChangePasswordDto, ChangePinDto, ChangeTransactionPinDto, CreateTransactionPinDto, UpdateUserProfileDto } from './dto/user.dto';
-import { UserKYC } from './entities/user-kyc.entity';
 import { UserOnboarding } from './entities/user-onboarding.entity';
 import { UserProfile } from './entities/user-profile.entity';
 import { UserSecurity } from './entities/user-security.entity';
@@ -52,12 +51,15 @@ export class UsersService {
   private readonly MAX_PIN_ATTEMPTS = 5;
   private readonly PIN_LOCK_MINUTES = 5;
 
+  // Onboarding flow: PERSONAL_INFORMATION must be first,
+  // PHONE_VERIFICATION, KYC_VERIFICATION, and AUTHENTICATION_PIN can be done in any order,
+  // BUSINESS_INFORMATION must be done last and completes onboarding
   private readonly ONBOARDING_ORDER = [
     OnboardingStep.PERSONAL_INFORMATION,
     OnboardingStep.PHONE_VERIFICATION,
     OnboardingStep.KYC_VERIFICATION,
-    OnboardingStep.BUSINESS_INFORMATION,
     OnboardingStep.AUTHENTICATION_PIN,
+    OnboardingStep.BUSINESS_INFORMATION, // Must be last
   ];
 
   private shouldUpdateStep(current: OnboardingStep, next: OnboardingStep): boolean {
@@ -65,6 +67,59 @@ export class UsersService {
     const nextIndex = this.ONBOARDING_ORDER.indexOf(next);
     // Only update if next step is further ahead than current step
     return nextIndex > currentIndex;
+  }
+
+  /**
+   * Check if user has completed all prerequisites for business creation
+   * Business is the final step and can only be created after all other steps
+   */
+  async validateBusinessPrerequisites(userId: number): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['profile', 'kyc', 'security'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    const missingSteps: string[] = [];
+
+    if (!user.profile?.isPhoneVerified) {
+      missingSteps.push('Phone verification');
+    }
+    if (!user.kyc) {
+      missingSteps.push('KYC verification');
+    }
+    if (!user.security?.pin) {
+      missingSteps.push('Authentication PIN');
+    }
+
+    if (missingSteps.length > 0) {
+      ErrorHelper.BadRequestException(
+        `Please complete the following steps before creating business information: ${missingSteps.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Mark onboarding as complete when business information is created
+   * Business information is the final step that completes onboarding
+   */
+  async completeOnboarding(userId: number): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['onboarding'],
+    });
+
+    if (!user || !user.onboarding) return;
+
+    user.onboarding.isCompleted = true;
+    user.onboarding.completedAt = new Date();
+    user.onboarding.progressPercentage = 100;
+    user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
+    await this.userOnboardingRepository.save(user.onboarding);
+    this.logger.log(`Onboarding completed for user ${userId}`);
   }
 
 
@@ -77,8 +132,6 @@ export class UsersService {
     private otpRepository: Repository<Otp>,
     @InjectRepository(UserProfile)
     private userProfileRepository: Repository<UserProfile>,
-    @InjectRepository(UserKYC)
-    private userKycRepository: Repository<UserKYC>,
     @InjectRepository(UserSecurity)
     private userSecurityRepository: Repository<UserSecurity>,
     @InjectRepository(UserOnboarding)
@@ -87,7 +140,6 @@ export class UsersService {
     private httpService: HttpService,
     private configService: ConfigService,
     @Inject(forwardRef(() => WalletProvisioningUtil))
-    private walletProvisioningUtil: WalletProvisioningUtil,
     private userProgressService: UserProgressService,
     private notificationService: NotificationService,
   ) { }
@@ -209,6 +261,7 @@ export class UsersService {
         isEmailVerified: savedUser.isEmailVerified,
         isPhoneVerified: userProfile.isPhoneVerified,
         onboardingStep: userOnboarding.currentStep,
+        isOnboardingCompleted: userOnboarding.isCompleted,
       };
 
       return data
@@ -325,6 +378,7 @@ export class UsersService {
       isEmailVerified: user.isEmailVerified,
       isPhoneVerified: user.profile?.isPhoneVerified || false,
       onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
+      isOnboardingCompleted: user.onboarding?.isCompleted || false,
     };
   }
 
@@ -387,7 +441,6 @@ export class UsersService {
     otpCode: string,
   ): Promise<{ message: string; verified: boolean }> {
     try {
-
       const standardizedPhone = PhoneUtil.standardize(
         phone,
         CountryCode.NIGERIA,
@@ -497,13 +550,13 @@ export class UsersService {
         await this.userSecurityRepository.save(userSecurity);
       }
 
-      // Update onboarding step to AUTHENTICATION_PIN and mark as completed
+      // Update onboarding step to AUTHENTICATION_PIN
       if (user.onboarding) {
-        user.onboarding.currentStep = OnboardingStep.AUTHENTICATION_PIN;
-        user.onboarding.isCompleted = true;
-        user.onboarding.completedAt = new Date();
-        user.onboarding.progressPercentage = 100;
-        await this.userOnboardingRepository.save(user.onboarding);
+        const nextStep = OnboardingStep.AUTHENTICATION_PIN;
+        if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+          user.onboarding.currentStep = nextStep;
+          await this.userOnboardingRepository.save(user.onboarding);
+        }
       }
 
       return {
@@ -691,12 +744,12 @@ export class UsersService {
 
     // Update onboarding step
     if (user.onboarding) {
-      await this.userOnboardingRepository.update(user.onboarding.id, {
-        currentStep: OnboardingStep.AUTHENTICATION_PIN,
-        isCompleted: true,
-        completedAt: new Date(),
-        progressPercentage: 100,
-      });
+      const nextStep = OnboardingStep.AUTHENTICATION_PIN;
+      if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+        await this.userOnboardingRepository.update(user.onboarding.id, {
+          currentStep: nextStep,
+        });
+      }
     }
 
     try {
@@ -1486,6 +1539,7 @@ export class UsersService {
       isEmailVerified: user.isEmailVerified,
       isPhoneVerified: user.profile?.isPhoneVerified || false,
       onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
+      isOnboardingCompleted: user.onboarding?.isCompleted || false,
     };
   }
 
