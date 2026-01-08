@@ -1,8 +1,8 @@
 import { DataSource } from 'typeorm';
-import { Transaction } from './core/transaction/entity/transaction.entity';
-import { User } from './core/users/entity/user.entity';
-import { Business } from './core/businesses/business.entity';
-import { Order } from './core/order/entity/order.entity';
+import { Transaction } from '../src/core/transaction/entity/transaction.entity';
+import { User } from '../src/core/users/entity/user.entity';
+import { Business } from '../src/core/businesses/business.entity';
+import { Order } from '../src/core/order/entity/order.entity';
 import * as dotenv from 'dotenv';
 
 dotenv.config();

@@ -1,4 +1,3 @@
-
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -64,6 +63,27 @@ export class StoreFrontService {
       },
       createdAt: business.createdAt,
     };
+  }
+
+  async getAllStores() {
+    const businesses = await this.businessService.findAllBusinesses();
+
+    return businesses.map((business) => ({
+      id: business.id,
+      businessName: business.businessName,
+      businessDescription: business.businessDescription,
+      location: business.location,
+      logo: business.logo,
+      storeName: business.storeName,
+      slug: business.slug,
+      storeColor: business.storeColor,
+      coverImage: business.coverImage,
+      businessType: {
+        id: business.businessType?.id,
+        name: business.businessType?.name,
+      },
+      createdAt: business.createdAt,
+    }));
   }
 
   async getProductDetail(

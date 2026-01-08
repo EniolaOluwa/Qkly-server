@@ -30,7 +30,20 @@ import {
 export class StoreFrontController {
   constructor(private readonly storeFrontService: StoreFrontService) { }
 
-
+  @Get()
+  @Public()
+  @ApiOperation({
+    summary: 'Get all stores',
+    description: 'Retrieves a list of all available stores with public information.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of stores retrieved successfully',
+    type: [PublicBusinessInfoDto],
+  })
+  async getAllStores(): Promise<PublicBusinessInfoDto[]> {
+    return this.storeFrontService.getAllStores();
+  }
 
   @Get(':identifier')
   @Public()

@@ -23,7 +23,7 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/ormconfig.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/ormconfig.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/database/ormconfig.ts",
-    "db:drop": "yes | typeorm-ts-node-commonjs schema:drop -d src/database/ormconfig.ts",
+    "db:drop": "echo y | typeorm-ts-node-commonjs schema:drop -d src/database/ormconfig.ts",
     "db:reset": "npm run db:drop && npm run migration:run",
     "seed": "ts-node -r tsconfig-paths/register src/cli/seed.command.ts",
     "seed:prod": "node dist/cli/seed.command.js"
