@@ -17,6 +17,7 @@ import { ProductVariant } from '../product/entity/product-variant.entity';
 import { Product } from '../product/entity/product.entity';
 import { Settlement } from '../settlements/entities/settlement.entity';
 import { SettlementsService } from '../settlements/settlements.service'; // Import Service
+import { SystemConfigService } from '../system-config/system-config.service';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
@@ -29,9 +30,13 @@ import { OrderRefund } from './entity/order-refund.entity';
 import { OrderStatusHistory } from './entity/order-status-history.entity';
 import { Order } from './entity/order.entity';
 
-const SETTLEMENT_PERCENTAGE = 0.00;
-const SETTLEMENT_PERCENTAGE_ORDER = 0.985;
-const PLATFORM_FEE_PERCENTAGE = 0
+/**
+ * Configurable values via SystemConfig (DB → Env → Default fallback):
+ * - PLATFORM_FEE_PERCENTAGE: Platform fee (default: 0.015 = 1.5%)
+ * - PLATFORM_FEE_MAX: Max platform fee cap (default: 2000)
+ * - SETTLEMENT_PERCENTAGE: Settlement deduction (default: 0.00)
+ * - SETTLEMENT_MODE: SUBACCOUNT (T+1) or MAIN_BALANCE (instant payout)
+ */
 
 
 @Injectable()
@@ -70,6 +75,7 @@ export class OrderService {
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
     private readonly dataSource: DataSource,
+    private readonly systemConfigService: SystemConfigService,
   ) { }
 
 
@@ -535,33 +541,37 @@ export class OrderService {
       let transactionCharge = 0;
       let bearer: 'account' | 'subaccount' | 'all-proportional' | 'all' | undefined = undefined;
 
-      // Logic: If business has a valid subaccount, we split payment.
-      // Platform takes commission (transaction_charge), Business takes remainder.
-      // Merchant pays Paystack fees (bearer='subaccount').
-      if (business.paymentAccount && business.paymentAccount.providerSubaccountCode && business.paymentAccount.status === PaymentAccountStatus.ACTIVE) {
-        // Calculate Platform Fee (1.5% capped at 2000 - same as Settlement Service logic)
-        // Ideally this comes from a central Config or BusinessSettlementConfig
-        const FEE_PERCENTAGE = 0.015;
-        const MAX_FEE = 2000;
+      // Check SETTLEMENT_MODE: SUBACCOUNT (default) or MAIN_BALANCE
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      const isMainBalanceMode = settlementMode === 'MAIN_BALANCE';
+
+      if (isMainBalanceMode) {
+        // MAIN_BALANCE MODE: All funds go to platform, no split
+        // Merchant share tracked locally, instant payout available
+        this.logger.log(`MAIN_BALANCE Mode: No split, all funds to platform balance`);
+        // subaccountCode stays undefined, no split
+      } else {
+        // SUBACCOUNT MODE (Default): Split payments to merchant subaccount
+        // Logic: If business has a valid subaccount, we split payment.
+        // Platform takes commission (transaction_charge), Business takes remainder.
+        // Merchant pays Paystack fees (bearer='subaccount').
+        if (!business.paymentAccount || !business.paymentAccount.providerSubaccountCode || business.paymentAccount.status !== PaymentAccountStatus.ACTIVE) {
+          // STRICT MODE: Fail if no subaccount
+          ErrorHelper.BadRequestException('Merchant account is not set up to receive payments. Please contact support or update banking details.');
+        }
+
+        // Calculate Platform Fee (configurable via SystemConfig)
+        const FEE_PERCENTAGE = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const MAX_FEE = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
 
         let platformFee = order.total * FEE_PERCENTAGE;
         if (platformFee > MAX_FEE) platformFee = MAX_FEE;
-
-        // Ensure fee is usually rounded to 2 decimal places before converting to kobo?
-        // Paystack expects kobo if passed as integer, or we handle it in provider.
-        // Provider expects transaction_charge to be in kobo if amount is in kobo? 
-        // PaystackProvider converts amount to kobo. Let's assume passed charge should be in MAJOR unit if provider converts it?
-        // Checking PaystackProvider: "payload.transaction_charge = dto.transaction_charge || 0;"
-        // It does NOT convert transaction_charge. It assumes caller passes correct value? 
-        // Wait, Paystack API expects transaction_charge in kobo.
-        // Let's modify Provider or Pass Kobo here?
-        // Safest: Pass Kobo here since provider implementation didn't explicitly convert it in the `if(dto.subaccount)` block.
 
         transactionCharge = Math.round(platformFee * 100);
         subaccountCode = business.paymentAccount.providerSubaccountCode;
         bearer = 'subaccount'; // Merchant bears Paystack processing fee
 
-        this.logger.log(`Split Payment Active: Subaccount ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
+        this.logger.log(`SUBACCOUNT Mode: Split to ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
       }
 
       // Prepare payload
@@ -576,6 +586,7 @@ export class OrderService {
         metadata: {
           orderId: order.id,
           businessId: order.businessId,
+          settlementMode: settlementMode,
           ...initiatePaymentDto.metadata,
         },
         subaccount: subaccountCode,
@@ -639,11 +650,15 @@ export class OrderService {
         },
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error('Payment initialization failed:', error);
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!queryRunner.isReleased) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -1851,9 +1866,29 @@ export class OrderService {
       }
 
       const business = order.business;
-      const platformFeePercentage = SETTLEMENT_PERCENTAGE;
-      const platformFee = order.total * platformFeePercentage;
-      const payoutAmount = order.total - platformFee;
+
+      // Check SETTLEMENT_MODE to determine fee calculation
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      let platformFee: number;
+      let payoutAmount: number;
+
+      if (settlementMode === 'MAIN_BALANCE') {
+        // MAIN_BALANCE mode: All funds went to platform, calculate merchant share
+        // Use the same fee percentage used during payment initialization
+        const feePercentage = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const maxFee = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
+
+        platformFee = order.total * feePercentage;
+        if (platformFee > maxFee) platformFee = maxFee;
+
+        payoutAmount = order.total - platformFee;
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+      } else {
+        // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
+        const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
+        platformFee = order.total * settlementPercentage;
+        payoutAmount = order.total - platformFee;
+      }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
@@ -1868,7 +1903,7 @@ export class OrderService {
         gatewayFee: 0,
         settlementAmount: payoutAmount,
         currency: 'NGN',
-        transferProvider: 'WALLET',
+        transferProvider: settlementMode === 'MAIN_BALANCE' ? 'PLATFORM_BALANCE' : 'WALLET',
         settledAt: new Date(),
       });
 
@@ -1966,9 +2001,27 @@ export class OrderService {
         throw new Error(`No business found for order ${orderId}`);
       }
 
-      const platformFeePercentage = SETTLEMENT_PERCENTAGE;
-      const platformFee = order.total * platformFeePercentage;
-      const payoutAmount = order.total - platformFee;
+      // Check SETTLEMENT_MODE to determine fee calculation
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      let platformFee: number;
+      let payoutAmount: number;
+
+      if (settlementMode === 'MAIN_BALANCE') {
+        // MAIN_BALANCE mode: All funds went to platform, calculate merchant share
+        const feePercentage = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+        const maxFee = await this.systemConfigService.get<number>('PLATFORM_FEE_MAX', 2000);
+
+        platformFee = order.total * feePercentage;
+        if (platformFee > maxFee) platformFee = maxFee;
+
+        payoutAmount = order.total - platformFee;
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+      } else {
+        // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
+        const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
+        platformFee = order.total * settlementPercentage;
+        payoutAmount = order.total - platformFee;
+      }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
 
@@ -1983,7 +2036,7 @@ export class OrderService {
         gatewayFee: 0,
         settlementAmount: payoutAmount,
         currency: 'NGN',
-        transferProvider: 'WALLET',
+        transferProvider: settlementMode === 'MAIN_BALANCE' ? 'PLATFORM_BALANCE' : 'WALLET',
         settledAt: new Date(),
       });
 
@@ -2364,7 +2417,8 @@ export class OrderService {
       }
 
       // Calculate refund split
-      const platformFee = order.total * (PLATFORM_FEE_PERCENTAGE / 100);
+      const platformFeePercentageRaw = await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015);
+      const platformFee = order.total * platformFeePercentageRaw;
       const businessAmount = order.total - platformFee;
 
       // References for tracking platform and business refunds
@@ -2505,7 +2559,7 @@ export class OrderService {
       orderRefund.businessRefundReference = businessRefundRef;
       orderRefund.providerMetadata = {
         transactions: refundTransactions,
-        platformFeePercentage: PLATFORM_FEE_PERCENTAGE,
+        platformFeePercentage: await this.systemConfigService.get<number>('PLATFORM_FEE_PERCENTAGE', 0.015),
       };
 
       if (allSuccess) {

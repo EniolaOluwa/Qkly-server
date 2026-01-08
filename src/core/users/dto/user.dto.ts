@@ -86,3 +86,19 @@ export class ChangeTransactionPinDto {
   @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
   confirmPin: string;
 }
+
+export class ConfirmTransactionPinResetDto {
+  @ApiProperty({ example: '123456', description: 'OTP received via SMS/Email' })
+  @IsString()
+  otp: string;
+
+  @ApiProperty({ example: '1234', description: 'New 4-digit Transaction PIN' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'New PIN must be exactly 4 digits' })
+  newPin: string;
+
+  @ApiProperty({ example: '1234', description: 'Confirm new Transaction PIN' })
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'Confirm PIN must be exactly 4 digits' })
+  confirmPin: string;
+}

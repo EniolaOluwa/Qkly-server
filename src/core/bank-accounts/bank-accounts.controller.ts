@@ -8,6 +8,7 @@ import {
   UseGuards,
   Request,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
@@ -37,6 +38,21 @@ export class BankAccountsController {
   @ApiOperation({ summary: 'Get all bank accounts for user' })
   async getUserBankAccounts(@Request() req) {
     return this.bankAccountsService.getUserBankAccounts(req.user.userId);
+  }
+
+  @Get('banks')
+  @ApiOperation({ summary: 'Get list of supported banks' })
+  async getBankList() {
+    return this.bankAccountsService.getBankList();
+  }
+
+  @Get('resolve')
+  @ApiOperation({ summary: 'Resolve account name' })
+  async resolveAccount(
+    @Query('accountNumber') accountNumber: string,
+    @Query('bankCode') bankCode: string,
+  ) {
+    return this.bankAccountsService.resolveAccount(accountNumber, bankCode);
   }
 
   @Delete(':id')

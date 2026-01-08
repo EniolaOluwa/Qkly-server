@@ -28,6 +28,7 @@ export enum OtpPurpose {
   PASSWORD_RESET = 'password_reset',
   EMAIL_VERIFICATION = 'email_verification',
   PIN_CREATION = 'pin_creation',
+  TRANSACTION_PIN_RESET = 'transaction_pin_reset',
 }
 
 
