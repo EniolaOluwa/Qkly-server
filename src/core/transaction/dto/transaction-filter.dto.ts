@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsDateString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsDateString, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 import { TransactionStatus, TransactionType } from '../entity/transaction.entity';
 import { PaginationDto } from '../../../common/queries/dto';
 
@@ -21,10 +22,14 @@ export class TransactionFilterDto extends PaginationDto {
 
   @ApiPropertyOptional({ description: 'Filter by specific user ID' })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   userId?: number;
 
   @ApiPropertyOptional({ description: 'Filter by specific business ID' })
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
   businessId?: number;
 
   @ApiPropertyOptional({ description: 'Start date filter (ISO 8601)' })

@@ -160,7 +160,7 @@ export class GrowthMetricsDto {
   previousPeriodOrders: number;
 }
 
-export class TopProductDto {
+export class OrderTopProductDto {
   @ApiProperty({ example: 123, description: 'Product ID' })
   productId: number;
 
@@ -225,8 +225,8 @@ export class OrderMetricsResponseDto {
   @ApiProperty({ type: GrowthMetricsDto, required: false, description: 'Only included when date range is specified' })
   growthMetrics?: GrowthMetricsDto;
 
-  @ApiProperty({ type: [TopProductDto], required: false, description: 'Top 10 selling products' })
-  topProducts?: TopProductDto[];
+  @ApiProperty({ type: [OrderTopProductDto], required: false, description: 'Top 10 selling products' })
+  topProducts?: OrderTopProductDto[];
 
   @ApiProperty({ type: TimeMetricsDto, required: false })
   timeMetrics?: TimeMetricsDto;

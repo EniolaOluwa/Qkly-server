@@ -11,7 +11,7 @@ import {
   DashboardMetricsDto,
   DashboardQueryDto,
   RecentOrderDto,
-  TopProductDto,
+  BusinessTopProductDto,
   SalesChartDataDto,
   OrderStatusDistributionDto,
   PaymentMethodDistributionDto,
@@ -128,9 +128,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
   ): Promise<DashboardMetricsDto> {
-    console.log({ businessId, userId, query })
-
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }
       : { startDate: undefined, endDate: undefined };
@@ -170,7 +168,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query('limit') limit: number = 10,
   ): Promise<RecentOrderDto[]> {
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     return this.dashboardService.getRecentOrders(businessId, limit);
   }
 
@@ -214,7 +212,7 @@ export class DashboardController {
   @ApiResponse({
     status: 200,
     description: 'Top products retrieved successfully',
-    type: [TopProductDto],
+    type: [BusinessTopProductDto],
   })
   @ApiResponse({
     status: 404,
@@ -225,8 +223,8 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
     @Query('limit') limit: number = 10,
-  ): Promise<TopProductDto[]> {
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+  ): Promise<BusinessTopProductDto[]> {
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }
       : { startDate: undefined, endDate: undefined };
@@ -277,7 +275,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
   ): Promise<SalesChartDataDto[]> {
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }
       : { startDate: undefined, endDate: undefined };
@@ -328,7 +326,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
   ): Promise<OrderStatusDistributionDto[]> {
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }
       : { startDate: undefined, endDate: undefined };
@@ -379,7 +377,7 @@ export class DashboardController {
     @CurrentUser('userId') userId: number,
     @Query() query: DashboardQueryDto,
   ): Promise<PaymentMethodDistributionDto[]> {
-    await this.dashboardService['verifyBusinessOwnership'](businessId, userId);
+    await this.dashboardService.verifyBusinessOwnership(businessId, userId);
     const { startDate, endDate } = query?.startDate && query?.endDate
       ? { startDate: new Date(query.startDate), endDate: new Date(query.endDate) }
       : { startDate: undefined, endDate: undefined };

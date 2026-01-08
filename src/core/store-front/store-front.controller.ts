@@ -16,6 +16,8 @@ import {
 import { Public } from '../../common/decorators/public.decorator';
 import { StoreFrontProductQueryDto } from './dto/store-front-query.dto';
 import { StoreFrontService } from './store-front.service';
+import { StoreFrontStoreQueryDto } from './dto/store-front-store-query.dto';
+import { PaginationResultDto } from '../../common/queries/dto';
 
 import {
   PaginatedProductsDto,
@@ -30,7 +32,22 @@ import {
 export class StoreFrontController {
   constructor(private readonly storeFrontService: StoreFrontService) { }
 
-
+  @Get()
+  @Public()
+  @ApiOperation({
+    summary: 'Get all stores',
+    description: 'Retrieves a list of all available stores with public information.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of stores retrieved successfully',
+    type: PaginationResultDto,
+  })
+  async getAllStores(
+    @Query() query: StoreFrontStoreQueryDto
+  ): Promise<PaginationResultDto<PublicBusinessInfoDto>> {
+    return this.storeFrontService.getAllStores(query);
+  }
 
   @Get(':identifier')
   @Public()

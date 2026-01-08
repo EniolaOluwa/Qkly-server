@@ -28,7 +28,7 @@ import {
 } from './dto/product-filter.dto';
 import {
   ProductMetricsDto,
-  TopProductDto,
+  AdminTopProductDto,
   CategoryDistributionDto,
 } from './dto/product-metrics.dto';
 import {
@@ -403,7 +403,7 @@ export class AdminProductsController {
   private async getTopProducts(
     startDate?: string,
     endDate?: string,
-  ): Promise<TopProductDto[]> {
+  ): Promise<AdminTopProductDto[]> {
     let queryBuilder = this.orderItemRepository
       .createQueryBuilder('orderItem')
       .leftJoin('orderItem.product', 'product')

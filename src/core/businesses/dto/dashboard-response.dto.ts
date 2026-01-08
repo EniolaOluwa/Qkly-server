@@ -6,6 +6,7 @@ import { IsOptional, IsEnum, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 
+
 export class TrafficSourceMetric {
   @ApiProperty({ description: 'Traffic source name', example: 'DIRECT' })
   source: string;
@@ -49,7 +50,7 @@ export class RecentOrderDto {
   createdAt: Date;
 }
 
-export class TopProductDto {
+export class BusinessTopProductDto {
   @ApiProperty({ description: 'Product ID', example: 45 })
   id: number;
 
@@ -269,8 +270,8 @@ export class CompleteDashboardDto {
   @ApiProperty({ description: 'List of recent orders', type: [RecentOrderDto] })
   recentOrders: RecentOrderDto[];
 
-  @ApiProperty({ description: 'Top-performing products', type: [TopProductDto] })
-  topProducts: TopProductDto[];
+  @ApiProperty({ description: 'Top-performing products', type: [BusinessTopProductDto] })
+  topProducts: BusinessTopProductDto[];
 
   @ApiProperty({ description: 'Sales chart data over time', type: [SalesChartDataDto] })
   salesChart: SalesChartDataDto[];
