@@ -2,7 +2,8 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const API_URL = 'http://localhost:4000/v1';
+// const API_URL = 'http://localhost:4000/v1'
+const API_URL = 'https://qkly-server-dev.up.railway.app/v1'
 
 /**
  * Complete setup and test for instant payout
@@ -153,7 +154,7 @@ async function setupAndTestInstantPayout() {
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        amount: 100,
+        amount: 1000000,
         bankAccountId: bankAccountId,
         pin: '1234',
         narration: 'Test instant payout'

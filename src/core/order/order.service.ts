@@ -222,6 +222,8 @@ export class OrderService {
       }
       if (relations.includes('user')) {
         qb = qb.leftJoinAndSelect('ord.user', 'user');
+        // Auto-join profile if user is requested, as names are there now
+        qb = qb.leftJoinAndSelect('user.profile', 'userProfile');
       }
       if (relations.includes('business')) {
         qb = qb.leftJoinAndSelect('ord.business', 'business');
@@ -243,7 +245,16 @@ export class OrderService {
         // ... (existing select logic) ...
         const selectFields = ['ord'];
         if (relations.includes('user') && select.some((field) => field.startsWith('user.'))) {
-          selectFields.push(...select.filter((field) => field.startsWith('user.')));
+          // Map user.firstName -> userProfile.firstName if needed, but select array strings
+          // usually map to entity aliases. We need to handle 'userProfile' alias.
+          const userFields = select.filter((field) => field.startsWith('user.'));
+          selectFields.push(...userFields);
+
+          // Add userProfile fields if they are in the select list (as user.firstName etc won't work directly on user alias)
+          // We assume caller passes 'user.profile.firstName' or we map 'user.firstName' manually?
+          // To keep it simple, we push 'userProfile' alias specific fields if we detect them or just select all profile if user is selected?
+          // Let's explicitly add userProfile to selection if 'user' is selected to ensure we get data
+          selectFields.push('userProfile');
         }
         if (
           relations.includes('business') &&
@@ -295,9 +306,9 @@ export class OrderService {
       select: [
         'order',
         'user.id',
-        'user.firstName',
-        'user.lastName',
         'user.email',
+        // Select profile fields via alias (assuming TypeORM selects relations automatically if joined & not filtered, 
+        // OR we need to specify alias.field. detailed select logic above pushes 'userProfile')
         'business.id',
         'business.businessName',
         'business.location',
@@ -335,7 +346,9 @@ export class OrderService {
 
     const qb = this.orderRepository
       .createQueryBuilder('ord')
-      .leftJoinAndSelect('ord.items', 'items');
+      .leftJoinAndSelect('ord.items', 'items')
+      .leftJoinAndSelect('ord.user', 'user')
+      .leftJoinAndSelect('user.profile', 'userProfile');
 
     // ---- Filters ----
     if (userId) qb.andWhere('ord.userId = :userId', { userId });
@@ -406,6 +419,7 @@ export class OrderService {
       .createQueryBuilder('ord')
       .leftJoinAndSelect('ord.items', 'items')
       .leftJoinAndSelect('ord.user', 'user')
+      .leftJoinAndSelect('user.profile', 'userProfile')
       .leftJoinAndSelect('ord.business', 'business')
       .where('ord.businessId = :businessId', { businessId })
       .andWhere('ord.paymentStatus = :paymentStatus', { paymentStatus: PaymentStatus.PAID });

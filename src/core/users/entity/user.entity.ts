@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
   ManyToOne
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 import { UserType } from '../../../common/auth/user-role.enum';
 import { Business } from '../../businesses/business.entity';
 import { Role } from '../../roles/entities/role.entity';
@@ -33,6 +34,7 @@ export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @ApiProperty({ description: 'User email address', example: 'user@example.com' })
   @Column({ unique: true, nullable: false })
   email: string;
 
@@ -94,6 +96,7 @@ export class User {
   suspendedBy?: number;
 
   // Relationships to new separated entities
+  @ApiProperty({ type: () => UserProfile, description: 'User profile information' })
   @OneToOne(() => UserProfile, (profile) => profile.user, { cascade: true })
   profile: UserProfile;
 
