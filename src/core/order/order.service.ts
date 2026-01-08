@@ -538,31 +538,24 @@ export class OrderService {
       // Logic: If business has a valid subaccount, we split payment.
       // Platform takes commission (transaction_charge), Business takes remainder.
       // Merchant pays Paystack fees (bearer='subaccount').
-      if (business.paymentAccount && business.paymentAccount.providerSubaccountCode && business.paymentAccount.status === PaymentAccountStatus.ACTIVE) {
-        // Calculate Platform Fee (1.5% capped at 2000 - same as Settlement Service logic)
-        // Ideally this comes from a central Config or BusinessSettlementConfig
-        const FEE_PERCENTAGE = 0.015;
-        const MAX_FEE = 2000;
-
-        let platformFee = order.total * FEE_PERCENTAGE;
-        if (platformFee > MAX_FEE) platformFee = MAX_FEE;
-
-        // Ensure fee is usually rounded to 2 decimal places before converting to kobo?
-        // Paystack expects kobo if passed as integer, or we handle it in provider.
-        // Provider expects transaction_charge to be in kobo if amount is in kobo? 
-        // PaystackProvider converts amount to kobo. Let's assume passed charge should be in MAJOR unit if provider converts it?
-        // Checking PaystackProvider: "payload.transaction_charge = dto.transaction_charge || 0;"
-        // It does NOT convert transaction_charge. It assumes caller passes correct value? 
-        // Wait, Paystack API expects transaction_charge in kobo.
-        // Let's modify Provider or Pass Kobo here?
-        // Safest: Pass Kobo here since provider implementation didn't explicitly convert it in the `if(dto.subaccount)` block.
-
-        transactionCharge = Math.round(platformFee * 100);
-        subaccountCode = business.paymentAccount.providerSubaccountCode;
-        bearer = 'subaccount'; // Merchant bears Paystack processing fee
-
-        this.logger.log(`Split Payment Active: Subaccount ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
+      // Logic: Enforce Subaccount Existence for Merchants
+      if (!business.paymentAccount || !business.paymentAccount.providerSubaccountCode || business.paymentAccount.status !== PaymentAccountStatus.ACTIVE) {
+        // STRICT MODE: Fail if no subaccount
+        ErrorHelper.BadRequestException('Merchant account is not set up to receive payments. Please contact support or update banking details.');
       }
+
+      // Calculate Platform Fee (1.5% capped at 2000)
+      const FEE_PERCENTAGE = 0.015;
+      const MAX_FEE = 2000;
+
+      let platformFee = order.total * FEE_PERCENTAGE;
+      if (platformFee > MAX_FEE) platformFee = MAX_FEE;
+
+      transactionCharge = Math.round(platformFee * 100);
+      subaccountCode = business.paymentAccount.providerSubaccountCode;
+      bearer = 'subaccount'; // Merchant bears Paystack processing fee
+
+      this.logger.log(`Split Payment Enforced: Subaccount ${subaccountCode}, Platform Fee: ${platformFee} (Charge: ${transactionCharge})`);
 
       // Prepare payload
       const paymentPayload: InitializePaymentRequestDto = {
@@ -639,11 +632,15 @@ export class OrderService {
         },
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       this.logger.error('Payment initialization failed:', error);
       throw error;
     } finally {
-      await queryRunner.release();
+      if (!queryRunner.isReleased) {
+        await queryRunner.release();
+      }
     }
   }
 

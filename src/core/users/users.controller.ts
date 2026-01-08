@@ -52,7 +52,7 @@ import {
 } from '../../common/dto/responses.dto';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
-import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto, CreateTransactionPinDto, ChangeTransactionPinDto } from './dto/user.dto';
+import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto, CreateTransactionPinDto, ChangeTransactionPinDto, ConfirmTransactionPinResetDto } from './dto/user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UsersService } from './users.service';
 
@@ -865,6 +865,88 @@ export class UsersController {
     return HttpResponse.success({
       message: 'User logged in successfully',
       data: data,
+    });
+  }
+
+  // ============================================================
+  // TRANSACTION PIN RESET (Forgot PIN Flow)
+  // ============================================================
+
+  @Post('transaction-pin/reset/request')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Request transaction PIN reset',
+    description: 'Sends an OTP to the registered phone number to reset the transaction PIN. For users who forgot their PIN.',
+  })
+  @ApiResponse({ status: 200, description: 'OTP sent successfully' })
+  @ApiResponse({ status: 400, description: 'No transaction PIN set or no phone number' })
+  async requestTransactionPinReset(@Request() req) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
+    }
+
+    const data = await this.usersService.requestTransactionPinReset(authUserId);
+
+    return HttpResponse.success({
+      data,
+      message: 'OTP sent to your registered phone number',
+    });
+  }
+
+  @Post('transaction-pin/reset/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Confirm transaction PIN reset',
+    description: 'Verifies OTP and sets a new transaction PIN. Triggers a 24-hour withdrawal restriction for security.',
+  })
+  @ApiResponse({ status: 200, description: 'Transaction PIN reset successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid OTP or PIN format' })
+  async confirmTransactionPinReset(
+    @Body(ValidationPipe) confirmResetDto: ConfirmTransactionPinResetDto,
+    @Request() req,
+  ) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
+    }
+
+    const data = await this.usersService.confirmTransactionPinReset(
+      authUserId,
+      confirmResetDto.otp,
+      confirmResetDto.newPin,
+      confirmResetDto.confirmPin,
+    );
+
+    return HttpResponse.success({
+      data,
+      message: 'Transaction PIN reset successfully. Withdrawals are restricted for 24 hours.',
+    });
+  }
+
+  @Get('transaction-pin/reset/restriction')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Check withdrawal restriction status',
+    description: 'Returns whether withdrawals are currently restricted due to a recent PIN reset.',
+  })
+  @ApiResponse({ status: 200, description: 'Restriction status retrieved' })
+  async getTransactionPinResetRestriction(@Request() req) {
+    const authUserId = req.user?.userId;
+    if (!authUserId) {
+      ErrorHelper.BadRequestException('Authenticated user id not found');
+    }
+
+    const data = await this.usersService.getTransactionPinResetRestriction(authUserId);
+
+    return HttpResponse.success({
+      data,
+      message: data.restricted
+        ? `Withdrawals restricted for ${data.remainingHours} more hour(s)`
+        : 'No restrictions active',
     });
   }
 }

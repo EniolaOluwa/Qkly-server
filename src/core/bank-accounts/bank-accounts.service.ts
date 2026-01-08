@@ -122,4 +122,28 @@ export class BankAccountsService {
       return 'Unknown Bank';
     }
   }
+
+  /**
+   * Get list of supported banks
+   */
+  async getBankList() {
+    return this.paymentService.getBankList();
+  }
+
+  /**
+   * Resolve account name from external provider
+   */
+  async resolveAccount(accountNumber: string, bankCode: string) {
+    return this.paymentService.resolveBankAccount({ accountNumber, bankCode });
+  }
+
+  /**
+   * Find bank account by account number (internal use)
+   */
+  async findByAccountNumber(accountNumber: string): Promise<BankAccount | null> {
+    return this.bankAccountRepository.findOne({
+      where: { accountNumber, isDeleted: false },
+      relations: ['user'],
+    });
+  }
 }
