@@ -1,0 +1,199 @@
+QKLY WALLET API - SIMPLE GUIDE
+===============================
+
+This document explains how to use the Qkly Wallet API. 
+All endpoints need authentication. Include your token in the header like this:
+Authorization: Bearer YOUR_TOKEN_HERE
+
+
+===========================================
+PART 1: AVAILABLE ENDPOINTS
+===========================================
+
+WALLET ENDPOINTS
+----------------
+
+1. CREATE YOUR WALLET
+   Use this to create a virtual account for receiving payments.
+   
+   POST /wallets/generate
+   
+   If you already have a wallet, this will return your existing one.
+
+2. CHECK YOUR BALANCE
+   See how much money is in your wallet.
+   
+   GET /wallets/balance
+
+3. GET LIST OF BANKS
+   Get all Nigerian banks you can send money to.
+   
+   GET /bank-accounts/banks
+
+4. VERIFY A BANK ACCOUNT
+   Before adding a bank account, verify it's correct.
+   
+   GET /bank-accounts/resolve?accountNumber=1234567890&bankCode=057
+   
+   This returns the account holder's name.
+
+5. SAVE A BANK ACCOUNT
+   Save a bank account for future withdrawals.
+   
+   POST /bank-accounts
+   Send: accountNumber, bankCode, currency (NGN)
+
+6. VIEW YOUR SAVED BANK ACCOUNTS
+   See all bank accounts you've saved.
+   
+   GET /bank-accounts
+
+7. WITHDRAW MONEY
+   Send money from your wallet to your bank account.
+   
+   POST /wallets/withdraw
+   Send: amount, bankAccountId, pin, narration
+
+8. VIEW YOUR TRANSACTIONS
+   See all your deposits, withdrawals, and payments.
+   
+   GET /wallets/transactions
+
+
+PIN MANAGEMENT ENDPOINTS
+------------------------
+
+1. CREATE YOUR PIN (First Time)
+   Set up a 4-digit PIN for secure transactions.
+   
+   POST /users/transaction-pin
+   Send: pin, confirmPin
+
+2. CHANGE YOUR PIN
+   Change your PIN if you know your current one.
+   
+   PATCH /users/settings/transaction-pin
+   Send: oldPin, newPin, confirmPin
+
+3. FORGOT YOUR PIN? - REQUEST RESET
+   If you forgot your PIN, request a reset code.
+   
+   POST /users/transaction-pin/reset/request
+   
+   We'll send a code to your phone and email.
+
+4. FORGOT YOUR PIN? - CONFIRM RESET
+   Enter the code you received and set a new PIN.
+   
+   POST /users/transaction-pin/reset/confirm
+   Send: otp, newPin, confirmPin
+   
+   IMPORTANT: After resetting your PIN, you cannot withdraw money for 24 hours.
+   This is for your security.
+
+5. CHECK IF YOU CAN WITHDRAW
+   Check if there's any restriction on your account.
+   
+   GET /users/transaction-pin/reset/restriction
+
+
+===========================================
+PART 2: HOW TO WITHDRAW MONEY
+===========================================
+
+Follow these steps to withdraw money from your wallet:
+
+
+STEP 1: MAKE SURE YOU HAVE A WALLET
+-----------------------------------
+If you don't have a wallet yet, create one first.
+Call: POST /wallets/generate
+
+
+STEP 2: ADD YOUR BANK ACCOUNT (Only once)
+-----------------------------------------
+First, verify the account is correct:
+Call: GET /bank-accounts/resolve?accountNumber=YOUR_NUMBER&bankCode=YOUR_BANK_CODE
+
+If the name looks right, save it:
+Call: POST /bank-accounts
+Send: { "accountNumber": "1234567890", "bankCode": "057", "currency": "NGN" }
+
+
+STEP 3: CHECK YOUR BALANCE
+--------------------------
+Make sure you have enough money:
+Call: GET /wallets/balance
+
+
+STEP 4: MAKE SURE YOU'RE NOT RESTRICTED
+---------------------------------------
+If you recently reset your PIN, you may be blocked for 24 hours:
+Call: GET /users/transaction-pin/reset/restriction
+
+If it says "restricted: false", you can proceed.
+
+
+STEP 5: REQUEST THE WITHDRAWAL
+------------------------------
+Call: POST /wallets/withdraw
+Send:
+{
+  "amount": 5000,
+  "bankAccountId": 1,
+  "pin": "1234",
+  "narration": "Personal withdrawal"
+}
+
+
+STEP 6: WAIT FOR YOUR MONEY
+---------------------------
+For merchant accounts:
+- Your request is recorded as "Pending"
+- Paystack sends the money the next business day
+- Once sent, the status changes to "Success"
+- The money appears in your bank account
+
+For regular wallets:
+- Money is sent almost immediately
+- Status changes to "Success" within minutes
+
+
+STEP 7: CHECK YOUR TRANSACTION
+------------------------------
+Call: GET /wallets/transactions
+Look for your withdrawal reference to see its status.
+
+
+===========================================
+PART 3: FEES
+===========================================
+
+We charge a small fee for withdrawals:
+
+Amount                    Fee
+------                    ---
+Up to N5,000             N10
+N5,001 to N50,000        N25
+Above N50,000            N50
+
+
+===========================================
+PART 4: PIN SECURITY
+===========================================
+
+Your transaction PIN keeps your money safe. Here's how it works:
+
+CREATING A PIN:
+- No special requirements
+- No restrictions after
+
+CHANGING YOUR PIN (you know the old one):
+- You need your old PIN
+- No restrictions after
+
+RESETTING YOUR PIN (you forgot it):
+- We send a code to your phone and email
+- You enter the code and set a new PIN
+- WITHDRAWALS ARE BLOCKED FOR 24 HOURS after reset
+- This protects you in case someone else tries to take over your account

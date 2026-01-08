@@ -69,3 +69,6 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+// https://qkly-server-dev.up.railway.app/v1/payment/webhook
+// https://c53b91052641.ngrok-free.app/v1/payment/webhook

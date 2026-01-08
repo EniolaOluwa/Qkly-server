@@ -1,6 +1,8 @@
 // src/core/payment/payment.module.ts
 import { HttpModule } from '@nestjs/axios';
 import { Module, forwardRef } from '@nestjs/common';
+import { WalletsModule } from '../wallets/wallets.module';
+
 import { OrderModule } from '../order/order.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SharedRepositoryModule } from '../shared/shared-repository.module';
@@ -13,10 +15,14 @@ import { PaymentController } from './payment.controller';
 @Module({
   controllers: [PaymentController],
   imports: [
-    HttpModule,
+    HttpModule.register({
+      timeout: 30000,
+      maxRedirects: 5,
+    }),
     ScheduleModule.forRoot(),
     SharedRepositoryModule,
     forwardRef(() => OrderModule),
+    forwardRef(() => WalletsModule),
   ],
   providers: [
     PaymentService,

@@ -4,6 +4,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ErrorHelper } from '../../common/utils';
 import { OrderService } from '../order/order.service';
+import { WalletsService } from '../wallets/wallets.service';
 import {
   BankAccountDetailsDto,
   CreateVirtualAccountDto,
@@ -19,6 +20,7 @@ import {
   WebhookEventDto,
   RefundRequestDto,
   RefundResponseDto,
+
 } from './dto/payment-provider.dto';
 import { IPaymentProvider } from './interfaces/payment-provider.interface';
 import { PaystackProvider } from './providers/paystack.provider';
@@ -38,6 +40,8 @@ export class PaymentService {
     private readonly paystackProvider: PaystackProvider,
     @Inject(forwardRef(() => OrderService))
     private readonly orderService: OrderService,
+    @Inject(forwardRef(() => WalletsService))
+    private readonly walletsService: WalletsService,
   ) {
     // Get configured provider from environment
     const configuredProvider = this.configService.get<string>(
@@ -98,22 +102,32 @@ export class PaymentService {
     throw new Error('Provider does not support subaccount fetching');
   }
 
-  /**
-   * Create a subaccount (Delegates to provider)
-   */
-  async requestPayout(subaccountCode: string, amount: number, bankDetails: any): Promise<any> {
-    if (this.providerType === PaymentProviderType.PAYSTACK) {
-      return (this.provider as any).requestPayout(subaccountCode, amount, bankDetails);
-    }
-    throw new Error('Provider does not support payouts');
-  }
-
   async createSubaccount(payload: any): Promise<any> {
     // Check if provider supports it
     if (this.providerType === PaymentProviderType.PAYSTACK && 'createSubaccount' in this.provider) {
       return await (this.provider as any).createSubaccount(payload);
     }
     throw new Error(`Provider ${this.providerType} does not support subaccount creation`);
+  }
+
+  /**
+   * Create a Transfer Recipient for instant payouts
+   */
+  async createTransferRecipient(payload: {
+    type: string;
+    name: string;
+    account_number: string;
+    bank_code: string;
+    currency: string;
+  }): Promise<any> {
+    if (this.providerType === PaymentProviderType.PAYSTACK && 'createOrGetTransferRecipient' in this.provider) {
+      return await (this.provider as any).createOrGetTransferRecipient(payload);
+    }
+    // Try direct method name
+    if ('createTransferRecipient' in this.provider) {
+      return await (this.provider as any).createTransferRecipient(payload);
+    }
+    throw new Error(`Provider ${this.providerType} does not support transfer recipient creation`);
   }
 
   /**
@@ -271,6 +285,9 @@ export class PaymentService {
 
       // Forward to OrderService for processing
       await this.orderService.processWebhook(event);
+
+      // Forward to WalletsService for processing (Transfers/Payouts)
+      await this.walletsService.processWebhook(event);
 
       return event;
     } catch (error) {

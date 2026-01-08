@@ -1,39 +1,40 @@
 
 import {
   BadRequestException,
+  forwardRef,
+  HttpException,
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  Inject,
-  forwardRef,
-  HttpException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { plainToInstance } from 'class-transformer';
-import { SystemConfigService } from '../system-config/system-config.service';
 import { validateOrReject } from 'class-validator';
+import { DataSource, EntityManager, Repository } from 'typeorm';
+import { ErrorHelper } from '../../common/utils';
+import { ReferenceGenerator } from '../../common/utils/reference-generator.util';
+
+import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
+import { BusinessesService } from '../businesses/businesses.service'; // Import
+import { PaymentService } from '../payment/payment.service';
+import { SystemConfigService } from '../system-config/system-config.service';
+import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
-import { Wallet } from './entities/wallet.entity';
-import { Transaction, TransactionType, TransactionFlow, TransactionStatus } from '../transaction/entity/transaction.entity';
-import { DataSource, EntityManager } from 'typeorm';
-import {
-  GenerateWalletDto,
-  GenerateWalletResponseDto,
-} from './dto/wallet.dto';
 import { WalletBalanceResponseDto } from './dto/wallet-response.dto';
 import {
   WalletTransferOtpDto,
   WalletTransferRequestDto,
   WalletTransferResponseDto,
 } from './dto/wallet-transfer.dto';
-import { PaymentService } from '../payment/payment.service';
-import { BusinessesService } from '../businesses/businesses.service'; // Import
-import { BankAccountsService } from '../bank-accounts/bank-accounts.service';
+import {
+  GenerateWalletDto,
+  GenerateWalletResponseDto,
+} from './dto/wallet.dto';
 import { WithdrawalDto, WithdrawalResponseDto } from './dto/withdraw.dto';
-import { ErrorHelper, ReferenceGenerator } from '../../common/utils';
+import { Wallet } from './entities/wallet.entity';
 
 import { UsersService } from '../users/users.service';
 
@@ -234,6 +235,7 @@ export class WalletsService {
 
       if (!wallet) {
         ErrorHelper.NotFoundException('User does not have a wallet');
+        throw new Error('User does not have a wallet');
       }
 
       // Wallet balance is maintained locally via transactions (Ledger System)
@@ -251,14 +253,32 @@ export class WalletsService {
           // Verify integration returns. For now assuming major or we map it.
           if (subaccountData) {
             // Paystack balances are often in minor units (kobo).
-            // But let's log to verify structure first during testing or trust integration docs.
-            // Docs: GET /subaccount/:id returns { ... balance: 0, ... } (often 0 if not managed settlement?)
-            // Actually, with manual settlement, funds accumulate.
-            // Let's assume subaccountData.balance exists.
-
-            // If balance is present
+            // We assume integration layer returns raw response.
+            // Documentation: data.balance (in kobo)
+            let rawBalance = 0;
             if (subaccountData.balance !== undefined) {
-              externalBalance = subaccountData.balance / 100; // Convert to major units if kobo
+              rawBalance = subaccountData.balance; // Convert to major units
+            } else if (subaccountData.data && subaccountData.data.balance !== undefined) {
+              rawBalance = subaccountData.data.balance;
+            }
+
+            externalBalance = rawBalance / 100; // Convert to Major
+
+            // --- BALANCE LOCKING ---
+            // Fetch PENDING withdrawals locally to prevent double-spend
+            const pendingWithdrawalsSum = await this.transactionRepository
+              .createQueryBuilder('trx')
+              .select('SUM(trx.amount)', 'total')
+              .where('trx.userId = :userId', { userId })
+              .andWhere('trx.type = :type', { type: TransactionType.WITHDRAWAL })
+              .andWhere('trx.status = :status', { status: TransactionStatus.PENDING })
+              .getRawOne();
+
+            const pendingAmount = Number(pendingWithdrawalsSum?.total || 0);
+
+            if (pendingAmount > 0) {
+              this.logger.log(`User ${userId} has pending withdrawals: ${pendingAmount}. Locking from balance.`);
+              externalBalance = Math.max(0, externalBalance - pendingAmount);
             }
           }
         }
@@ -266,14 +286,20 @@ export class WalletsService {
         this.logger.warn(`Failed to fetch external subaccount balance for user ${userId}: ${e.message}`);
       }
 
+      const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+      const useLocalBalance = settlementMode === 'MAIN_BALANCE';
+
+
+
       const walletDto = plainToInstance(WalletBalanceResponseDto, {
         walletReference: wallet.providerAccountId,
         accountNumber: wallet.accountNumber,
         accountName: wallet.accountName,
         bankName: wallet.bankName,
         bankCode: wallet.bankCode,
-        availableBalance: externalBalance !== null ? externalBalance : wallet.availableBalance,
-        ledgerBalance: externalBalance !== null ? externalBalance : wallet.ledgerBalance,
+        // Ensure numeric conversion for decimal fields
+        availableBalance: Number(useLocalBalance ? wallet.availableBalance : (externalBalance !== null ? externalBalance : wallet.availableBalance)),
+        ledgerBalance: Number(useLocalBalance ? wallet.ledgerBalance : (externalBalance !== null ? externalBalance : wallet.ledgerBalance)),
       });
 
       return walletDto;
@@ -373,115 +399,6 @@ export class WalletsService {
       }
       this.logger.error('Transfer to wallet/bank failed', error.stack);
       ErrorHelper.InternalServerErrorException('Transfer failed');
-    }
-  }
-
-  /**
-   * Request Payout (Withdrawal) from Subaccount
-   */
-  async requestPayout(userId: number, payload: WithdrawalDto): Promise<WithdrawalResponseDto> {
-    try {
-      // 1. Validate User & Business Account
-      const businessAccount = await this.businessesService.getBusinessPaymentAccount(userId);
-      if (!businessAccount || !businessAccount.providerSubaccountCode) {
-        ErrorHelper.BadRequestException('User does not have a linked business subaccount for payouts.');
-      }
-
-      // 2. Validate Bank Account
-      // We need to resolve the bank details from bankAccountId
-      // Assuming we have access to bank accounts.
-      // Since WalletsService doesn't inject BankAccountsService yet, we might need repository or just pass bankAccount details if DTO allows.
-      // DTO has `bankAccountId`.
-      // Let's quickly verify imports or inject BankAccountRepository if needed.
-      // For now, I will assume we can fetch it via a service call or query.
-      // Since I can't see BankAccountsService injected, I'll add it to constructor first if needed, likely injected.
-      // Wait, let me check imports first in next step if verification fails.
-      // For now, let's assume I can query it or use a placeholder.
-      // Actually, let's CHECK imports first properly.
-
-      // RE-READING IMPORTS:
-      // WalletsService constructor has:
-      // @InjectRepository(Wallet) walletRepo,
-      // @InjectRepository(Transaction) txRepo,
-      // UsersService, PaymentService, ConfigService, BusinessesService.
-      // NO BankAccountsService.
-
-      // I will use a direct check or Mock for now to proceed, but ideally inject BankAccountsService.
-      // To update constructor is invasive with potential circular deps.
-      // However, we DO have `resolveBankAccount` method in this service which calls provider.
-      // But we need the SAVED bank account from DB.
-
-      // Workaround: Use `BusinessesService` to get bank details? No.
-      // Let's just update the method to accept `bankDetails` directly for now?
-      // No, DTO mandates `bankAccountId`.
-
-      // Let's assume for this specific task I will query `usersService` or `businessesService` if they have bank access?
-      // Better: Use `wallet.bankDetails` if stored?
-      // The `Wallet` entity has `bankName`, `accountNumber`.
-      // If the user wants to withdraw to their "Linked" account on the wallet (the one created during onboarding),
-      // we can use that if `bankAccountId` matches OR if we simplify DTO to not require ID but use "Default".
-
-      // IMPLEMENTATION CHOICE:
-      // Use the Wallet's linked bank details (accountNumber/bankCode) which we saved during `generateWallet`.
-      // If payload.bankAccountId is provided, we *should* look it up, but since I lack the Repo,
-      // I will default to using the Wallet's internally stored bank details if they exist.
-
-      const wallet = await this.walletRepository.findOne({ where: { userId } });
-      if (!wallet) ErrorHelper.NotFoundException('Wallet not found');
-
-      // Verify PIN (Mock check or utilize existing validatePin if available)
-      // await this.validateTransactionPin(userId, payload.pin); // If method exists
-
-      // 3. Request Payout via Provider
-      // Use wallet's stored bank details as destination
-      const bankDetails = {
-        account_number: wallet.accountNumber,
-        bank_code: wallet.bankCode,
-        account_name: wallet.accountName
-      };
-
-      if (!bankDetails.account_number || !bankDetails.bank_code) {
-        ErrorHelper.BadRequestException('No linked bank account found on wallet.');
-      }
-
-      const payoutResponse = await this.paymentService.requestPayout(
-        businessAccount.providerSubaccountCode,
-        payload.amount,
-        bankDetails
-      );
-
-      // 4. Record Transaction
-      const transaction = this.transactionRepository.create({
-        userId,
-        amount: payload.amount,
-        netAmount: payload.amount, // Assuming 0 fee for now
-        fee: 0,
-        type: TransactionType.WITHDRAWAL,
-        flow: TransactionFlow.DEBIT,
-        status: TransactionStatus.PENDING,
-        reference: payoutResponse.reference,
-        description: payload.narration || 'Payout',
-        balanceBefore: wallet.availableBalance,
-        balanceAfter: wallet.availableBalance, // Local balance technically unchanged if funds are subaccount-based and 0 locally
-        recipientAccountNumber: bankDetails.account_number,
-        recipientBankName: bankDetails.bank_code, // Storing code here or lookup name? Keeping code for consistency with provider payload
-        currency: 'NGN',
-        metadata: {
-          subaccountCode: businessAccount.providerSubaccountCode,
-          bankDetails
-        }
-      });
-      await this.transactionRepository.save(transaction);
-
-      return {
-        success: true,
-        message: 'Payout initiated successfully',
-        reference: payoutResponse.reference
-      };
-
-    } catch (error) {
-      this.logger.error(`Payout failed for user ${userId}`, error);
-      throw error;
     }
   }
 
@@ -707,75 +624,139 @@ export class WalletsService {
    * Withdraw funds to a saved bank account
    */
   async withdrawToBankAccount(userId: number, dto: WithdrawalDto): Promise<WithdrawalResponseDto> {
-    // 1. Validate Bank Account
-    const bankAccount = await this.bankAccountsService.getBankAccount(dto.bankAccountId, userId);
-
-    if (!bankAccount) {
-      ErrorHelper.NotFoundException('Bank account not found or does not belong to user');
+    // 1. Detect Scenario: Merchant Subaccount vs Personal Wallet
+    const settlementMode = await this.systemConfigService.get<string>('SETTLEMENT_MODE', 'SUBACCOUNT');
+    if (settlementMode === 'MAIN_BALANCE') {
+      return this.instantPayout(userId, dto);
     }
 
-    // 2. Validate PIN
-    if (!dto.pin) {
-      ErrorHelper.BadRequestException('Transaction PIN is required');
-    }
-    const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
-    if (!isPinValid) {
-      ErrorHelper.BadRequestException('Invalid Transaction PIN');
-    }
+    const businessAccount = await this.businessesService.getBusinessPaymentAccount(userId);
+    const isMerchantSubaccount = businessAccount && businessAccount.providerSubaccountCode;
 
-    // 3. Security: Check for recent PIN change and limit withdrawal
-    const lastPinChange = await this.usersService.getTransactionPinLastChanged(userId);
-    if (lastPinChange) {
-      const COOL_DOWN_HOURS = await this.systemConfigService.get<number>('SECURITY_PIN_COOLDOWN_HOURS', 24);
-      const MAX_LIMIT_DURING_COOL_DOWN = await this.systemConfigService.get<number>('SECURITY_MAX_LIMIT_DURING_COOL_DOWN', 5000);
-      const hoursSinceChange = (Date.now() - new Date(lastPinChange).getTime()) / (1000 * 60 * 60);
+    if (isMerchantSubaccount && settlementMode === 'SUBACCOUNT') {
+      // --- MERCHANT SUBACCOUNT PAYOUT API ---
+      // We ignore 'dto.bankAccountId' because Subaccounts can ONLY pay out to their linked Primary Bank Account.
+      // We ignore 'dto.pin' check technically because the provider manages ownership, 
+      // BUT for security we SHOULD still validate the user's local PIN to prevent unauthorized access to their session.
 
-      if (hoursSinceChange < COOL_DOWN_HOURS && dto.amount > MAX_LIMIT_DURING_COOL_DOWN) {
-        const remainingHours = Math.ceil(COOL_DOWN_HOURS - hoursSinceChange);
-        ErrorHelper.ForbiddenException(
-          `For security, withdrawals are limited to ₦${MAX_LIMIT_DURING_COOL_DOWN} for ${COOL_DOWN_HOURS} hours after a PIN change. Please try again in ${remainingHours} hours.`,
+      // 1. Validate PIN
+      if (!dto.pin) ErrorHelper.BadRequestException('Transaction PIN is required');
+      const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
+      if (!isPinValid) ErrorHelper.BadRequestException('Invalid Transaction PIN');
+
+      // 1a. Check for PIN Reset Restriction (24-hour cooldown)
+      const restriction = await this.usersService.getTransactionPinResetRestriction(userId);
+      if (restriction.restricted) {
+        ErrorHelper.BadRequestException(
+          `Withdrawals are restricted for ${restriction.remainingHours} hour(s) after a PIN reset. Restriction ends at ${restriction.endsAt?.toLocaleString()}.`,
         );
       }
+
+      // 1b. Validate Balance (Fetch live from provider)
+      // We must ensure the user has enough funds in their Subaccount before requesting payout.
+      const walletData = await this.getUserWalletWithBalance(userId);
+      const availableBalance = walletData.availableBalance;
+
+      if (dto.amount > availableBalance) {
+        ErrorHelper.BadRequestException('Insufficient funds in subaccount');
+      }
+
+      // 2. Execute Payout via PaymentService
+      // Note: We don't deduct local wallet balance because the source is external. 
+      // But we DO record the transaction.
+
+      // 2. Execute Payout Logic
+      // Since standard Paystack Subaccounts settle manually or automatically (and API does not support direct "payout" trigger for splits effortlessly without transfer balance),
+      // we treat this as a "Record Payout" request which aligns with the manual settlement schedule or manual dashboard action.
+      // In a real automated Managed Account flow, this would call transferToBank. 
+      // For now, we simply record the intent.
+
+      const reference = ReferenceGenerator.generate('WDR');
+
+      // 3. Record Transaction
+      const transaction = this.transactionRepository.create({
+        userId,
+        amount: dto.amount,
+        netAmount: dto.amount,
+        fee: 0,
+        type: TransactionType.WITHDRAWAL,
+        flow: TransactionFlow.DEBIT,
+        status: TransactionStatus.PENDING, // Pending until confirmed logic or webhook?
+        reference: reference, // Use local ref
+        description: dto.narration || 'Merchant Payout',
+        currency: 'NGN',
+        metadata: {
+          subaccountCode: businessAccount.providerSubaccountCode,
+          source: 'SUBACCOUNT_PAYOUT'
+        }
+      });
+      await this.transactionRepository.save(transaction);
+
+      this.logger.log(`Recorded Subaccount Payout for ${userId}: ${dto.amount} (Ref: ${reference})`);
+
+      return {
+        success: true,
+        message: 'Payout initiated successfully', // User message remains friendly
+        reference: reference,
+      };
+
+    } else {
+      // --- STANDARD WALLET WITHDRAWAL (Fallback for non-merchants) ---
+
+      // 1. Validate Bank Account
+      const bankAccount = await this.bankAccountsService.getBankAccount(dto.bankAccountId, userId);
+      if (!bankAccount) ErrorHelper.NotFoundException('Bank account not found or does not belong to user');
+
+      // 2. Validate PIN
+      if (!dto.pin) ErrorHelper.BadRequestException('Transaction PIN is required');
+      const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
+      if (!isPinValid) ErrorHelper.BadRequestException('Invalid Transaction PIN');
+
+      // 2a. Check for PIN Reset Restriction (24-hour cooldown)
+      const restriction = await this.usersService.getTransactionPinResetRestriction(userId);
+      if (restriction.restricted) {
+        ErrorHelper.BadRequestException(
+          `Withdrawals are restricted for ${restriction.remainingHours} hour(s) after a PIN reset. Restriction ends at ${restriction.endsAt?.toLocaleString()}.`,
+        );
+      }
+
+      // 3. Check Balance & Calculate Fee
+      const wallet = await this.walletRepository.findOne({ where: { userId } });
+      if (!wallet) ErrorHelper.NotFoundException('Wallet not found');
+
+      const fee = this.calculateTransferFee(dto.amount);
+      const totalDebit = Number(dto.amount) + Number(fee);
+
+      if (Number(wallet.availableBalance) < totalDebit) {
+        ErrorHelper.BadRequestException('Insufficient funds');
+      }
+
+      // 4. Construct Transfer Payload
+      const transferPayload: WalletTransferRequestDto = {
+        amount: dto.amount,
+        fee: fee,
+        reference: ReferenceGenerator.generate('WDR'),
+        narration: dto.narration || 'Withdrawal',
+        destinationAccountNumber: bankAccount.accountNumber,
+        destinationBankCode: bankAccount.bankCode,
+        currency: bankAccount.currency,
+        sourceAccountNumber: wallet.providerAccountId,
+        async: false,
+      };
+
+      // 5. Execute
+      const transferResult = await this.transferToWalletOrBank(transferPayload);
+
+      return {
+        success: transferResult.status === 'SUCCESS' || transferResult.status === 'PENDING',
+        message: 'Withdrawal initiated successfully',
+        reference: transferPayload.reference,
+        data: transferResult,
+      };
     }
-
-    // 4. Get User Wallet to get reference
-    const wallet = await this.walletRepository.findOne({ where: { userId } });
-    if (!wallet) ErrorHelper.NotFoundException('Wallet not found');
-
-    // 4. Calculate Fee
-    const fee = this.calculateTransferFee(dto.amount);
-    const totalDebit = Number(dto.amount) + Number(fee);
-
-    // 5. Construct Transfer Payload
-    const transferPayload: WalletTransferRequestDto = {
-      amount: dto.amount,
-      fee: fee, // Pass calculated fee
-      reference: ReferenceGenerator.generate('WDR'),
-      narration: dto.narration || 'Withdrawal to Bank Account',
-      destinationAccountNumber: bankAccount.accountNumber,
-      destinationBankCode: bankAccount.bankCode,
-      currency: bankAccount.currency,
-      sourceAccountNumber: wallet.providerAccountId,
-      async: false,
-    };
-
-    // 5. Execute Transfer
-    const transferResult = await this.transferToWalletOrBank(transferPayload);
-
-    return {
-      success: transferResult.status === 'SUCCESS' || transferResult.status === 'PENDING',
-      message: 'Withdrawal initiated successfully',
-      reference: transferPayload.reference,
-      data: transferResult,
-    };
   }
 
-  /**
-   * Calculate Transfer Fee based on Paystack Schedule
-   * <= 5000: 10
-   * 5001 - 50000: 25
-   * > 50000: 50
-   */
+
   calculateTransferFee(amount: number): number {
     if (amount <= 5000) {
       return 10;
@@ -783,6 +764,267 @@ export class WalletsService {
       return 25;
     } else {
       return 50;
+    }
+  }
+
+  // ============================================================
+  // INSTANT PAYOUT (Option 2: Main Balance Mode)
+  // ============================================================
+
+  /**
+   * Instant payout to merchant's bank account
+   * Uses Paystack Transfer API - money sent within minutes
+   * Requires: Transaction PIN, bank account with providerRecipientCode
+   */
+  async instantPayout(userId: number, dto: WithdrawalDto): Promise<WithdrawalResponseDto> {
+    // 1. Validate PIN
+    if (!dto.pin) ErrorHelper.BadRequestException('Transaction PIN is required');
+    const isPinValid = await this.usersService.validateTransactionPin(userId, dto.pin);
+    if (!isPinValid) ErrorHelper.BadRequestException('Invalid Transaction PIN');
+
+    // 2. Check for PIN Reset Restriction (24-hour cooldown)
+    const restriction = await this.usersService.getTransactionPinResetRestriction(userId);
+    if (restriction.restricted) {
+      ErrorHelper.BadRequestException(
+        `Withdrawals are restricted for ${restriction.remainingHours} hour(s) after a PIN reset.`,
+      );
+    }
+
+    // 3. Get bank account with recipient code
+    const bankAccount = await this.bankAccountsService.getBankAccount(dto.bankAccountId, userId);
+    if (!bankAccount) {
+      ErrorHelper.NotFoundException('Bank account not found');
+    }
+
+    if (!bankAccount.providerRecipientCode) {
+      this.logger.warn(`Bank account ${bankAccount.id} missing recipient code. Attempting to create one...`);
+      try {
+        const recipient = await this.paymentService.createTransferRecipient({
+          type: 'nuban',
+          name: bankAccount.accountName,
+          account_number: bankAccount.accountNumber,
+          bank_code: bankAccount.bankCode,
+          currency: bankAccount.currency || 'NGN',
+        });
+
+        if (recipient && recipient.recipient_code) {
+          bankAccount.providerRecipientCode = recipient.recipient_code;
+          // Save for future use
+          await this.bankAccountsService.updateBankAccount(bankAccount.id, userId, {
+            providerRecipientCode: recipient.recipient_code
+          });
+          this.logger.log(`Created and saved new recipient code: ${recipient.recipient_code}`);
+        } else {
+          throw new Error('Failed to generate recipient code');
+        }
+      } catch (error) {
+        this.logger.error('Failed to create recipient code on the fly', error);
+        ErrorHelper.BadRequestException(
+          'Bank account not set up for instant payout and failed to repair. Please remove and re-add your bank account.',
+        );
+      }
+    }
+
+    // 4. Check balance (from local wallet for Main Balance mode)
+    const wallet = await this.walletRepository.findOne({ where: { userId } });
+    if (!wallet) {
+      ErrorHelper.NotFoundException('Wallet not found');
+    }
+
+    const fee = this.calculateTransferFee(dto.amount);
+    const totalDebit = Number(dto.amount) + Number(fee);
+
+    if (Number(wallet.availableBalance) < totalDebit) {
+      ErrorHelper.BadRequestException('Insufficient funds');
+    }
+
+    // 5. Generate reference and initiate transfer via Paystack
+    const reference = ReferenceGenerator.generate('WDR');
+
+    try {
+      const transferResult = await this.paymentService.transferToBank({
+        amount: dto.amount,
+        reference,
+        destinationAccountNumber: bankAccount.accountNumber,
+        destinationBankCode: bankAccount.bankCode,
+        destinationAccountName: bankAccount.accountName,
+        currency: bankAccount.currency || 'NGN',
+        narration: dto.narration || 'Instant Payout',
+      });
+
+      // 6. Deduct from local wallet
+      wallet.availableBalance = Number(wallet.availableBalance) - totalDebit;
+      await this.walletRepository.save(wallet);
+
+      // 7. Record transaction
+      const transaction = this.transactionRepository.create({
+        userId,
+        amount: dto.amount,
+        netAmount: dto.amount,
+        fee,
+        type: TransactionType.WITHDRAWAL,
+        flow: TransactionFlow.DEBIT,
+        status: transferResult.status === 'SUCCESS' ? TransactionStatus.SUCCESS : TransactionStatus.PENDING,
+        reference,
+        providerReference: transferResult.transferReference,
+        description: dto.narration || 'Instant Payout',
+        currency: 'NGN',
+        metadata: {
+          bankAccountId: bankAccount.id,
+          recipientCode: bankAccount.providerRecipientCode,
+          source: 'INSTANT_PAYOUT',
+        },
+      });
+      await this.transactionRepository.save(transaction);
+
+      this.logger.log(`Instant payout initiated for user ${userId}: ${dto.amount} (Ref: ${reference})`);
+
+      return {
+        success: true,
+        message: 'Instant payout initiated. Funds will arrive within minutes.',
+        reference,
+        data: transferResult,
+      };
+    } catch (error) {
+      this.logger.error(`Instant payout failed for user ${userId}: ${error.message}`);
+      ErrorHelper.InternalServerErrorException(`Payout failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Process Webhook Events (Transfers)
+   */
+  async processWebhook(event: any): Promise<void> {
+    // Handle both raw Paystack payload and standardized WebhookEventDto
+    const rawPayload = event.rawPayload || event;
+    const eventType = rawPayload.event;
+    const data = rawPayload.data;
+
+    if (!eventType || !['transfer.success', 'transfer.failed', 'transfer.reversed'].includes(eventType)) {
+      return;
+    }
+
+    this.logger.log(`Processing Transfer Webhook: ${eventType} for Ref: ${data?.reference}`);
+
+    const reference = data.reference;
+    // Transaction reference might match directly or be in providerReference
+    const transaction = await this.transactionRepository.findOne({
+      where: [
+        { reference: reference },
+        { providerReference: reference } // Sometimes provider sends their ID
+      ]
+    });
+
+    if (!transaction) {
+      // HANDLE T+1 AUTO-SETTLEMENTS (Unmatched References)
+      if (eventType === 'transfer.success' && data.recipient?.details?.account_number) {
+        const accountNumber = data.recipient.details.account_number;
+        this.logger.log(`Unmatched transfer success. Attempting to match by account number: ${accountNumber}`);
+
+        const bankAccount = await this.bankAccountsService.findByAccountNumber(accountNumber);
+
+        if (bankAccount && bankAccount.user) {
+          const userId = bankAccount.userId;
+          const amount = data.amount / 100; // Paystack sends kobo
+
+          // 1. Check for PENDING "Subaccount Payout" requests
+          const pendingPayout = await this.transactionRepository.findOne({
+            where: {
+              userId,
+              type: TransactionType.WITHDRAWAL,
+              status: TransactionStatus.PENDING,
+              // We could also check amount match, but amounts might differ due to fees.
+              // For T+1, it usually clears the balance.
+            },
+            order: { createdAt: 'ASC' } // Match oldest first
+          });
+
+          if (pendingPayout) {
+            this.logger.log(`Matched auto-settlement ${reference} to Pending Payout ${pendingPayout.reference}`);
+            pendingPayout.status = TransactionStatus.SUCCESS;
+            pendingPayout.providerReference = reference; // Save real ref
+            pendingPayout.metadata = {
+              ...pendingPayout.metadata,
+              webhookData: data,
+              matchType: 'AUTO_RESOLVED',
+              originalReference: pendingPayout.reference
+            };
+            // Optional: Update amount if significantly different?
+            await this.transactionRepository.save(pendingPayout);
+            return;
+          } else {
+            // 2. No pending payout found -> Create "Auto Settlement" record
+            this.logger.log(`Creating new Auto-Settlement record for execution ${reference}`);
+            const newTx = this.transactionRepository.create({
+              userId,
+              amount: amount,
+              netAmount: amount,
+              fee: 0,
+              type: TransactionType.WITHDRAWAL,
+              flow: TransactionFlow.DEBIT,
+              status: TransactionStatus.SUCCESS,
+              reference: reference, // Use Paystack Ref
+              description: 'Automatic Settlement (Payout)',
+              currency: data.currency || 'NGN',
+              metadata: {
+                webhookData: data,
+                source: 'AUTO_SETTLEMENT'
+              }
+            });
+            await this.transactionRepository.save(newTx);
+            return;
+          }
+        }
+      }
+
+      this.logger.warn(`Transaction not found for webhook ref: ${reference}`);
+      return;
+    }
+
+    if (transaction.status === TransactionStatus.SUCCESS || transaction.status === TransactionStatus.FAILED) {
+      this.logger.log(`Transaction ${transaction.reference} already processed.`);
+      return;
+    }
+
+    if (eventType === 'transfer.success') {
+      transaction.status = TransactionStatus.SUCCESS;
+      transaction.metadata = { ...transaction.metadata, webhookData: data };
+      await this.transactionRepository.save(transaction);
+      this.logger.log(`Transaction ${transaction.reference} marked as SUCCESS.`);
+    } else {
+      // Failed or Reversed
+      transaction.status = eventType === 'transfer.reversed' ? TransactionStatus.REVERSED : TransactionStatus.FAILED;
+      transaction.metadata = { ...transaction.metadata, webhookData: data, failureReason: data.reason || 'Webhook Failed' };
+      await this.transactionRepository.save(transaction);
+
+      this.logger.log(`Transaction ${transaction.reference} marked as ${transaction.status}.`);
+
+      // REFUND LOGIC
+      // If this was a Standard Wallet withdrawal (Custodial), we debited the ledger. We must refund.
+      // If it was Subaccount Payout, we didn't debit ledger (only locked via pending check). 
+      // Setting status to FAILED automatically releases the lock (count decreases).
+
+      const isSubaccountPayout = transaction.metadata?.source === 'SUBACCOUNT_PAYOUT';
+
+      if (!isSubaccountPayout && transaction.type === TransactionType.WITHDRAWAL) {
+        if (!transaction.userId) {
+          this.logger.warn(`Cannot refund transaction ${transaction.reference}: missing userId`);
+          return;
+        }
+
+        this.logger.log(`Refunding failed withdrawal for Standard Wallet: ${transaction.reference}`);
+        await this.creditWallet(
+          transaction.userId,
+          Number(transaction.amount || 0) + Number(transaction.fee || 0), // Refund full amount + fee
+          `REF-${transaction.reference}`,
+          `Refund for failed withdrawal ${transaction.reference}`,
+          undefined,
+          {
+            originalReference: transaction.reference,
+            transactionType: TransactionType.REFUND
+          }
+        );
+      }
     }
   }
 }

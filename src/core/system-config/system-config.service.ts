@@ -94,4 +94,10 @@ export class SystemConfigService {
         return value;
     }
   }
+  /**
+   * Get all config entries
+   */
+  async findAll(): Promise<SystemConfig[]> {
+    return this.configRepository.find();
+  }
 }

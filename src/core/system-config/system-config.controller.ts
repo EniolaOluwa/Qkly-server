@@ -19,6 +19,12 @@ class UpdateConfigDto {
 export class SystemConfigController {
   constructor(private readonly systemConfigService: SystemConfigService) { }
 
+  @Get()
+  @Roles(UserType.ADMIN as any, UserType.SUPER_ADMIN as any)
+  async getAllConfigs() {
+    return this.systemConfigService.findAll();
+  }
+
   @Get(':key')
   @Roles(UserType.ADMIN as any, UserType.SUPER_ADMIN as any)
   async getConfig(@Param('key') key: string) {

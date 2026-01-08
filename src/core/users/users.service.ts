@@ -1,7 +1,9 @@
 import { HttpService } from '@nestjs/axios';
 import {
   BadRequestException,
+  Inject,
   Injectable,
+  forwardRef,
   Logger,
   NotFoundException,
   UnauthorizedException
@@ -84,6 +86,7 @@ export class UsersService {
     private jwtService: JwtService,
     private httpService: HttpService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => WalletProvisioningUtil))
     private walletProvisioningUtil: WalletProvisioningUtil,
     private userProgressService: UserProgressService,
     private notificationService: NotificationService,
@@ -1751,5 +1754,195 @@ export class UsersService {
     const maskedMiddle = '*'.repeat(Math.max(cleanPhone.length - 6, 5));
 
     return `${firstPart}${maskedMiddle}${lastPart} `;
+  }
+
+  // ============================================================
+  // TRANSACTION PIN RESET (Forgot PIN Flow)
+  // ============================================================
+
+  /**
+   * Request a transaction PIN reset - sends OTP to user's phone
+   * This is for users who FORGOT their PIN (cannot provide old PIN)
+   */
+  async requestTransactionPinReset(userId: number): Promise<{ message: string; maskedPhone?: string }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['profile', 'security'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    if (!user.security?.transactionPin) {
+      ErrorHelper.BadRequestException('No transaction PIN is set. Please create one first.');
+    }
+
+    if (!user.profile?.phone) {
+      ErrorHelper.BadRequestException('Phone number is required for PIN reset. Please update your profile.');
+    }
+
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    // Invalidate any existing PIN reset OTPs
+    await this.otpRepository.update(
+      {
+        userId: user.id,
+        purpose: OtpPurpose.TRANSACTION_PIN_RESET,
+        isUsed: false,
+      },
+      { isUsed: true },
+    );
+
+    // Save new OTP
+    const otpRecord = this.otpRepository.create({
+      userId: user.id,
+      otp,
+      otpType: OtpType.PHONE,
+      purpose: OtpPurpose.TRANSACTION_PIN_RESET,
+      expiresAt,
+      isUsed: false,
+    });
+    await this.otpRepository.save(otpRecord);
+
+    // Send OTP via SMS
+    try {
+      await this.sendOtpViaTermii(user.profile.phone, otp);
+    } catch (error) {
+      this.logger.error(`Failed to send PIN reset OTP to ${user.id}: ${error.message}`);
+      // Still return success to prevent phone enumeration
+    }
+
+    // Also send email notification for security awareness
+    this.notificationService.sendEmail(
+      user.email,
+      'Transaction PIN Reset Requested',
+      `<p>A transaction PIN reset was requested for your Qkly account.</p>
+       <p>If you did not request this, please contact support immediately.</p>
+       <p>Your OTP code is: <strong>${otp}</strong></p>
+       <p>This code expires in 10 minutes.</p>`,
+    ).catch(err => this.logger.error(`Failed to send PIN reset email: ${err.message}`));
+
+    return {
+      message: 'OTP sent to your registered phone number',
+      maskedPhone: this.maskPhoneNumber(user.profile.phone),
+    };
+  }
+
+  /**
+   * Confirm transaction PIN reset with OTP and set new PIN
+   * Triggers 24-hour withdrawal restriction
+   */
+  async confirmTransactionPinReset(
+    userId: number,
+    otp: string,
+    newPin: string,
+    confirmPin: string,
+  ): Promise<{ message: string; success: boolean; restrictionEndsAt: Date }> {
+    // Validate PIN format
+    if (!/^\d{4}$/.test(newPin)) {
+      ErrorHelper.BadRequestException('Transaction PIN must be exactly 4 digits');
+    }
+
+    if (newPin !== confirmPin) {
+      ErrorHelper.BadRequestException('New PIN and confirm PIN do not match');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['security'],
+    });
+
+    if (!user) {
+      ErrorHelper.NotFoundException('User not found');
+    }
+
+    // Find and validate OTP
+    const otpRecord = await this.otpRepository.findOne({
+      where: {
+        userId: user.id,
+        otp,
+        purpose: OtpPurpose.TRANSACTION_PIN_RESET,
+        isUsed: false,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!otpRecord) {
+      ErrorHelper.BadRequestException('Invalid or expired OTP');
+    }
+
+    if (otpRecord.expiresAt < new Date()) {
+      ErrorHelper.BadRequestException('OTP has expired. Please request a new one.');
+    }
+
+    // Mark OTP as used
+    await this.otpRepository.update(otpRecord.id, { isUsed: true });
+
+    // Encrypt new PIN
+    const encryptedPin = CryptoUtil.encryptPin(newPin);
+
+    // Set restriction end time (24 hours from now)
+    const restrictionEndsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    // Update security record
+    await this.userSecurityRepository.update(user.security.id, {
+      transactionPin: encryptedPin,
+      transactionPinFailedAttempts: 0,
+      transactionPinLockedUntil: null as any,
+      transactionPinChangedAt: new Date(),
+      transactionPinResetAt: new Date(), // This triggers the 24h restriction
+    });
+
+    this.logger.log(`Transaction PIN reset for user ${userId}. Withdrawal restricted until ${restrictionEndsAt.toISOString()}`);
+
+    // Send confirmation notification
+    this.notificationService.sendEmail(
+      user.email,
+      'Transaction PIN Reset Successful',
+      `<p>Your transaction PIN has been successfully reset.</p>
+       <p><strong>Important:</strong> For security reasons, withdrawals are restricted for 24 hours after a PIN reset.</p>
+       <p>Restrictions end at: ${restrictionEndsAt.toLocaleString()}</p>
+       <p>If you did not perform this action, please contact support immediately.</p>`,
+    ).catch(err => this.logger.error(`Failed to send PIN reset confirmation email: ${err.message}`));
+
+    return {
+      message: 'Transaction PIN reset successfully. Withdrawals are restricted for 24 hours.',
+      success: true,
+      restrictionEndsAt,
+    };
+  }
+
+  /**
+   * Check if user has an active PIN reset restriction
+   * Returns null if no restriction, or the restriction end time
+   */
+  async getTransactionPinResetRestriction(userId: number): Promise<{ restricted: boolean; endsAt?: Date; remainingHours?: number }> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['security'],
+    });
+
+    if (!user?.security?.transactionPinResetAt) {
+      return { restricted: false };
+    }
+
+    const resetAt = new Date(user.security.transactionPinResetAt);
+    const restrictionEndsAt = new Date(resetAt.getTime() + 24 * 60 * 60 * 1000);
+
+    if (restrictionEndsAt > new Date()) {
+      const remainingMs = restrictionEndsAt.getTime() - Date.now();
+      const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000));
+
+      return {
+        restricted: true,
+        endsAt: restrictionEndsAt,
+        remainingHours,
+      };
+    }
+
+    return { restricted: false };
   }
 }

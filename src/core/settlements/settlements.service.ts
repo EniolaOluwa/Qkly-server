@@ -35,7 +35,9 @@ export class SettlementsService {
     private readonly walletRepository: Repository<Wallet>,
     @Inject(forwardRef(() => PaymentService))
     private readonly paymentService: PaymentService,
+    @Inject(forwardRef(() => BankAccountsService))
     private readonly bankAccountsService: BankAccountsService,
+    @Inject(forwardRef(() => WalletsService))
     private readonly walletsService: WalletsService,
     private readonly dataSource: DataSource,
   ) { }
