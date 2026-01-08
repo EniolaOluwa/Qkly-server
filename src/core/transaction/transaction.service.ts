@@ -38,6 +38,7 @@ export class TransactionService {
 
       const queryBuilder = this.transactionRepository.createQueryBuilder('transaction')
         .leftJoinAndSelect('transaction.user', 'user')
+        .leftJoinAndSelect('user.profile', 'userProfile')
         .leftJoinAndSelect('transaction.business', 'business');
 
       // Search
@@ -220,7 +221,7 @@ export class TransactionService {
   async findOne(id: number): Promise<Transaction> {
     const transaction = await this.transactionRepository.findOne({
       where: { id },
-      relations: ['user', 'business', 'order']
+      relations: ['user', 'user.profile', 'business', 'order']
     });
 
     if (!transaction) {

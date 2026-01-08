@@ -8,6 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { ApiProperty } from '@nestjs/swagger';
 import { User } from '../../users/entity/user.entity';
 import { Business } from '../../businesses/business.entity';
 import { Order } from '../../order/entity/order.entity';
@@ -44,6 +45,7 @@ export class Transaction {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @ApiProperty({ description: 'The unique reference for the transaction' })
   @Column({ unique: true, nullable: false })
   reference: string;
 
@@ -51,7 +53,7 @@ export class Transaction {
   @Index()
   userId: number | null;
 
-
+  @ApiProperty({ type: () => User, description: 'The user associated with the transaction' })
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
