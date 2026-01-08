@@ -21,9 +21,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
-import { UserRole } from '../../common/auth/user-role.enum';
 import { Public } from '../../common/decorators/public.decorator';
-import { Roles } from '../../common/decorators/roles.decorator';
 import {
   CreatePinResponseDto,
   CreatePinWithReferenceDto,
@@ -41,18 +39,17 @@ import {
   RegisterUserResponseDto,
   ResetPasswordDto,
   ResetPasswordResponseDto,
+  UpgradeToTier3Dto,
   VerifyCreatePinOtpDto,
   VerifyCreatePinOtpResponseDto,
-  UpgradeToTier3Dto,
   VerifyKycDto,
   VerifyPasswordResetOtpDto,
   VerifyPasswordResetOtpResponseDto,
   VerifyPhoneOtpDto,
   VerifyPhoneOtpResponseDto
 } from '../../common/dto/responses.dto';
-import { RoleGuard } from '../../common/guards/role.guard';
 import { ErrorHelper } from '../../common/utils';
-import { ChangePasswordDto, ChangePinDto, UpdateUserProfileDto, CreateTransactionPinDto, ChangeTransactionPinDto, ConfirmTransactionPinResetDto } from './dto/user.dto';
+import { ChangePasswordDto, ChangePinDto, ChangeTransactionPinDto, ConfirmTransactionPinResetDto, CreateTransactionPinDto, UpdateUserProfileDto } from './dto/user.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { UsersService } from './users.service';
 
@@ -95,17 +92,26 @@ export class UsersController {
   async registerUser(
     @Body(ValidationPipe) registerUserDto: RegisterUserDto,
   ) {
-    const register = this.usersService.registerUser(registerUserDto);
-    return register
+    const { message, ...rest } = await this.usersService.registerUser(registerUserDto);
+
+    return HttpResponse.success({
+      data: rest,
+      message
+    })
   }
 
+  @ApiBearerAuth()
   @Post('send-email-verification')
   @ApiOperation({ summary: 'Send email verification code' })
   @ApiResponse({ status: 200, description: 'Verification email sent' })
   async sendEmailVerification(
     @Request() req,
   ) {
-    return this.usersService.sendEmailVerification(req.user.userId); // req.user.userId based on likely JwtStrategy payload
+    const data = await this.usersService.sendEmailVerification(req.user.userId);
+    return HttpResponse.success({
+      data: data,
+      message: 'Verification email sent'
+    })
   }
 
   @Public()
@@ -115,7 +121,11 @@ export class UsersController {
   async verifyEmail(
     @Body() verifyEmailDto: VerifyEmailDto,
   ) {
-    return this.usersService.verifyEmail(verifyEmailDto.token);
+    const data = this.usersService.verifyEmail(verifyEmailDto.token);
+    return HttpResponse.success({
+      data: data,
+      message: 'Email verified successfully'
+    })
   }
 
   @Public()
@@ -277,7 +287,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('selfie_image', {
     limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB limit
+      fileSize: 5 * 1024 * 1024,
     },
     fileFilter: (req, file, cb) => {
       const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png'];
@@ -779,11 +789,13 @@ export class UsersController {
       ErrorHelper.BadRequestException('Authenticated user id not found');
     }
 
-    const data = await this.usersService.createTransactionPin(authUserId, createTransactionPinDto);
+    const {
+      message, ...rest
+    } = await this.usersService.createTransactionPin(authUserId, createTransactionPinDto);
 
     return HttpResponse.success({
-      data,
-      message: 'Transaction PIN created successfully',
+      data: rest,
+      message,
     });
   }
 

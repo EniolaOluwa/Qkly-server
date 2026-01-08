@@ -14,6 +14,26 @@ import { v4 as uuidv4 } from 'uuid';
 
 export const IgnoredPropertyName = Symbol('IgnoredPropertyName');
 
+/**
+ * Safely stringify objects, handling circular references
+ */
+function safeStringify(obj: any): string {
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (_key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular]';
+        }
+        seen.add(value);
+      }
+      return value;
+    });
+  } catch (error) {
+    return `[Unable to stringify: ${error.message}]`;
+  }
+}
+
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
@@ -31,7 +51,7 @@ export class LoggingInterceptor implements NestInterceptor {
     (request as any).requestId = requestId;
 
     this.logger.log(
-      `[${requestId}] REQUEST: ${method} ${url} - User-Agent: ${userAgent} - Body: ${JSON.stringify(body)}`
+      `[${requestId}] REQUEST: ${method} ${url} - User-Agent: ${userAgent} - Body: ${safeStringify(body)}`
     );
 
     const isIgnored = context.getHandler()[IgnoredPropertyName];
@@ -47,7 +67,7 @@ export class LoggingInterceptor implements NestInterceptor {
         const { statusCode } = response;
 
         this.logger.log(
-          `[${requestId}] RESPONSE: ${method} ${url} - Status: ${statusCode} - Duration: ${duration}ms - Body: ${JSON.stringify(responseBody)}`
+          `[${requestId}] RESPONSE: ${method} ${url} - Status: ${statusCode} - Duration: ${duration}ms - Body: ${safeStringify(responseBody)}`
         );
       }),
       catchError((error) => {
@@ -56,7 +76,7 @@ export class LoggingInterceptor implements NestInterceptor {
         const statusCode = error.status || error.statusCode || 500;
 
         this.logger.error(
-          `[${requestId}] ERROR RESPONSE: ${method} ${url} - Status: ${statusCode} - Duration: ${duration}ms - Error: ${error.message || 'Unknown error'} - Body: ${JSON.stringify(error.response || error)}`
+          `[${requestId}] ERROR RESPONSE: ${method} ${url} - Status: ${statusCode} - Duration: ${duration}ms - Error: ${error.message || 'Unknown error'} - Body: ${safeStringify(error.response || error)}`
         );
 
         return throwError(() => error);
