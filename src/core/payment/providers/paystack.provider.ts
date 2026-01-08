@@ -81,7 +81,7 @@ export class PaystackProvider extends IPaymentProvider {
     try {
       const body = {
         ...payload,
-        settlement_schedule: 'manual', // Enforce MANUAL settlement
+        settlement_schedule: 'auto', // T+1 auto-settlement to merchant's bank
       };
 
       this.logger.log(`Creating Paystack Subaccount for ${payload.business_name}`);
