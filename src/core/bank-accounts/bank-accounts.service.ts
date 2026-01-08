@@ -127,6 +127,10 @@ export class BankAccountsService {
     return { message: 'Bank account deleted successfully' };
   }
 
+  async updateBankAccount(id: number, userId: number, updates: Partial<BankAccount>) {
+    await this.bankAccountRepository.update({ id, userId }, updates);
+  }
+
   /**
    * Helper to get bank name from code
    */
