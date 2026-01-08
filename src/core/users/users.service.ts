@@ -160,6 +160,8 @@ export class UsersService {
         longitude: registerUserDto.longitude,
         latitude: registerUserDto.latitude,
       });
+
+
       await this.userSecurityRepository.save(userSecurity);
 
       // Create user onboarding record
@@ -169,6 +171,8 @@ export class UsersService {
         isCompleted: false,
         progressPercentage: 0,
       });
+
+
       await this.userOnboardingRepository.save(userOnboarding);
 
       // Fetch user with role and related entities
@@ -192,7 +196,7 @@ export class UsersService {
       const accessToken = this.jwtService.sign(payload);
 
       // Return user information with token (phone in standardized format)
-      return {
+      const data = {
         message: 'User registered successfully',
         accessToken,
         tokenType: 'Bearer',
@@ -206,6 +210,8 @@ export class UsersService {
         isPhoneVerified: userProfile.isPhoneVerified,
         onboardingStep: userOnboarding.currentStep,
       };
+
+      return data
     } catch (error) {
       throw error
     }
@@ -237,6 +243,8 @@ export class UsersService {
     if (!user) {
       ErrorHelper.UnauthorizedException('Invalid email or password');
     }
+
+    this.logger.log(`User ${user.id} logging in. isPhoneVerified from DB: ${user.profile?.isPhoneVerified}`);
 
     // Check user status
     if (user.status === UserStatus.SUSPENDED) {
@@ -326,12 +334,18 @@ export class UsersService {
     userId: number,
     phone: string,
   ): Promise<{ message: string; expiryInMinutes: number; expiryTimestamp: Date }> {
+
+    const standardizedPhone = PhoneUtil.standardize(
+      phone,
+      CountryCode.NIGERIA,
+    );
+
     const user = await this.userRepository.findOne({
       where: { id: userId },
       relations: ['profile'],
     });
 
-    if (!user || user.profile?.phone !== phone) {
+    if (!user || user.profile?.phone !== standardizedPhone) {
       ErrorHelper.NotFoundException(
         'User with this ID and phone number not found',
       );
@@ -357,7 +371,7 @@ export class UsersService {
 
 
     // Send OTP via Termii SMS
-    await this.sendOtpViaTermii(phone, otpCode);
+    await this.sendOtpViaTermii(standardizedPhone, otpCode);
 
     return {
       message: 'OTP sent successfully to your phone number',
@@ -373,17 +387,28 @@ export class UsersService {
     otpCode: string,
   ): Promise<{ message: string; verified: boolean }> {
     try {
+
+      const standardizedPhone = PhoneUtil.standardize(
+        phone,
+        CountryCode.NIGERIA,
+      );
+
+      this.logger.log(`Verifying phone OTP for user ${userId}, phone: ${standardizedPhone}`);
+
       // Find user by ID with profile and onboarding
       const user = await this.userRepository.findOne({
         where: { id: userId },
         relations: ['profile', 'onboarding'],
       });
 
-      if (!user || user.profile?.phone !== phone) {
+      if (!user || user.profile?.phone !== standardizedPhone) {
+        this.logger.error(`User not found or phone mismatch. User exists: ${!!user}, Profile phone: ${user?.profile?.phone}, Requested: ${standardizedPhone}`);
         ErrorHelper.NotFoundException(
           'User with this ID and phone number not found',
         );
       }
+
+      this.logger.log(`Current isPhoneVerified status: ${user.profile.isPhoneVerified}`);
 
       // Find the most recent unused OTP for this user and phone
       const otp = await this.otpRepository.findOne({
@@ -413,20 +438,19 @@ export class UsersService {
       // Mark OTP as used
       await this.otpRepository.update(otp.id, { isUsed: true });
 
-
+      // Update phone verification status
       if (user.profile) {
-        const a = await this.userProfileRepository.update(user.profile.id, {
-          isPhoneVerified: true,
-        });
+        user.profile.isPhoneVerified = true;
+        const savedProfile = await this.userProfileRepository.save(user.profile);
+        this.logger.log(`Phone verified and saved for user ${userId}, profile ${user.profile.id}. New status: ${savedProfile.isPhoneVerified}`);
       }
 
       // Update onboarding step to PHONE_VERIFICATION if appropriate
       if (user.onboarding) {
         const nextStep = OnboardingStep.PHONE_VERIFICATION;
         if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
-          await this.userOnboardingRepository.update(user.onboarding.id, {
-            currentStep: nextStep,
-          });
+          user.onboarding.currentStep = nextStep;
+          await this.userOnboardingRepository.save(user.onboarding);
         }
       }
 
@@ -439,14 +463,11 @@ export class UsersService {
     }
   }
 
-
-
-
   // Pin creation
   async createPin(userId: number, pin: string): Promise<CreatePinResponseDto> {
     try {
       // Validate PIN format (4 digits only)
-      if (!/^\d{ 4 } $ /.test(pin)) {
+      if (!/^\d{4}$/.test(pin)) {
         ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
       }
 
@@ -609,7 +630,7 @@ export class UsersService {
     success: boolean;
   }> {
     // Validate PIN format (4 digits only)
-    if (!/^\d{ 4 } $ /.test(pin)) {
+    if (!/^\d{4}$/.test(pin)) {
       ErrorHelper.BadRequestException('PIN must be exactly 4 digits');
     }
 
@@ -829,7 +850,6 @@ export class UsersService {
       ErrorHelper.BadRequestException('Email is already verified');
     }
 
-    // Generate 6-digit OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     const expiresAt = new Date();
@@ -845,7 +865,6 @@ export class UsersService {
 
     await this.otpRepository.save(otp);
 
-    // Send email using NotificationService
     const firstName = user.profile?.firstName || 'User';
     await this.notificationService.sendEmailVerification(user.email, firstName, otpCode);
 
@@ -856,7 +875,6 @@ export class UsersService {
   }
 
   async verifyEmail(token: string): Promise<{ message: string; success: boolean }> {
-    // Find the verification token in the database
     const tokenRecord = await this.otpRepository.findOne({
       where: {
         otp: token,
@@ -1385,6 +1403,8 @@ export class UsersService {
       ErrorHelper.UnauthorizedException('Invalid credentials');
     }
 
+    this.logger.log(`User ${user.id} logging in with PIN. isPhoneVerified from DB: ${user.profile?.isPhoneVerified}`);
+
     // Check user status
     if (user.status !== UserStatus.ACTIVE) {
       ErrorHelper.UnauthorizedException('Account is not active. Contact support.');
@@ -1725,7 +1745,7 @@ export class UsersService {
 
 
     const response = await firstValueFrom(
-      this.httpService.post(`${termiiBaseUrl} /api/sms / send`, payload, {
+      this.httpService.post(`${termiiBaseUrl}/api/sms/send`, payload, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -1893,7 +1913,7 @@ export class UsersService {
       transactionPinFailedAttempts: 0,
       transactionPinLockedUntil: null as any,
       transactionPinChangedAt: new Date(),
-      transactionPinResetAt: new Date(), // This triggers the 24h restriction
+      transactionPinResetAt: new Date(),
     });
 
     this.logger.log(`Transaction PIN reset for user ${userId}. Withdrawal restricted until ${restrictionEndsAt.toISOString()}`);
