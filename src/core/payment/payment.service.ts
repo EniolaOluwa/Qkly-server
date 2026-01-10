@@ -1,6 +1,8 @@
 // src/modules/payments/payment.service.ts
 
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { ErrorHelper } from '../../common/utils';
 import { OrderService } from '../order/order.service';
@@ -24,6 +26,7 @@ import {
 } from './dto/payment-provider.dto';
 import { IPaymentProvider } from './interfaces/payment-provider.interface';
 import { PaystackProvider } from './providers/paystack.provider';
+import { WebhookEvent } from './entities/webhook-event.entity';
 
 /**
  * Payment Service - Unified interface for all payment providers
@@ -36,6 +39,8 @@ export class PaymentService {
   private readonly providerType: PaymentProviderType;
 
   constructor(
+    @InjectRepository(WebhookEvent)
+    private readonly webhookEventRepository: Repository<WebhookEvent>,
     private readonly configService: ConfigService,
     private readonly paystackProvider: PaystackProvider,
     @Inject(forwardRef(() => OrderService))
@@ -265,13 +270,15 @@ export class PaymentService {
   // ============================================================
 
   /**
-   * Process webhook event from provider
+   * Process webhook event from provider with idempotency
    */
   async processWebhook(
     payload: any,
     signature?: string,
     rawBody?: string,
   ): Promise<WebhookEventDto> {
+    let webhookEvent: WebhookEvent | null = null;
+
     try {
       // Validate signature if provided
       if (signature && rawBody) {
@@ -283,15 +290,69 @@ export class PaymentService {
 
       const event = await this.provider.processWebhook(payload, signature);
 
+      // Extract unique event ID from payload
+      // Paystack sends event ID in payload.data.id or payload.id
+      const eventId = payload.data?.id?.toString() || payload.id?.toString() || payload.event;
+      const reference = event.eventData.paymentReference || event.eventData.transactionReference;
+
+      if (!eventId) {
+        this.logger.warn('Webhook event missing unique ID, processing without idempotency check');
+      } else {
+        // Check for duplicate webhook (idempotency)
+        const existingEvent = await this.webhookEventRepository.findOne({
+          where: {
+            provider: this.providerType,
+            eventId: eventId,
+          },
+        });
+
+        if (existingEvent) {
+          this.logger.warn(
+            `Duplicate webhook detected: ${eventId} (${event.eventType}). Already processed at ${existingEvent.processedAt}. Skipping.`
+          );
+          return event; // Return early without processing
+        }
+
+        // Create webhook event record for idempotency tracking
+        webhookEvent = this.webhookEventRepository.create({
+          provider: this.providerType,
+          eventId: eventId,
+          eventType: event.eventType,
+          reference: reference,
+          payload: payload,
+          processed: false,
+          attempts: 1,
+        });
+
+        await this.webhookEventRepository.save(webhookEvent);
+        this.logger.log(`Webhook event ${eventId} (${event.eventType}) recorded for processing`);
+      }
+
       // Forward to OrderService for processing
       await this.orderService.processWebhook(event);
 
       // Forward to WalletsService for processing (Transfers/Payouts)
       await this.walletsService.processWebhook(event);
 
+      // Mark webhook as processed
+      if (webhookEvent) {
+        webhookEvent.processed = true;
+        webhookEvent.processedAt = new Date();
+        await this.webhookEventRepository.save(webhookEvent);
+        this.logger.log(`Webhook event ${eventId} processed successfully`);
+      }
+
       return event;
     } catch (error) {
       this.logger.error('Failed to process webhook:', error.message);
+
+      // Record error in webhook event if it was created
+      if (webhookEvent) {
+        webhookEvent.error = error.message;
+        webhookEvent.attempts += 1;
+        await this.webhookEventRepository.save(webhookEvent);
+      }
+
       throw error;
     }
   }

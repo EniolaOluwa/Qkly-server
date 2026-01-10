@@ -1,28 +1,31 @@
 import {
+  BeforeInsert,
+  Column,
+  CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
-  PrimaryGeneratedColumn,
-  Column,
-  ManyToOne,
   JoinColumn,
+  ManyToOne,
   OneToMany,
   OneToOne,
-  CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
-  BeforeInsert,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn
 } from 'typeorm';
-import { Business } from '../../businesses/business.entity';
-import { User } from '../../users/entity/user.entity';
-import { OrderStatus, DeliveryMethod } from '../../../common/enums/order.enum';
-import { PaymentStatus, PaymentMethod } from '../../../common/enums/payment.enum';
-import { OrderItem } from './order-items.entity';
 import { v4 as uuidv4 } from 'uuid';
-import { OrderStatusHistory } from './order-status-history.entity';
-import { OrderPayment } from './order-payment.entity';
-import { OrderShipment } from './order-shipment.entity';
-import { OrderRefund } from './order-refund.entity';
+import { DeliveryMethod, OrderStatus } from '../../../common/enums/order.enum';
+import { PaymentMethod, PaymentStatus } from '../../../common/enums/payment.enum';
+import { Business } from '../../businesses/business.entity';
 import { Settlement } from '../../settlements/entities/settlement.entity';
+import { User } from '../../users/entity/user.entity';
+import { OrderItem } from './order-items.entity';
+import { OrderPayment } from './order-payment.entity';
+import { OrderRefund } from './order-refund.entity';
+import { OrderShipment } from './order-shipment.entity';
+import { OrderStatusHistory } from './order-status-history.entity';
+import { Exclude } from 'class-transformer';
+
+import { ApiProperty } from '@nestjs/swagger';
 
 @Entity('orders')
 @Index(['userId', 'businessId'])
@@ -56,6 +59,7 @@ export class Order {
 
   @ManyToOne(() => Business, { nullable: false })
   @JoinColumn({ name: 'businessId' })
+  @Exclude()
   business: Business;
 
   @Column({ unique: true, nullable: true })
@@ -143,6 +147,7 @@ export class Order {
 
   // Relationships to new entities
   @OneToMany(() => OrderStatusHistory, (history) => history.order, { cascade: true })
+  @ApiProperty({ type: () => [OrderStatusHistory] })
   statusHistoryRecords: OrderStatusHistory[];
 
   @OneToOne(() => OrderPayment, (payment) => payment.order, { cascade: true })

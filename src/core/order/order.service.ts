@@ -228,6 +228,9 @@ export class OrderService {
       if (relations.includes('business')) {
         qb = qb.leftJoinAndSelect('ord.business', 'business');
       }
+      if (relations.includes('statusHistoryRecords')) {
+        qb = qb.leftJoinAndSelect('ord.statusHistoryRecords', 'statusHistoryRecords');
+      }
 
       if (id) {
         qb = qb.where('ord.id = :id', { id });
@@ -265,6 +268,9 @@ export class OrderService {
         if (relations.includes('items')) {
           selectFields.push('items');
         }
+        if (relations.includes('statusHistoryRecords')) {
+          selectFields.push('statusHistoryRecords');
+        }
         qb = qb.select(selectFields);
       }
 
@@ -297,6 +303,7 @@ export class OrderService {
   async findOrderById(id: number): Promise<Order> {
     return this.findOrderByIdentifier({
       id,
+      relations: ['items', 'user', 'business', 'statusHistoryRecords'],
     });
   }
 
@@ -314,14 +321,14 @@ export class OrderService {
         'business.location',
         'business.logo',
         'items',
+        'statusHistoryRecords',
       ],
+      relations: ['items', 'user', 'business', 'statusHistoryRecords'],
     });
   }
 
   async findOrderByTransactionReference(transactionReference: string): Promise<Order> {
-    return this.findOrderByIdentifier({
-      transactionReference,
-    });
+    return this.findOrderByIdentifier({ transactionReference, relations: ['items', 'user', 'business', 'statusHistoryRecords'] });
   }
 
 
@@ -475,7 +482,7 @@ export class OrderService {
 
       const order = await queryRunner.manager.findOne(Order, {
         where: { id: orderId },
-        relations: ['items', 'payment'],
+        relations: ['items', 'payment', 'statusHistoryRecords'],
       });
 
       if (!order) {
@@ -545,6 +552,18 @@ export class OrderService {
 
       // Update order status
       order.paymentStatus = PaymentStatus.INITIATED;
+
+      // Log status change to history
+      this.addStatusToHistory(
+        order,
+        order.status, // Order status remains same (e.g. PENDING)
+        order.userId, // Triggered by user
+        `Payment initiated via ${initiatePaymentDto.paymentMethod}`,
+        {
+          paymentMethod: initiatePaymentDto.paymentMethod,
+        }
+      );
+
       await queryRunner.manager.save(order);
       await queryRunner.commitTransaction(); // Commit check/update before external call
 
@@ -833,7 +852,7 @@ export class OrderService {
             { transactionReference: transactionReference || paymentReference },
             { transactionReference: paymentReference },
           ],
-          relations: ['items', 'business'],
+          relations: ['items', 'business', 'statusHistoryRecords'],
         })) as Order;
 
         if (!order) {
@@ -1116,16 +1135,14 @@ export class OrderService {
       // Validate status transition
       this.validateStatusTransition(order.status, status);
 
+      // Add to status history BEFORE updating order.status so that 'createStatusHistoryEntry' captures the correct 'previousStatus'
+      this.addStatusToHistory(order, status, userId, notes);
+
       // Update order status
       order.status = status;
       if (notes) {
         order.notes = notes;
       }
-
-      // Add to status history (duplicate check inside createStatusHistoryEntry logic if needed, but strict duplicate check valid above)
-      // Explicitly create and save history entry to avoid cascade issues
-      const historyEntry = this.createStatusHistoryEntry(order, status, userId, notes);
-      await queryRunner.manager.save(OrderStatusHistory, historyEntry);
 
       // Update payment status if needed
       this.updatePaymentStatusForOrderStatus(order);
@@ -1225,8 +1242,27 @@ export class OrderService {
       const allItemsHaveStatus = order.items.every((i) => i.status === status);
       if (allItemsHaveStatus) {
         const orderStatus = this.mapOrderItemStatusToOrderStatus(status);
-        if (orderStatus) {
+        if (orderStatus && orderStatus !== order.status) {
+          const previousStatus = order.status;
           order.status = orderStatus;
+
+          await queryRunner.manager.save(Order, order);
+
+          // Log automatic order status update
+          this.addStatusToHistory(
+            order,
+            orderStatus,
+            null, // System triggered
+            `Auto-update: All items are ${status}`,
+            {
+              trigger: 'AUTO_ITEM_UPDATE',
+              itemStatus: status
+            }
+          );
+          // Since we are inside a transaction and using queryRunner, we should save the history manually
+          // The addStatusToHistory helper pushes to the array, but doesn't save.
+          // And since we just saved the order above, we might need to save history explicitly.
+          // OR save order again? Saving order again is easier given cascade.
           await queryRunner.manager.save(Order, order);
         }
       }
@@ -1554,7 +1590,18 @@ export class OrderService {
         return;
       }
 
-      this.logger.log(`Processing Webhook Event: ${event.eventType} for Reference: ${event.eventData.paymentReference}`);
+      this.logger.log(`Processing Webhook Event: ${event.eventType}`);
+
+      // Ignore transfer events (handled by WalletsService)
+      if (
+        event.eventType === 'SUCCESSFUL_TRANSFER' ||
+        event.eventType === 'FAILED_TRANSFER' ||
+        event.eventType.startsWith('transfer.')
+      ) {
+        return;
+      }
+
+      this.logger.log(`Processing Order Webhook: ${event.eventType} for Reference: ${event.eventData.paymentReference}`);
 
       // 3. Find Order and Update
       const reference = event.eventData.paymentReference;
@@ -1711,7 +1758,6 @@ export class OrderService {
 
       // Update order with payment information
       order.paymentStatus = paymentData.paymentStatus;
-      order.status = paymentData.orderStatus;
       order.paymentMethod = paymentData.paymentMethod;
 
       // Create or update OrderPayment entity
@@ -1760,6 +1806,21 @@ export class OrderService {
         }
       }
 
+      // Log status change to history (BEFORE updating order status to capture previous status)
+      if (paymentData.orderStatus && paymentData.orderStatus !== order.status) {
+        this.addStatusToHistory(
+          order,
+          paymentData.orderStatus,
+          null, // System action
+          `Payment processed: ${paymentData.paymentStatus}`,
+          {
+            paymentReference: paymentData.paymentReference,
+            provider: paymentData.provider,
+          }
+        );
+        order.status = paymentData.orderStatus;
+      }
+
       await entityManager.save(Order, order);
       return order;
     } catch (error) {
@@ -1796,7 +1857,6 @@ export class OrderService {
 
       // Update order with payment information
       order.paymentStatus = paymentData.paymentStatus;
-      order.status = paymentData.orderStatus;
       order.paymentMethod = paymentData.paymentMethod;
 
       // Create or update OrderPayment entity
@@ -1821,7 +1881,6 @@ export class OrderService {
         });
       }
 
-      // Update payment status and timestamps
       // Update payment status and timestamps
       orderPayment.status = paymentData.paymentStatus;
 
@@ -1848,6 +1907,21 @@ export class OrderService {
 
         // Handle business settlement for paid orders
         await this.handleBusinessSettlement(order.id, entityManager);
+      }
+
+      // Log status change to history (BEFORE updating order status to capture previous status)
+      if (paymentData.orderStatus && paymentData.orderStatus !== order.status) {
+        this.addStatusToHistory(
+          order,
+          paymentData.orderStatus,
+          null, // System action
+          `Payment processed: ${paymentData.paymentStatus}`,
+          {
+            paymentReference: paymentData.paymentReference,
+            provider: paymentData.provider,
+          }
+        );
+        order.status = paymentData.orderStatus;
       }
 
       await entityManager.save(Order, order);
@@ -2681,11 +2755,36 @@ export class OrderService {
     }
   }
 
-  private hasStatusInHistory(order: Order, status: OrderStatus): boolean {
-    if (!order.statusHistoryRecords || order.statusHistoryRecords.length === 0) {
+  /**
+   * Check if the current status matches the new status
+   * This prevents adding the same status consecutively (e.g., processing → processing)
+   * but allows re-entry to a previous status (e.g., processing → shipped → processing)
+   */
+  private isConsecutiveDuplicateStatus(order: Order, status: OrderStatus): boolean {
+    // If order.status hasn't been set yet, not a duplicate
+    if (!order.status) {
       return false;
     }
-    return order.statusHistoryRecords.some(entry => entry.status === status);
+
+    // Check if new status is same as current order status
+    return order.status === status;
+  }
+
+  /**
+   * Get the most recent status from history
+   * Used as fallback when order.status might not be reliable
+   */
+  private getLatestHistoryStatus(order: Order): OrderStatus | null {
+    if (!order.statusHistoryRecords || order.statusHistoryRecords.length === 0) {
+      return null;
+    }
+
+    // History records should be ordered by createdAt, get the last one
+    const sortedHistory = [...order.statusHistoryRecords].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+    return sortedHistory[0]?.status || null;
   }
 
   private addStatusToHistory(
@@ -2699,10 +2798,11 @@ export class OrderService {
       order.statusHistoryRecords = [];
     }
 
-    // Prevent duplicate status entries
-    if (this.hasStatusInHistory(order, newStatus)) {
+    // Prevent consecutive duplicate status entries
+    // This allows re-entry (e.g., processing → shipped → processing) but prevents (processing → processing)
+    if (this.isConsecutiveDuplicateStatus(order, newStatus)) {
       this.logger.warn(
-        `Status ${newStatus} already exists in history for order ${order.id}, skipping duplicate`
+        `Consecutive duplicate status detected for order ${order.id}: ${order.status} → ${newStatus}. Skipping.`
       );
       return;
     }

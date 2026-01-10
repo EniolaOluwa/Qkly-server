@@ -1,8 +1,8 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { Logger } from '@nestjs/common';
+import { Logger, ClassSerializerInterceptor } from '@nestjs/common';
 import { ValidationPipe } from './common/pipes';
 import { LoggingInterceptor } from './common/logging/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors';
@@ -41,6 +41,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter(app.get(ConfigService)));
   app.useGlobalFilters(new MulterExceptionFilter());
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
 
   app.setGlobalPrefix('v1');
