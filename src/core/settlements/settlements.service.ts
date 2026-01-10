@@ -89,7 +89,10 @@ export class SettlementsService {
         platformFee = MAX_FEE;
       }
 
-      const settlementAmount = Number(order.total) - Number(platformFee);
+      // Calculate Settlement Amount: Order Total - Platform Fee - *Shipping Fee*
+      // Shipping fee is retained by platform to pay ShipBubble
+      const shippingFee = Number(order.shippingFee) || 0;
+      const settlementAmount = Number(order.total) - Number(platformFee) - shippingFee;
 
       // 4. Create Settlement Record
       const settlementReference = `STL-${uuidv4()}`;

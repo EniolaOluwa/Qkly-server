@@ -31,6 +31,7 @@ import { UserProgressModule } from './core/user-progress/user-progress.module';
 import { JwtAuthGuard } from './core/users';
 import { UsersModule } from './core/users/users.module';
 import { WalletsModule } from './core/wallets/wallets.module';
+import { LogisticsModule } from './core/logistics/logistics.module';
 import { dataSource } from './database';
 import { SeedModule } from './database/seeds/seed.module';
 
@@ -76,6 +77,7 @@ import { SeedModule } from './database/seeds/seed.module';
     }]),
     TransferModule,
     HealthModule,
+    LogisticsModule,
   ],
   controllers: [AppController],
   providers: [

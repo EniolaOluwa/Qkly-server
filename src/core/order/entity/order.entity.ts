@@ -136,6 +136,13 @@ export class Order {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  /**
+   * ShipBubble/Logistics metadata
+   * Stores address codes, request tokens, service codes
+   */
+  @Column({ type: 'jsonb', nullable: true })
+  shippingMetadata: any;
+
   @OneToMany(() => OrderItem, (orderItem) => orderItem.order, {
     cascade: true,
     eager: true,

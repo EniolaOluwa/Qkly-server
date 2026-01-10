@@ -118,6 +118,16 @@ export class BaseOrderDto {
   @MaxLength(500)
   notes?: string;
 
+  @ApiProperty({ description: 'Shipping fee (optional, for ShipBubble)', example: 1500, required: false })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  shippingFee?: number;
+
+  @ApiProperty({ description: 'Shipping metadata (optional, for ShipBubble)', example: { request_token: '...', service_code: '...' }, required: false })
+  @IsOptional()
+  shippingMetadata?: any;
+
   @ApiProperty({ description: 'Promo code (optional)', example: 'SUMMER20', required: false })
   @IsOptional()
   @IsString()

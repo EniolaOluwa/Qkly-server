@@ -21,6 +21,7 @@ import { SystemConfigService } from '../system-config/system-config.service';
 import { Transaction, TransactionFlow, TransactionStatus, TransactionType } from '../transaction/entity/transaction.entity';
 import { User } from '../users/entity/user.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
+import { ShipBubbleService } from '../logistics/shipbubble.service';
 import { CreateOrderDto, CreateOrderFromCartDto } from './dto/create-order.dto';
 import { FindAllOrdersDto, FindBusinessOrdersDto, UpdateOrderItemStatusDto, UpdateOrderStatusDto } from './dto/filter-order.dto';
 import { InitiatePaymentDto, ProcessPaymentDto, VerifyPaymentDto } from './dto/payment.dto';
@@ -28,6 +29,7 @@ import { OrderItem } from './entity/order-items.entity';
 import { OrderPayment } from './entity/order-payment.entity';
 import { OrderRefund } from './entity/order-refund.entity';
 import { OrderStatusHistory } from './entity/order-status-history.entity';
+import { OrderShipment } from './entity/order-shipment.entity';
 import { Order } from './entity/order.entity';
 
 /**
@@ -68,6 +70,8 @@ export class OrderService {
     private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
+    @InjectRepository(OrderShipment)
+    private readonly orderShipmentRepository: Repository<OrderShipment>,
     private readonly cartService: CartService,
     private readonly settlementsService: SettlementsService, // Inject Service
     private readonly notificationService: NotificationService,
@@ -76,6 +80,7 @@ export class OrderService {
     private readonly paymentService: PaymentService,
     private readonly dataSource: DataSource,
     private readonly systemConfigService: SystemConfigService,
+    private readonly shipBubbleService: ShipBubbleService,
   ) { }
 
 
@@ -1486,7 +1491,7 @@ export class OrderService {
       }
 
       // Calculate order totals
-      const shippingFee = this.calculateShippingFee(createOrderDto.deliveryMethod);
+      const shippingFee = createOrderDto.shippingFee ?? this.calculateShippingFee(createOrderDto.deliveryMethod);
       const tax = this.calculateTax(subtotal);
       const discount = 0;
       const total = subtotal + shippingFee + tax - discount;
@@ -1508,6 +1513,7 @@ export class OrderService {
         tax,
         discount,
         total,
+        shippingMetadata: createOrderDto.shippingMetadata,
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.PENDING,
         isGuestOrder,
@@ -1711,14 +1717,22 @@ export class OrderService {
       await queryRunner.commitTransaction();
       this.logger.log(`Payment transaction committed for order ${order.id}: ${transaction.paymentStatus}`);
 
-      // Handle settlement in a separate transaction (best effort - won't rollback payment if it fails)
+      // Handle settlement and ShipBubble fulfillment in separate asynchronous tries
       if (paymentData.paymentStatus === PaymentStatus.PAID) {
+        // 1. Settlement
         try {
           this.logger.log(`Triggering settlement for order ${order.id}`);
           await this.handleBusinessSettlementSafe(order.id);
         } catch (settlementError) {
-          this.logger.error(`Settlement failed for order ${order.id}, but payment is recorded: ${settlementError.message}`, settlementError.stack);
-          // Payment is already committed, so this won't cause a rollback
+          this.logger.error(`Settlement failed for order ${order.id}: ${settlementError.message}`);
+        }
+
+        // 2. ShipBubble Fulfillment (if metadata exists)
+        try {
+          this.logger.log(`Checking ShipBubble fulfillment for order ${order.id}`);
+          await this.handleShipBubbleFulfillment(order.id);
+        } catch (logisticsError) {
+          this.logger.error(`ShipBubble fulfillment initiation failed for order ${order.id}: ${logisticsError.message}`);
         }
       }
     } catch (error) {
@@ -1969,13 +1983,19 @@ export class OrderService {
         platformFee = order.total * feePercentage;
         if (platformFee > maxFee) platformFee = maxFee;
 
-        payoutAmount = order.total - platformFee;
-        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+        // Deduct Shipping Fee (Platform retains it to pay ShipBubble)
+        const shippingFee = Number(order.shippingFee) || 0;
+        payoutAmount = order.total - platformFee - shippingFee;
+
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Shipping ${shippingFee}, Merchant ${payoutAmount}`);
       } else {
         // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
         const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
         platformFee = order.total * settlementPercentage;
-        payoutAmount = order.total - platformFee;
+
+        // Deduct Shipping Fee (Platform retains it to pay ShipBubble)
+        const shippingFee = Number(order.shippingFee) || 0;
+        payoutAmount = order.total - platformFee - shippingFee;
       }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
@@ -2102,13 +2122,19 @@ export class OrderService {
         platformFee = order.total * feePercentage;
         if (platformFee > maxFee) platformFee = maxFee;
 
-        payoutAmount = order.total - platformFee;
-        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Merchant ${payoutAmount}`);
+        // Deduct Shipping Fee (Platform retains it to pay ShipBubble)
+        const shippingFee = Number(order.shippingFee) || 0;
+        payoutAmount = order.total - platformFee - shippingFee;
+
+        this.logger.log(`MAIN_BALANCE settlement: Total ${order.total}, Fee ${platformFee}, Shipping ${shippingFee}, Merchant ${payoutAmount}`);
       } else {
         // SUBACCOUNT mode: Funds already split, wallet credit is for tracking only
         const settlementPercentage = await this.systemConfigService.get<number>('SETTLEMENT_PERCENTAGE', 0.00);
         platformFee = order.total * settlementPercentage;
-        payoutAmount = order.total - platformFee;
+
+        // Deduct Shipping Fee (Platform retains it to pay ShipBubble)
+        const shippingFee = Number(order.shippingFee) || 0;
+        payoutAmount = order.total - platformFee - shippingFee;
       }
 
       const settlementReference = `STL-${uuidv4().substring(0, 8).toUpperCase()}`;
@@ -2930,5 +2956,85 @@ export class OrderService {
     // Often fallback to a configured admin email
     const adminEmail = this.configService.get<string>('ADMIN_EMAIL') || 'admin@qkly.com';
     await this.notificationService.sendRefundFailureAlert(adminEmail, orderId, reason);
+  }
+  /**
+   * Automatically initiate ShipBubble fulfillment for an order.
+   * Called after successful payment.
+   */
+  async handleShipBubbleFulfillment(orderId: number): Promise<void> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['items'],
+    });
+
+    if (!order) {
+      this.logger.error(`Fulfillment skipped: Order ${orderId} not found`);
+      return;
+    }
+
+    const { shippingMetadata } = order;
+    if (!shippingMetadata || !shippingMetadata.request_token || !shippingMetadata.service_code) {
+      this.logger.log(`Fulfillment skipped for order ${order.orderReference}: No ShipBubble metadata found`);
+      return;
+    }
+
+    try {
+      this.logger.log(`Initiating ShipBubble fulfillment for order ${order.orderReference}`);
+
+      const labelData = await this.shipBubbleService.createLabel({
+        request_token: shippingMetadata.request_token,
+        service_code: shippingMetadata.service_code,
+        courier_id: shippingMetadata.courier_id,
+      });
+
+      // Create OrderShipment record
+      const shipment = this.orderShipmentRepository.create({
+        orderId: order.id,
+        carrier: labelData.courier_name,
+        trackingNumber: labelData.tracking_number,
+        trackingUrl: labelData.tracking_url,
+        status: 'PENDING', // Initial status, will be updated by webhooks
+        recipientName: order.customerName,
+        recipientPhone: order.customerPhoneNumber,
+        shippingAddress: order.deliveryAddress,
+        carrierMetadata: {
+          shipment_id: labelData.shipment_id,
+          waybill_url: labelData.waybill_url,
+          request_token: shippingMetadata.request_token,
+        },
+        shippedAt: new Date(),
+      });
+
+      await this.orderShipmentRepository.save(shipment);
+
+      // Update Order Status to SHIPPED or PROCESSING (ShipBubble creates label immediately)
+      order.status = OrderStatus.SHIPPED;
+      await this.orderRepository.save(order);
+
+      this.addStatusToHistory(
+        order,
+        OrderStatus.SHIPPED,
+        null, // System
+        `Automated ShipBubble fulfillment initiated. Tracking: ${labelData.tracking_number}`,
+        {
+          carrier: labelData.courier_name,
+          trackingNumber: labelData.tracking_number,
+          waybillUrl: labelData.waybill_url
+        }
+      );
+
+      this.logger.log(`Order ${order.orderReference} fulfilled via ShipBubble. Tracking: ${labelData.tracking_number}`);
+
+    } catch (error) {
+      this.logger.error(`ShipBubble label creation failed for order ${order.orderReference}: ${error.message}`);
+      // Log failure to history
+      this.addStatusToHistory(
+        order,
+        order.status,
+        null,
+        `Automated fulfillment failed: ${error.message}`,
+        { error: error.message }
+      );
+    }
   }
 }

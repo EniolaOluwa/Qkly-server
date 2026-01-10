@@ -7,6 +7,7 @@ import { Order } from '../order/entity/order.entity';
 import { OrderPayment } from '../order/entity/order-payment.entity';
 import { OrderRefund } from '../order/entity/order-refund.entity';
 import { OrderStatusHistory } from '../order/entity/order-status-history.entity';
+import { OrderShipment } from '../order/entity/order-shipment.entity';
 import { Product } from '../product/entity/product.entity';
 import { Transaction } from '../transaction/entity/transaction.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
@@ -24,6 +25,7 @@ import { Settlement } from '../settlements/entities/settlement.entity';
       OrderPayment,
       OrderRefund,
       OrderStatusHistory,
+      OrderShipment,
       Product,
       Wallet,
       BusinessPaymentAccount,
