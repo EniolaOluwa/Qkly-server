@@ -22,6 +22,7 @@ import {
   RegisterUserResponseDto
 } from '../../common/dto/responses.dto';
 import { OnboardingStep } from '../../common/enums/user.enum';
+import { OnboardingStepLabels, OnboardingStepMapper } from './dto/onboarding-step.mapper';
 import { PaginationDto, PaginationResultDto } from '../../common/queries/dto';
 import { CryptoUtil } from '../../common/utils/crypto.util';
 import { CountryCode, PhoneUtil } from '../../common/utils/phone.util';
@@ -51,60 +52,85 @@ export class UsersService {
   private readonly MAX_PIN_ATTEMPTS = 5;
   private readonly PIN_LOCK_MINUTES = 5;
 
-  // Onboarding flow: PERSONAL_INFORMATION must be first,
-  // PHONE_VERIFICATION, KYC_VERIFICATION, and AUTHENTICATION_PIN can be done in any order,
-  // BUSINESS_INFORMATION must be done last and completes onboarding
+  // Strict onboarding sequence (enforced only during onboarding, not after completion):
+  // 1. PERSONAL_INFORMATION (registration)
+  // 2. PHONE_VERIFICATION
+  // 3. BUSINESS_INFORMATION
+  // 4. KYC_VERIFICATION (BVN)
+  // 5. AUTHENTICATION_PIN (completes onboarding)
   private readonly ONBOARDING_ORDER = [
     OnboardingStep.PERSONAL_INFORMATION,
     OnboardingStep.PHONE_VERIFICATION,
+    OnboardingStep.BUSINESS_INFORMATION,
     OnboardingStep.KYC_VERIFICATION,
-    OnboardingStep.AUTHENTICATION_PIN,
-    OnboardingStep.BUSINESS_INFORMATION, // Must be last
+    OnboardingStep.AUTHENTICATION_PIN, // Must be last
   ];
 
-  private shouldUpdateStep(current: OnboardingStep, next: OnboardingStep): boolean {
+  /**
+   * Check if onboarding step should be updated
+   * During onboarding: enforces strict sequence
+   * After onboarding: always returns true (allow independent updates)
+   */
+  private async shouldUpdateStep(
+    userId: number,
+    current: OnboardingStep,
+    next: OnboardingStep,
+  ): Promise<boolean> {
+    // Check if onboarding is complete
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['onboarding'],
+    });
+
+    // If onboarding is complete, allow any updates
+    if (user?.onboarding?.isCompleted) {
+      return true;
+    }
+
+    // During onboarding, enforce strict sequence
     const currentIndex = this.ONBOARDING_ORDER.indexOf(current);
     const nextIndex = this.ONBOARDING_ORDER.indexOf(next);
-    // Only update if next step is further ahead than current step
-    return nextIndex > currentIndex;
+    // Only update if next step is exactly one step ahead
+    return nextIndex === currentIndex + 1;
   }
 
   /**
-   * Check if user has completed all prerequisites for business creation
-   * Business is the final step and can only be created after all other steps
+   * Check if user has completed prerequisites for business creation
+   * In the new sequence, only phone verification is required before business info
    */
   async validateBusinessPrerequisites(userId: number): Promise<void> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      relations: ['profile', 'kyc', 'security'],
+      relations: ['profile', 'onboarding'],
     });
 
     if (!user) {
       ErrorHelper.NotFoundException('User not found');
     }
 
-    const missingSteps: string[] = [];
+    // If onboarding is complete, allow business updates anytime
+    if (user.onboarding?.isCompleted) {
+      return;
+    }
 
+    // During onboarding, only phone verification is required
     if (!user.profile?.isPhoneVerified) {
-      missingSteps.push('Phone verification');
-    }
-    if (!user.kyc) {
-      missingSteps.push('KYC verification');
-    }
-    if (!user.security?.pin) {
-      missingSteps.push('Authentication PIN');
+      ErrorHelper.BadRequestException(
+        'Please verify your phone number before creating business information'
+      );
     }
 
-    if (missingSteps.length > 0) {
+    // Ensure user is on the correct step
+    if (user.onboarding?.currentStep !== OnboardingStep.PHONE_VERIFICATION) {
       ErrorHelper.BadRequestException(
-        `Please complete the following steps before creating business information: ${missingSteps.join(', ')}`
+        'Please complete phone verification before creating business information'
       );
     }
   }
 
   /**
-   * Mark onboarding as complete when business information is created
-   * Business information is the final step that completes onboarding
+   * Mark onboarding as complete when PIN is created
+   * PIN creation is the final step that completes onboarding
    */
   async completeOnboarding(userId: number): Promise<void> {
     const user = await this.userRepository.findOne({
@@ -117,9 +143,70 @@ export class UsersService {
     user.onboarding.isCompleted = true;
     user.onboarding.completedAt = new Date();
     user.onboarding.progressPercentage = 100;
-    user.onboarding.currentStep = OnboardingStep.BUSINESS_INFORMATION;
+    user.onboarding.currentStep = OnboardingStep.AUTHENTICATION_PIN;
     await this.userOnboardingRepository.save(user.onboarding);
     this.logger.log(`Onboarding completed for user ${userId}`);
+  }
+
+  /**
+   * Public method to update onboarding step if allowed by strict sequence
+   * Used by other services (e.g., BusinessesService) to update onboarding progress
+   */
+  async updateOnboardingStepIfAllowed(
+    userId: number,
+    targetStep: OnboardingStep,
+  ): Promise<void> {
+    const userOnboarding = await this.userOnboardingRepository.findOne({
+      where: { userId },
+    });
+
+    if (!userOnboarding || userOnboarding.isCompleted) {
+      return; // Skip if no onboarding record or already completed
+    }
+
+    const canUpdate = await this.shouldUpdateStep(
+      userId,
+      userOnboarding.currentStep,
+      targetStep,
+    );
+
+    if (canUpdate) {
+      userOnboarding.currentStep = targetStep;
+
+      // Update progress percentage based on step
+      const stepIndex = this.ONBOARDING_ORDER.indexOf(targetStep);
+      userOnboarding.progressPercentage = Math.round(
+        ((stepIndex + 1) / this.ONBOARDING_ORDER.length) * 100
+      );
+
+      await this.userOnboardingRepository.save(userOnboarding);
+      this.logger.log(`Updated onboarding step for user ${userId} to ${targetStep}`);
+    }
+  }
+
+  /**
+   * Build standardized login response
+   * Used by both loginUser and loginWithPin to ensure consistent response structure
+   */
+  private buildLoginResponse(user: User, accessToken: string): LoginResponseDto {
+    const onboardingStep = user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION;
+
+    return {
+      message: 'User logged in successfully',
+      accessToken,
+      tokenType: 'Bearer',
+      expiresIn: EXPIRATION_TIME_SECONDS,
+      userId: user.id,
+      email: user.email,
+      firstName: user.profile?.firstName || '',
+      lastName: user.profile?.lastName || '',
+      phone: user.profile?.phone || '',
+      isEmailVerified: user.isEmailVerified,
+      isPhoneVerified: user.profile?.isPhoneVerified || false,
+      onboardingStep: OnboardingStepMapper.toNumber(onboardingStep),
+      onboardingStepLabel: OnboardingStepMapper.getLabel(onboardingStep),
+      isOnboardingCompleted: user.onboarding?.isCompleted || false,
+    };
   }
 
 
@@ -260,7 +347,8 @@ export class UsersService {
         phone: standardizedPhone, // Return standardized format
         isEmailVerified: savedUser.isEmailVerified,
         isPhoneVerified: userProfile.isPhoneVerified,
-        onboardingStep: userOnboarding.currentStep,
+        onboardingStep: OnboardingStepMapper.toNumber(userOnboarding.currentStep),
+        onboardingStepLabel: OnboardingStepMapper.getLabel(userOnboarding.currentStep),
         isOnboardingCompleted: userOnboarding.isCompleted,
       };
 
@@ -364,22 +452,8 @@ export class UsersService {
     // Generate JWT token
     const accessToken = this.jwtService.sign(payload);
 
-    // Return user information with token
-    return {
-      message: 'User logged in successfully',
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: 3600,
-      userId: user.id,
-      email: user.email,
-      firstName: user.profile?.firstName || '',
-      lastName: user.profile?.lastName || '',
-      phone: user.profile?.phone || '',
-      isEmailVerified: user.isEmailVerified,
-      isPhoneVerified: user.profile?.isPhoneVerified || false,
-      onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
-      isOnboardingCompleted: user.onboarding?.isCompleted || false,
-    };
+    // Return standardized user information with token
+    return this.buildLoginResponse(user, accessToken);
   }
 
 
@@ -501,7 +575,7 @@ export class UsersService {
       // Update onboarding step to PHONE_VERIFICATION if appropriate
       if (user.onboarding) {
         const nextStep = OnboardingStep.PHONE_VERIFICATION;
-        if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+        if (await this.shouldUpdateStep(userId, user.onboarding.currentStep, nextStep)) {
           user.onboarding.currentStep = nextStep;
           await this.userOnboardingRepository.save(user.onboarding);
         }
@@ -550,10 +624,11 @@ export class UsersService {
         await this.userSecurityRepository.save(userSecurity);
       }
 
-      // Update onboarding step to AUTHENTICATION_PIN
+      // Update onboarding step to AUTHENTICATION_PIN (deprecated - PIN is now last step)
+      // This method is deprecated in favor of createPinWithReference
       if (user.onboarding) {
         const nextStep = OnboardingStep.AUTHENTICATION_PIN;
-        if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+        if (await this.shouldUpdateStep(userId, user.onboarding.currentStep, nextStep)) {
           user.onboarding.currentStep = nextStep;
           await this.userOnboardingRepository.save(user.onboarding);
         }
@@ -742,13 +817,28 @@ export class UsersService {
       await this.userSecurityRepository.save(userSecurity);
     }
 
-    // Update onboarding step
+    // Update onboarding step and complete onboarding if this is the final step
     if (user.onboarding) {
+      // If onboarding is not complete, validate prerequisites
+      if (!user.onboarding.isCompleted) {
+        // Ensure user has completed KYC before creating PIN
+        if (user.onboarding.currentStep !== OnboardingStep.KYC_VERIFICATION) {
+          ErrorHelper.BadRequestException(
+            'Please complete KYC verification before creating your authentication PIN'
+          );
+        }
+      }
+
       const nextStep = OnboardingStep.AUTHENTICATION_PIN;
-      if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+      if (await this.shouldUpdateStep(userId, user.onboarding.currentStep, nextStep)) {
         await this.userOnboardingRepository.update(user.onboarding.id, {
           currentStep: nextStep,
         });
+
+        // Complete onboarding when PIN is created (final step)
+        if (!user.onboarding.isCompleted) {
+          await this.completeOnboarding(userId);
+        }
       }
     }
 
@@ -1508,14 +1598,14 @@ export class UsersService {
     };
 
 
+    // Generate JWT token
     const accessToken = this.jwtService.sign(payload);
 
-    // Send Login Notification
+    // Send Login Notification (fire and forget)
     const currentTime = new Date().toLocaleString('en-NG', { timeZone: 'Africa/Lagos' });
     const location = ip || 'Unknown Location';
     const device = userAgent || 'Unknown Device';
 
-    // Fire and forget notification
     this.notificationService.sendLoginNotification(
       user.email,
       user.profile?.firstName || 'User',
@@ -1526,21 +1616,8 @@ export class UsersService {
       this.logger.error(`Failed to send login notification for user ${user.id}`, err);
     });
 
-    return {
-      message: 'User logged in successfully',
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: EXPIRATION_TIME_SECONDS,
-      userId: user.id,
-      email: user.email,
-      firstName: user.profile?.firstName || '',
-      lastName: user.profile?.lastName || '',
-      phone: user.profile?.phone || '',
-      isEmailVerified: user.isEmailVerified,
-      isPhoneVerified: user.profile?.isPhoneVerified || false,
-      onboardingStep: user.onboarding?.currentStep || OnboardingStep.PERSONAL_INFORMATION,
-      isOnboardingCompleted: user.onboarding?.isCompleted || false,
-    };
+    // Return standardized user information with token
+    return this.buildLoginResponse(user, accessToken);
   }
 
   async suspendUser(

@@ -14,8 +14,8 @@ export enum UserStatus {
 export enum OnboardingStep {
   PERSONAL_INFORMATION = 'personal_information',
   PHONE_VERIFICATION = 'phone_verification',
-  KYC_VERIFICATION = 'kyc_verification',
   BUSINESS_INFORMATION = 'business_information',
+  KYC_VERIFICATION = 'kyc_verification',
   AUTHENTICATION_PIN = 'authentication_pin',
 }
 
