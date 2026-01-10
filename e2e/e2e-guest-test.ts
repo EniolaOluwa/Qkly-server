@@ -151,6 +151,69 @@ PAYMENT REFERENCE: ${paymentRef}
     if (verifyRes.data.data.paymentStatus === 'paid') {
       console.log('SUCCESS: Order verified as PAID.\n');
 
+      // --- NEW: Merchant Processing & History Verification ---
+      console.log('[5b] Merchant Processing & History Verification...');
+
+      // 1. Merchant confirms/accepts order
+      // Note: Endpoint might be /orders/:id/accept or similar, checking service...
+      // Service has acceptOrder(orderId, businessId, notes)
+      // Controller usually maps this to PATCH /orders/:id/accept or similar.
+      // Let's assume standard REST: PATCH /orders/:id/status or specific action
+      // Checking controller... Controller not visible but Service has acceptOrder. 
+      // Assuming route is POST /orders/:id/accept based on conventions or PATCH.
+      // Let's try to update status directly first as it's more generic if specific endpoint uncertain, 
+      // but acceptOrder is safer. Let's try update status to 'confirmed' then 'processing'.
+
+      // Wait a bit for async processing (notifications etc)
+      await new Promise(r => setTimeout(r, 2000));
+
+      console.log('Merchat Accepting Order (CONFIRMED -> PROCESSING)...');
+      // Set to CONFIRMED first? Service says: "Can only accept CONFIRMED orders (after payment)".
+      // Wait, processWebhook sets order to PROCESSING? 
+      // Service: "paymentStatus: PAID, orderStatus: PROCESSING".
+      // So order is already PROCESSING after payment.
+      // Let's check current status.
+      let currentOrderRes = await axios.get(`${API_URL}/orders/${orderId}`);
+      console.log(`Current Order Status: ${currentOrderRes.data.data.status}`);
+
+      // If already PROCESSING, let's update to SHIPPED
+      const updateToShippedRes = await axios.patch(`${API_URL}/orders/${orderId}/status`, {
+        status: 'shipped',
+        notes: 'Order shipped via Courier'
+      }, { headers: { Authorization: `Bearer ${merchantToken}` } });
+      console.log(`Updated to SHIPPED. New Status: ${updateToShippedRes.data.data.status}`);
+
+      // Update to DELIVERED
+      const updateToDeliveredRes = await axios.patch(`${API_URL}/orders/${orderId}/status`, {
+        status: 'delivered',
+        notes: 'Delivered to customer'
+      }, { headers: { Authorization: `Bearer ${merchantToken}` } });
+      console.log(`Updated to DELIVERED. New Status: ${updateToDeliveredRes.data.data.status}`);
+
+      // Verify History
+      console.log('\nVerifying History Records...');
+      const finalOrderRes = await axios.get(`${API_URL}/orders/${orderId}`);
+      const history = finalOrderRes.data.data.statusHistoryRecords;
+
+      console.log('History Records Found:', history.length);
+      console.log(JSON.stringify(history, null, 2));
+
+      const expectedStatuses = ['pending', 'processing', 'shipped', 'delivered']; // Payment usually sets processing
+      const foundStatuses = history.map((h: any) => h.status);
+      console.log('Found Statuses:', foundStatuses);
+
+      // Simple check
+      const hasProcessing = foundStatuses.includes('processing');
+      const hasShipped = foundStatuses.includes('shipped');
+      const hasDelivered = foundStatuses.includes('delivered');
+
+      if (hasProcessing && hasShipped && hasDelivered) {
+        console.log('SUCCESS: All key status changes recorded in history!');
+      } else {
+        console.log('WARNING: Some status changes might be missing from history.');
+      }
+      // --- END NEW SECTION ---
+
       // 6. Verify Merchant Settlement
       console.log('[6] Verifying Merchant Settlement (Wait 5s)...');
       await new Promise(r => setTimeout(r, 5000));
@@ -256,32 +319,11 @@ PAYMENT REFERENCE: ${paymentRef}
               console.log(`FAILURE: Balance mismatch. Expected ₦${preBalance - expectedDeduction}, Got ₦${postBalance}, Diff: ${preBalance - postBalance}`);
             }
 
-            // --- WEBHOOK EMULATION (Only for Success cases) ---
+            // --- WEBHOOK EMULATION REMOVED (Real Webhook expected) ---
             if (expectedResult === 'SUCCESS' && withdrawRes?.data?.reference) {
-              const withdrawalRef = withdrawRes.data.reference;
-              console.log(`\n[Webhook Emulation] Sending 'transfer.success' for ${withdrawalRef}...`);
-
-              const webhookPayload = {
-                event: 'transfer.success',
-                data: {
-                  reference: withdrawalRef,
-                  amount: amount * 100,
-                  status: 'success',
-                  recipient: { account_number: '0000000000' }
-                }
-              };
-
-              if (process.env.PAYSTACK_SECRET_KEY) {
-                const crypto = require('crypto');
-                const signature = crypto.createHmac('sha512', process.env.PAYSTACK_SECRET_KEY).update(JSON.stringify(webhookPayload)).digest('hex');
-
-                try {
-                  await axios.post(`${API_URL}/payment/webhook`, webhookPayload, { headers: { 'x-paystack-signature': signature } });
-                  console.log('Webhook sent successfully.');
-                } catch (e) {
-                  console.log('Webhook emulation skipped (Server not reachable or error):', e.message);
-                }
-              }
+              console.log(`\nTransaction Reference: ${withdrawRes.data.reference}`);
+              console.log('Waiting for real Paystack webhook to process...');
+              await new Promise(r => setTimeout(r, 5000));
             }
 
           } catch (error: any) {

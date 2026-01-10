@@ -16,6 +16,7 @@ import {
   UpdateBusinessTypeDto,
 } from '../../common/dto/responses.dto';
 import { PaymentAccountStatus } from '../../common/enums/payment.enum';
+import { OnboardingStep } from '../../common/enums/user.enum';
 import { PaginationMetadataDto, PaginationOrder } from '../../common/queries/dto';
 import { ErrorHelper } from '../../common/utils';
 import { CloudinaryUtil } from '../../common/utils/cloudinary.util';
@@ -254,8 +255,11 @@ export class BusinessesService {
       businessId: savedBusiness.id,
     });
 
-    // Mark onboarding as complete (business is the final step)
-    await this.usersService.completeOnboarding(userId);
+    // Update onboarding step to BUSINESS_INFORMATION
+    await this.usersService.updateOnboardingStepIfAllowed(
+      userId,
+      OnboardingStep.BUSINESS_INFORMATION,
+    );
 
     return await this.findBusinessById(savedBusiness.id);
   }

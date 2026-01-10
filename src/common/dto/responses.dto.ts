@@ -174,10 +174,17 @@ export class RegisterUserResponseDto {
   isPhoneVerified: boolean;
 
   @ApiProperty({
-    description: 'Current onboarding step',
-    example: 'personal_information',
+    description: 'Current onboarding step (enum value)',
+    example: 0,
+    enum: [0, 1, 2, 3, 4],
   })
-  onboardingStep: string;
+  onboardingStep: number;
+
+  @ApiProperty({
+    description: 'Current onboarding step label (human-readable)',
+    example: 'Personal Information',
+  })
+  onboardingStepLabel: string;
 
   @ApiProperty({
     description: 'Whether user has completed onboarding',
@@ -678,10 +685,17 @@ export class LoginResponseDto {
   isPhoneVerified: boolean;
 
   @ApiProperty({
-    description: 'Current onboarding step',
-    example: 'personal_information',
+    description: 'Current onboarding step (enum value)',
+    example: 0,
+    enum: [0, 1, 2, 3, 4],
   })
-  onboardingStep: string;
+  onboardingStep: number;
+
+  @ApiProperty({
+    description: 'Current onboarding step label (human-readable)',
+    example: 'Personal Information',
+  })
+  onboardingStepLabel: string;
 
   @ApiProperty({
     description: 'Whether user has completed onboarding',

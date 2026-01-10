@@ -32,17 +32,39 @@ export class KycService {
     private notificationService: NotificationService,
   ) { }
 
-  private shouldUpdateStep(current: OnboardingStep, next: OnboardingStep): boolean {
+  /**
+   * Check if onboarding step should be updated
+   * During onboarding: enforces strict sequence
+   * After onboarding: always returns true (allow independent updates)
+   */
+  private async shouldUpdateStep(
+    userId: number,
+    current: OnboardingStep,
+    next: OnboardingStep,
+  ): Promise<boolean> {
     const ONBOARDING_ORDER = [
       OnboardingStep.PERSONAL_INFORMATION,
       OnboardingStep.PHONE_VERIFICATION,
-      OnboardingStep.KYC_VERIFICATION,
       OnboardingStep.BUSINESS_INFORMATION,
+      OnboardingStep.KYC_VERIFICATION,
       OnboardingStep.AUTHENTICATION_PIN,
     ];
+
+    // Check if onboarding is complete
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['onboarding'],
+    });
+
+    // If onboarding is complete, allow any updates
+    if (user?.onboarding?.isCompleted) {
+      return true;
+    }
+
+    // During onboarding, enforce strict sequence
     const currentIndex = ONBOARDING_ORDER.indexOf(current);
     const nextIndex = ONBOARDING_ORDER.indexOf(next);
-    return nextIndex > currentIndex;
+    return nextIndex === currentIndex + 1;
   }
 
   async verifyBvnWithSelfie(
@@ -156,8 +178,18 @@ export class KycService {
 
         // Update onboarding step
         if (user.onboarding) {
+          // If onboarding is not complete, validate prerequisites
+          if (!user.onboarding.isCompleted) {
+            // Ensure user has completed business information before KYC
+            if (user.onboarding.currentStep !== OnboardingStep.BUSINESS_INFORMATION) {
+              ErrorHelper.BadRequestException(
+                'Please complete business information before KYC verification'
+              );
+            }
+          }
+
           const nextStep = OnboardingStep.KYC_VERIFICATION;
-          if (this.shouldUpdateStep(user.onboarding.currentStep, nextStep)) {
+          if (await this.shouldUpdateStep(userId, user.onboarding.currentStep, nextStep)) {
             await this.userOnboardingRepository.update(user.onboarding.id, {
               currentStep: nextStep,
             });
